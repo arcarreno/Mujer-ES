@@ -12,30 +12,24 @@ const images = Array.from({ length: 11 }, (_, i) => ({
 
 function App() {
   const [showLogin, setShowLogin] = useState(false)
-  const [phase, setPhase] = useState<'intro' | 'zooming' | 'login'>('intro')
 
   const handleComenzar = () => {
-    setPhase('zooming')
-    setTimeout(() => {
-      setPhase('login')
-      setShowLogin(true)
-    }, 800)
+    setShowLogin(true)
   }
 
   const handleBack = () => {
     setShowLogin(false)
-    setPhase('intro')
   }
 
   return (
     <div className="relative w-full h-screen bg-white overflow-hidden" style={{ perspective: '1200px' }}>
-      <AnimatePresence>
-        {phase === 'intro' && (
+      <AnimatePresence mode="wait">
+        {!showLogin && (
           <motion.div
             key="intro"
             initial={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 1.5, filter: 'blur(10px)' }}
-            transition={{ duration: 0.8, ease: 'easeInOut' }}
+            exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
+            transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
             className="absolute inset-0 z-10"
           >
             <div className="absolute left-0 w-full text-center z-10 max-sm:top-6" style={{ top: '42px' }}>
@@ -58,7 +52,7 @@ function App() {
                 />
               </div>
               <motion.button
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.2, duration: 0.5 }}
                 onClick={handleComenzar}
@@ -74,29 +68,20 @@ function App() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {phase === 'zooming' && (
+      <AnimatePresence mode="wait">
+        {showLogin && (
           <motion.div
-            key="zoom"
-            initial={{ scale: 0.3, opacity: 0, rotateY: 180 }}
-            animate={{ scale: 1, opacity: 1, rotateY: 360 }}
-            transition={{ duration: 0.8, ease: [0.34, 1.56, 0.64, 1] }}
+            key="login"
+            initial={{ opacity: 0, scale: 0.5, rotateX: 25 }}
+            animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
             className="absolute inset-0 flex items-center justify-center z-20"
           >
-            <div className="login-placeholder" />
+            <Login onBack={handleBack} />
           </motion.div>
         )}
       </AnimatePresence>
-
-      {showLogin && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.4, ease: 'easeOut' }}
-        >
-          <Login onBack={handleBack} />
-        </motion.div>
-      )}
     </div>
   )
 }

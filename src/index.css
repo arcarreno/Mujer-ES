@@ -605,7 +605,10 @@ html, body {
   border-radius: 2rem;
   padding: 0.65rem 2.5rem;
   cursor: pointer;
-  margin-top: 1.5rem;
+  margin-top: 0.5rem;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
   transition: all 0.3s ease;
 }
 
