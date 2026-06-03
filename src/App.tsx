@@ -27,7 +27,8 @@ function App() {
         {!showLogin && (
           <motion.div
             key="intro"
-            initial={{ opacity: 1 }}
+            initial={{ opacity: 0, scale: 0.5, rotateX: -25 }}
+            animate={{ opacity: 1, scale: 1, rotateX: 0 }}
             exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
             transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
             className="absolute inset-0 z-10"
@@ -74,7 +75,7 @@ function App() {
             key="login"
             initial={{ opacity: 0, scale: 0.5, rotateX: 25 }}
             animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-            exit={{ opacity: 0, scale: 0.8 }}
+            exit={{ opacity: 0, scale: 0.5, rotateX: -25 }}
             transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
             className="absolute inset-0 flex items-center justify-center z-20"
           >
