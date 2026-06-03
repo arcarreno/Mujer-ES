@@ -106,6 +106,14 @@ html, body {
   }
 }
 
+@media only screen and (max-width: 26rem) {
+  .carousel {
+    --_diameter: calc(var(--carousel-diameter) * 0.5);
+    --_item-width: calc(var(--carousel-item-width) * 0.5);
+    --_item-height: calc(var(--carousel-item-height) * 0.5);
+  }
+}
+
 @media only screen and (max-width: 16rem) {
   .carousel {
     --_diameter: calc(var(--carousel-diameter) * 0.25);
