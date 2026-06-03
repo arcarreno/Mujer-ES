@@ -10,7 +10,7 @@ const images = Array.from({ length: 11 }, (_, i) => ({
 function App() {
   return (
     <div className="relative w-full h-screen bg-white overflow-hidden">
-      <div className="absolute left-0 w-full text-center z-10" style={{ top: '42px' }}>
+      <div className="absolute left-0 w-full text-center z-10 max-sm:top-6" style={{ top: '42px' }}>
         <div className="inline-flex items-baseline">
           <BlurText
             text="Mujer"

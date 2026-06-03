@@ -115,12 +115,49 @@ html, body {
 }
 
 /* ============================================
+   MOBILE — iPhone 11 (414px) y similares
+   ============================================ */
+
+@media only screen and (max-width: 480px) {
+  .site-title {
+    font-size: 2rem;
+    letter-spacing: 0.1em;
+  }
+
+  .site-title-italic {
+    font-size: 2rem;
+    letter-spacing: 0.1em;
+  }
+}
+
+/* ============================================
    HEIGHT — Ajuste para pantallas bajas
    ============================================ */
 
 @media only screen and (max-height: 700px) {
   .site-title {
     font-size: 2.2rem;
+  }
+}
+
+/* ============================================
+   MODAL — Ajuste móvil
+   ============================================ */
+
+@media only screen and (max-width: 480px) {
+  .modal-card {
+    width: 85vw;
+    height: auto;
+    min-height: 20rem;
+    max-height: 70vh;
+  }
+
+  .card-back-title {
+    font-size: 0.75rem;
+  }
+
+  .card-back-text {
+    font-size: 0.55rem;
   }
 }
 
