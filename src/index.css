@@ -464,3 +464,156 @@ html, body {
 .carousel .carousel-item-wrapper.hovering .carousel-ground {
   opacity: 0.8;
 }
+
+/* ============================================
+   LOGIN — Minimalista
+   ============================================ */
+
+.login-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 120;
+  width: 22rem;
+  max-width: 90vw;
+  background: #ffffff;
+  border-radius: 1rem;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.login-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 400;
+  font-size: 1.75rem;
+  color: #1a1a1a;
+  text-align: center;
+  margin: 0 0 2rem;
+  letter-spacing: 0.05em;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.login-field label {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.85rem;
+  color: #4a4a4a;
+  letter-spacing: 0.03em;
+}
+
+.login-field input {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.95rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  background: #fafafa;
+}
+
+.login-field input:focus {
+  border-color: #581C87;
+  box-shadow: 0 0 0 3px rgba(88, 28, 135, 0.1);
+}
+
+.login-field input::placeholder {
+  color: #9ca3af;
+}
+
+.login-submit {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1rem;
+  font-weight: 500;
+  padding: 0.8rem;
+  margin-top: 0.5rem;
+  background: #1a1a1a;
+  color: #ffffff;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+  letter-spacing: 0.05em;
+}
+
+.login-submit:hover {
+  background: #333;
+}
+
+.login-submit:active {
+  transform: scale(0.98);
+}
+
+.login-links {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 1.5rem;
+}
+
+.login-link {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.8rem;
+  color: #581C87;
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.login-link:hover {
+  color: #7C3AED;
+  text-decoration: underline;
+}
+
+.login-back {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  margin-top: 1.25rem;
+  padding: 0;
+  transition: color 0.2s ease;
+}
+
+.login-back:hover {
+  color: #1a1a1a;
+}
+
+/* ============================================
+   COMENZAR BUTTON
+   ============================================ */
+
+.comenzar-btn {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.1rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: #1a1a1a;
+  background: transparent;
+  border: 1.5px solid #1a1a1a;
+  border-radius: 2rem;
+  padding: 0.65rem 2.5rem;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  transition: all 0.3s ease;
+}
+
+.comenzar-btn:hover {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.comenzar-btn:active {
+  transform: scale(0.97);
+}
