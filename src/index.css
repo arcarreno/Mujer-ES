@@ -436,8 +436,6 @@ html, body {
   transform: translate3d(0, 0, 0) rotateX(90deg) rotateZ(180deg) rotateY(180deg);
   position: absolute;
   contain: paint;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
   will-change: transform;
 }
 
