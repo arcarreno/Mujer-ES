@@ -2503,7 +2503,13 @@ input[type="date"].form-input {
    Modals use z-index 200, so we go higher. */
 [data-sileo-viewport] {
   z-index: 9999 !important;
-  top: calc(16px + var(--sat)) !important;
+  top: 2px !important;
+}
+
+@media (max-width: 480px) {
+  [data-sileo-viewport] {
+    top: calc(16px + var(--sat)) !important;
+  }
 }
 
 .sileo-title-light {
