@@ -49,7 +49,7 @@ html, body {
 
 @media (max-width: 480px) {
   .site-header {
-    top: calc(1.5rem + var(--sat));
+    top: calc(3.5rem + var(--sat));
   }
 }
 
@@ -2503,7 +2503,7 @@ input[type="date"].form-input {
    Modals use z-index 200, so we go higher. */
 [data-sileo-viewport] {
   z-index: 9999 !important;
-  top: calc(2px + var(--sat)) !important;
+  top: calc(16px + var(--sat)) !important;
 }
 
 .sileo-title-light {
