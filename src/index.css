@@ -188,7 +188,7 @@ html, body {
     width: 85vw;
     height: auto;
     min-height: 20rem;
-    max-height: 70vh;
+    max-height: 70dvh;
   }
 
   .card-back-title {
@@ -348,7 +348,7 @@ html, body {
   top: 0;
   left: 0;
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   background: rgba(0, 0, 0, 0.65);
   z-index: 100;
   animation: fadeIn 0.3s ease;
@@ -1975,7 +1975,7 @@ input[type="date"].form-input {
   padding: 2rem 1.75rem;
   max-width: 28rem;
   width: 100%;
-  max-height: 85vh;
+  max-height: 85dvh;
   overflow-y: auto;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25);
   display: flex;
@@ -2191,7 +2191,7 @@ input[type="date"].form-input {
   padding: 2rem 1.75rem;
   max-width: 28rem;
   width: 100%;
-  max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25);
 }

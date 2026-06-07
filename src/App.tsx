@@ -123,91 +123,93 @@ function App() {
   }
 
   return (
-    <div className="relative w-full h-screen bg-white overflow-hidden" style={{ perspective: '1200px' }}>
-      <AnimatePresence mode="wait">
-        {phase === 'landing' && (
-          <motion.div
-            key="landing"
-            initial={{ opacity: 0, scale: 0.5, rotateX: -25 }}
-            animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-            exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
-            transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-            className="absolute inset-0 z-10"
-          >
-            <div className="site-header absolute left-0 w-full text-center z-10">
-              <div className="inline-flex items-baseline">
-                <BlurText
-                  text="Mujer"
-                  animateBy="letters"
-                  direction="top"
-                  delay={150}
-                  stepDuration={0.4}
-                  className="site-title"
-                />
-                <BlurText
-                  text="-ES"
-                  animateBy="letters"
-                  direction="top"
-                  delay={150}
-                  stepDuration={0.4}
-                  className="site-title-italic"
-                />
+    <div className="relative w-full bg-white overflow-hidden" style={{ height: '100dvh' }}>
+      <div style={{ perspective: '1200px', width: '100%', height: '100%' }}>
+        <AnimatePresence mode="wait">
+          {phase === 'landing' && (
+            <motion.div
+              key="landing"
+              initial={{ opacity: 0, scale: 0.5, rotateX: -25 }}
+              animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+              exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
+              transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+              className="absolute inset-0 z-10"
+            >
+              <div className="site-header absolute left-0 w-full text-center z-10">
+                <div className="inline-flex items-baseline">
+                  <BlurText
+                    text="Mujer"
+                    animateBy="letters"
+                    direction="top"
+                    delay={150}
+                    stepDuration={0.4}
+                    className="site-title"
+                  />
+                  <BlurText
+                    text="-ES"
+                    animateBy="letters"
+                    direction="top"
+                    delay={150}
+                    stepDuration={0.4}
+                    className="site-title-italic"
+                  />
+                </div>
+                <motion.button
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 1.2, duration: 0.5 }}
+                  onClick={() => setPhase('welcome-form')}
+                  className="comenzar-btn"
+                >
+                  Comenzar
+                </motion.button>
               </div>
-              <motion.button
-                initial={{ opacity: 0, y: 15 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.2, duration: 0.5 }}
-                onClick={() => setPhase('welcome-form')}
-                className="comenzar-btn"
-              >
-                Comenzar
-              </motion.button>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center z-0">
-              <Carousel images={images} />
-            </div>
-          </motion.div>
-        )}
+              <div className="absolute inset-0 flex items-center justify-center z-0">
+                <Carousel images={images} />
+              </div>
+            </motion.div>
+          )}
 
-        {phase === 'welcome-form' && !user && (
-          <motion.div
-            key="login"
-            initial={{ opacity: 0, scale: 0.5, rotateX: 25 }}
-            animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-            exit={{ opacity: 0, scale: 0.5, rotateX: -25 }}
-            transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
-            className="absolute inset-0 flex items-center justify-center z-20"
-          >
-            <Login onBack={() => setPhase('landing')} />
-          </motion.div>
-        )}
+          {phase === 'welcome-form' && !user && (
+            <motion.div
+              key="login"
+              initial={{ opacity: 0, scale: 0.5, rotateX: 25 }}
+              animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+              exit={{ opacity: 0, scale: 0.5, rotateX: -25 }}
+              transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
+              className="absolute inset-0 flex items-center justify-center z-20"
+            >
+              <Login onBack={() => setPhase('landing')} />
+            </motion.div>
+          )}
 
-        {phase === 'welcome-form' && user && sessionData.profile && (
-          <WelcomeForm
-            key={`welcome-form-${formCheckKey}`}
-            userId={user.id}
-            username={sessionData.profile.username}
-            onComplete={handleFormComplete}
-          />
-        )}
+          {phase === 'welcome-form' && user && sessionData.profile && (
+            <WelcomeForm
+              key={`welcome-form-${formCheckKey}`}
+              userId={user.id}
+              username={sessionData.profile.username}
+              onComplete={handleFormComplete}
+            />
+          )}
 
-        {phase === 'home' && user && sessionData.profile && (
-          <motion.div
-            key="home"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ duration: 0.4 }}
-            className="absolute inset-0 z-20"
-          >
-            {sessionData.isAdmin ? (
-              <AdminLayout username={sessionData.profile.username} onLogout={handleLogout} />
-            ) : (
-              <HomeLayout username={sessionData.profile.username} onLogout={handleLogout} />
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {phase === 'home' && user && sessionData.profile && (
+            <motion.div
+              key="home"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.4 }}
+              className="absolute inset-0 z-20"
+            >
+              {sessionData.isAdmin ? (
+                <AdminLayout username={sessionData.profile.username} onLogout={handleLogout} />
+              ) : (
+                <HomeLayout username={sessionData.profile.username} onLogout={handleLogout} />
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       <Toaster
         position="top-center"
