@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import BottomNav, { type TabKey } from './BottomNav'
 import CursosPage from './CursosPage'
+import MapPage from './MapPage'
 import ChatsPage from './ChatsPage'
 import { signOut } from '../../lib/queries'
 
@@ -43,7 +44,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
 
       <main className="home-main">
         <AnimatePresence mode="wait">
-          {activeTab === 'cursos' ? (
+          {activeTab === 'cursos' && (
             <motion.div
               key="cursos"
               initial={{ opacity: 0, x: -20 }}
@@ -53,7 +54,19 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
             >
               <CursosPage />
             </motion.div>
-          ) : (
+          )}
+          {activeTab === 'mapa' && (
+            <motion.div
+              key="mapa"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <MapPage />
+            </motion.div>
+          )}
+          {activeTab === 'chats' && (
             <motion.div
               key="chats"
               initial={{ opacity: 0, x: 20 }}

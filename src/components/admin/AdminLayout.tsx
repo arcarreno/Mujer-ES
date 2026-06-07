@@ -5,9 +5,11 @@ import AdminBottomNav, { type AdminTabKey } from './AdminBottomNav'
 import AdminDashboard from './AdminDashboard'
 import ManageUsers from './ManageUsers'
 import AdminCursos from './AdminCursos'
+import CreateCoursePage from './CreateCoursePage'
 import AdminChats from './AdminChats'
 import { signOut } from '../../lib/queries'
 import { listUsers } from '../../lib/admin'
+import type { Course } from '../../lib/queries'
 
 interface AdminLayoutProps {
   username: string
@@ -18,6 +20,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [activeTab, setActiveTab] = useState<AdminTabKey>('dashboard')
   const [userCount, setUserCount] = useState(0)
   const [blockedCount, setBlockedCount] = useState(0)
+  const [showCreateCourse, setShowCreateCourse] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -59,57 +62,68 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
       </header>
 
       <main className="home-main">
-        <AnimatePresence mode="wait">
-          {activeTab === 'dashboard' && (
-            <motion.div
-              key="dashboard"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <AdminDashboard
-                userCount={userCount}
-                blockedCount={blockedCount}
-                onGoToUsers={() => setActiveTab('users')}
-                onGoToChats={() => setActiveTab('chats')}
-              />
-            </motion.div>
-          )}
-          {activeTab === 'users' && (
-            <motion.div
-              key="users"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <ManageUsers onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }} />
-            </motion.div>
-          )}
-          {activeTab === 'cursos' && (
-            <motion.div
-              key="cursos"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <AdminCursos />
-            </motion.div>
-          )}
-          {activeTab === 'chats' && (
-            <motion.div
-              key="chats"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <AdminChats />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {showCreateCourse ? (
+          <CreateCoursePage
+            onCreated={(course: Course) => {
+              setShowCreateCourse(false)
+              setActiveTab('cursos')
+              sileo.success({ title: 'Curso creado', description: `"${course.title}" fue creado exitosamente` })
+            }}
+            onBack={() => setShowCreateCourse(false)}
+          />
+        ) : (
+          <AnimatePresence mode="wait">
+            {activeTab === 'dashboard' && (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AdminDashboard
+                  userCount={userCount}
+                  blockedCount={blockedCount}
+                  onGoToUsers={() => setActiveTab('users')}
+                  onGoToChats={() => setActiveTab('chats')}
+                />
+              </motion.div>
+            )}
+            {activeTab === 'users' && (
+              <motion.div
+                key="users"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ManageUsers onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }} />
+              </motion.div>
+            )}
+            {activeTab === 'cursos' && (
+              <motion.div
+                key="cursos"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} />
+              </motion.div>
+            )}
+            {activeTab === 'chats' && (
+              <motion.div
+                key="chats"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AdminChats />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </main>
 
       <AdminBottomNav active={activeTab} onChange={setActiveTab} />

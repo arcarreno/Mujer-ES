@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
 import { listCourses, deleteCourse, type Course } from '../../lib/queries'
-import CreateCourseModal from './CreateCourseModal'
 
-export default function AdminCursos() {
+interface AdminCursosProps {
+  onCreateCourse: () => void
+}
+
+export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
-  const [showCreate, setShowCreate] = useState(false)
 
   const load = async () => {
     try {
@@ -32,11 +34,6 @@ export default function AdminCursos() {
     }
   }
 
-  const handleCreated = (course: Course) => {
-    setCourses((prev) => [course, ...prev])
-    setShowCreate(false)
-  }
-
   return (
     <div className="admin-cursos">
       <div className="admin-cursos-header">
@@ -46,7 +43,7 @@ export default function AdminCursos() {
         </div>
         <button
           className="admin-create-btn"
-          onClick={() => setShowCreate(true)}
+          onClick={onCreateCourse}
           type="button"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -97,6 +94,15 @@ export default function AdminCursos() {
               {course.description && (
                 <p className="admin-curso-card-desc">{course.description}</p>
               )}
+              {course.location_name && (
+                <p className="admin-curso-card-location">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  {course.location_name}
+                </p>
+              )}
               <div className="admin-curso-card-footer">
                 <span className="admin-curso-card-date">
                   {new Date(course.created_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
@@ -118,13 +124,6 @@ export default function AdminCursos() {
             </div>
           ))}
         </div>
-      )}
-
-      {showCreate && (
-        <CreateCourseModal
-          onClose={() => setShowCreate(false)}
-          onCreated={handleCreated}
-        />
       )}
     </div>
   )

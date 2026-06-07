@@ -314,6 +314,9 @@ export interface Course {
   modality: 'virtual' | 'presencial'
   published: boolean
   created_by: string | null
+  latitude: number | null
+  longitude: number | null
+  location_name: string | null
   created_at: string
   updated_at: string
 }
@@ -345,6 +348,9 @@ export async function createCourse(course: {
   description: string
   modality: 'virtual' | 'presencial'
   published?: boolean
+  latitude?: number | null
+  longitude?: number | null
+  location_name?: string | null
 }): Promise<Course> {
   const { data: { user } } = await supabase.auth.getUser()
   const { data, error } = await supabase
@@ -355,6 +361,9 @@ export async function createCourse(course: {
       description: course.description,
       modality: course.modality,
       published: course.published ?? false,
+      latitude: course.latitude ?? null,
+      longitude: course.longitude ?? null,
+      location_name: course.location_name ?? null,
       created_by: user?.id ?? null,
     })
     .select()
