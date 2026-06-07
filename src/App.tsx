@@ -134,7 +134,7 @@ function App() {
             transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
             className="absolute inset-0 z-10"
           >
-            <div className="absolute left-0 w-full text-center z-10 max-sm:top-6" style={{ top: '42px' }}>
+            <div className="site-header absolute left-0 w-full text-center z-10">
               <div className="inline-flex items-baseline">
                 <BlurText
                   text="Mujer"
