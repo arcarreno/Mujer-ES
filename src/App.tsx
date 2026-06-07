@@ -1,8 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
+import { Toaster, sileo } from 'sileo'
+import { supabase } from './lib/supabase'
+import {
+  getProfile,
+  hasCompletedInitialForm,
+  isUserAdmin,
+  type Profile,
+} from './lib/queries'
 import Carousel from './components/Carousel'
 import BlurText from './components/BlurText'
 import Login from './components/Login'
+import WelcomeForm from './components/form/WelcomeForm'
+import HomeLayout from './components/home/HomeLayout'
+import AdminLayout from './components/admin/AdminLayout'
 
 const images = Array.from({ length: 11 }, (_, i) => ({
   src: `/images/image ${i + 1}.jpeg`,
@@ -10,23 +21,94 @@ const images = Array.from({ length: 11 }, (_, i) => ({
   href: '#',
 }))
 
-function App() {
-  const [showLogin, setShowLogin] = useState(false)
+type SessionUser = { id: string; email?: string }
+type AppPhase = 'loading' | 'landing' | 'welcome-form' | 'home'
 
-  const handleComenzar = () => {
-    setShowLogin(true)
+interface SessionData {
+  profile: Profile | null
+  isAdmin: boolean
+}
+
+function App() {
+  const [phase, setPhase] = useState<AppPhase>('loading')
+  const [user, setUser] = useState<SessionUser | null>(null)
+  const [sessionData, setSessionData] = useState<SessionData>({
+    profile: null,
+    isAdmin: false,
+  })
+  const [formCheckKey, setFormCheckKey] = useState(0)
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      handleSession(session?.user ?? null)
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      handleSession(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const handleSession = async (u: SessionUser | null) => {
+    setUser(u)
+    if (!u) {
+      setSessionData({ profile: null, isAdmin: false })
+      setPhase('landing')
+      return
+    }
+    const [p, completed, admin] = await Promise.all([
+      getProfile(u.id),
+      hasCompletedInitialForm(u.id),
+      isUserAdmin(u.id),
+    ])
+
+    setSessionData({ profile: p, isAdmin: admin })
+
+    if (p?.blocked_until && new Date(p.blocked_until) > new Date()) {
+      const until = new Date(p.blocked_until).toLocaleString('es-MX', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      })
+      sileo.error({
+        title: 'Cuenta bloqueada',
+        description: `Tu cuenta está bloqueada hasta el ${until}. Esperá a que se cumpla el tiempo para volver a entrar.`,
+      })
+      await supabase.auth.signOut()
+      setUser(null)
+      setSessionData({ profile: null, isAdmin: false })
+      setPhase('landing')
+      return
+    }
+
+    if (admin || completed) {
+      setPhase('home')
+    } else {
+      setPhase('welcome-form')
+    }
   }
 
-  const handleBack = () => {
-    setShowLogin(false)
+  const handleFormComplete = async () => {
+    if (!user) return
+    setFormCheckKey((k) => k + 1)
+    const completed = await hasCompletedInitialForm(user.id)
+    if (completed) {
+      setPhase('home')
+    }
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    setSessionData({ profile: null, isAdmin: false })
+    setPhase('landing')
   }
 
   return (
     <div className="relative w-full h-screen bg-white overflow-hidden" style={{ perspective: '1200px' }}>
       <AnimatePresence mode="wait">
-        {!showLogin && (
+        {phase === 'landing' && (
           <motion.div
-            key="intro"
+            key="landing"
             initial={{ opacity: 0, scale: 0.5, rotateX: -25 }}
             animate={{ opacity: 1, scale: 1, rotateX: 0 }}
             exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
@@ -56,7 +138,7 @@ function App() {
                 initial={{ opacity: 0, y: 15 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 1.2, duration: 0.5 }}
-                onClick={handleComenzar}
+                onClick={() => setPhase('welcome-form')}
                 className="comenzar-btn"
               >
                 Comenzar
@@ -67,10 +149,8 @@ function App() {
             </div>
           </motion.div>
         )}
-      </AnimatePresence>
 
-      <AnimatePresence mode="wait">
-        {showLogin && (
+        {phase === 'welcome-form' && !user && (
           <motion.div
             key="login"
             initial={{ opacity: 0, scale: 0.5, rotateX: 25 }}
@@ -79,10 +159,52 @@ function App() {
             transition={{ duration: 0.6, ease: [0.34, 1.56, 0.64, 1] }}
             className="absolute inset-0 flex items-center justify-center z-20"
           >
-            <Login onBack={handleBack} />
+            <Login onBack={() => setPhase('landing')} />
+          </motion.div>
+        )}
+
+        {phase === 'welcome-form' && user && sessionData.profile && (
+          <WelcomeForm
+            key={`welcome-form-${formCheckKey}`}
+            userId={user.id}
+            username={sessionData.profile.username}
+            onComplete={handleFormComplete}
+          />
+        )}
+
+        {phase === 'home' && user && sessionData.profile && (
+          <motion.div
+            key="home"
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ duration: 0.4 }}
+            className="absolute inset-0 z-20"
+          >
+            {sessionData.isAdmin ? (
+              <AdminLayout username={sessionData.profile.username} onLogout={handleLogout} />
+            ) : (
+              <HomeLayout username={sessionData.profile.username} onLogout={handleLogout} />
+            )}
           </motion.div>
         )}
       </AnimatePresence>
+
+      <Toaster
+        position="top-center"
+        offset={24}
+        options={{
+          fill: '#000000',
+          roundness: 12,
+          autopilot: false,
+          styles: {
+            title: 'sileo-title-light',
+            description: 'sileo-description-light',
+            badge: 'sileo-badge-light',
+            button: 'sileo-button-light',
+          },
+        }}
+      />
     </div>
   )
 }

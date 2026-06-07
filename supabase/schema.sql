@@ -1,9 +1,4 @@
 -- =====================================================
--- MUJER-ES — Database Schema
--- Ejecutar en: Supabase Dashboard → SQL Editor → New query
--- =====================================================
-
--- =====================================================
 -- 1. PROFILES — Datos extra del usuario
 -- =====================================================
 
@@ -11,7 +6,7 @@ create table if not exists public.profiles (
   id uuid references auth.users on delete cascade primary key,
   username text unique not null,
   full_name text not null,
-  phone text unique not null,
+  phone text unique,
   role text not null default 'user' check (role in ('user', 'admin')),
   phone_verified boolean not null default false,
   created_at timestamptz not null default now(),
@@ -38,7 +33,7 @@ begin
     new.id,
     coalesce(new.raw_user_meta_data->>'username', 'user_' || substr(new.id::text, 1, 8)),
     coalesce(new.raw_user_meta_data->>'full_name', ''),
-    coalesce(new.raw_user_meta_data->>'phone', '')
+    nullif(new.raw_user_meta_data->>'phone', '')
   );
   return new;
 end;
@@ -50,7 +45,27 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 
 -- =====================================================
--- 3. RLS — Row Level Security en profiles
+-- 3. HELPER — is_admin() con security definer
+-- (necesario para evitar infinite recursion en RLS)
+-- =====================================================
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select coalesce(
+    (select role = 'admin' from public.profiles where id = auth.uid()),
+    false
+  );
+$$;
+
+grant execute on function public.is_admin() to authenticated;
+
+-- =====================================================
+-- 4. RLS — Row Level Security en profiles
 -- =====================================================
 
 alter table public.profiles enable row level security;
@@ -69,22 +84,12 @@ create policy "users update own profile" on public.profiles
 drop policy if exists "admins read all profiles" on public.profiles;
 create policy "admins read all profiles" on public.profiles
   for select to authenticated
-  using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
-  );
+  using (public.is_admin());
 
 drop policy if exists "admins update any profile" on public.profiles;
 create policy "admins update any profile" on public.profiles
   for update to authenticated
-  using (
-    exists (
-      select 1 from public.profiles
-      where id = auth.uid() and role = 'admin'
-    )
-  );
+  using (public.is_admin());
 
 -- =====================================================
 -- 4. CONVERSATIONS — Chat user ↔ admin
@@ -136,24 +141,20 @@ create policy "user updates own conv" on public.conversations
 drop policy if exists "admins read all convs" on public.conversations;
 create policy "admins read all convs" on public.conversations
   for select to authenticated
-  using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  using (public.is_admin());
 
 drop policy if exists "admins update all convs" on public.conversations;
 create policy "admins update all convs" on public.conversations
   for update to authenticated
-  using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  using (public.is_admin());
 
 drop policy if exists "admins read admin convs" on public.conversations;
 create policy "admins read admin convs" on public.conversations
   for select to authenticated
   using (
-    type = 'admin_admin' 
+    type = 'admin_admin'
     and auth.uid() = any(participants)
-    and exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    and public.is_admin()
   );
 
 drop policy if exists "admins create admin convs" on public.conversations;
@@ -162,7 +163,7 @@ create policy "admins create admin convs" on public.conversations
   with check (
     type = 'admin_admin'
     and auth.uid() = any(participants)
-    and exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    and public.is_admin()
   );
 
 -- =====================================================
@@ -212,16 +213,14 @@ create policy "user sends own messages" on public.messages
 drop policy if exists "admins read all messages" on public.messages;
 create policy "admins read all messages" on public.messages
   for select to authenticated
-  using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  using (public.is_admin());
 
 drop policy if exists "admins send messages" on public.messages;
 create policy "admins send messages" on public.messages
   for insert to authenticated
   with check (
     sender_role in ('admin', 'bot', 'system')
-    and exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
+    and public.is_admin()
   );
 
 drop policy if exists "admins read admin chat messages" on public.messages;
@@ -280,9 +279,7 @@ create policy "user inserts own responses" on public.form_responses
 drop policy if exists "admins read all responses" on public.form_responses;
 create policy "admins read all responses" on public.form_responses
   for select to authenticated
-  using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  using (public.is_admin());
 
 -- =====================================================
 -- 7. AUTO-BORRADO — Mensajes con más de 2 días
