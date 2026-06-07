@@ -4,6 +4,7 @@ import { sileo } from 'sileo'
 import AdminBottomNav, { type AdminTabKey } from './AdminBottomNav'
 import AdminDashboard from './AdminDashboard'
 import ManageUsers from './ManageUsers'
+import AdminCursos from './AdminCursos'
 import AdminChats from './AdminChats'
 import { signOut } from '../../lib/queries'
 import { listUsers } from '../../lib/admin'
@@ -84,6 +85,17 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
               transition={{ duration: 0.3 }}
             >
               <ManageUsers onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }} />
+            </motion.div>
+          )}
+          {activeTab === 'cursos' && (
+            <motion.div
+              key="cursos"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <AdminCursos />
             </motion.div>
           )}
           {activeTab === 'chats' && (

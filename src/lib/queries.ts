@@ -301,3 +301,89 @@ export async function modifyPassword(
   })
   if (error) throw error
 }
+
+// =====================================================
+// COURSES
+// =====================================================
+
+export interface Course {
+  id: string
+  title: string
+  subtitle: string
+  description: string
+  modality: 'virtual' | 'presencial'
+  published: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export async function listCourses(): Promise<Course[]> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as Course[]
+}
+
+export async function listPublishedCourses(): Promise<Course[]> {
+  const { data, error } = await supabase
+    .from('courses')
+    .select('*')
+    .eq('published', true)
+    .order('created_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []) as Course[]
+}
+
+export async function createCourse(course: {
+  title: string
+  subtitle: string
+  description: string
+  modality: 'virtual' | 'presencial'
+  published?: boolean
+}): Promise<Course> {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('courses')
+    .insert({
+      title: course.title,
+      subtitle: course.subtitle,
+      description: course.description,
+      modality: course.modality,
+      published: course.published ?? false,
+      created_by: user?.id ?? null,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as Course
+}
+
+export async function updateCourse(
+  id: string,
+  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published'>>
+): Promise<Course> {
+  const { data, error } = await supabase
+    .from('courses')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as Course
+}
+
+export async function deleteCourse(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('courses')
+    .delete()
+    .eq('id', id)
+
+  if (error) throw error
+}
