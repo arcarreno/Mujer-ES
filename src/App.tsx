@@ -211,7 +211,7 @@ function App() {
 
       <Toaster
         position="top-center"
-        offset={12}
+        offset={2}
         options={{
           fill: '#000000',
           roundness: 12,
