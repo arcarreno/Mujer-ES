@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { Toaster, sileo } from 'sileo'
 import { supabase } from './lib/supabase'
@@ -8,6 +8,7 @@ import {
   isUserAdmin,
   type Profile,
 } from './lib/queries'
+import useNetworkStatus from './hooks/useNetworkStatus'
 import Carousel from './components/Carousel'
 import BlurText from './components/BlurText'
 import Login from './components/Login'
@@ -37,6 +38,8 @@ function App() {
     isAdmin: false,
   })
   const [formCheckKey, setFormCheckKey] = useState(0)
+  const isOnline = useNetworkStatus()
+  const wasOffline = useRef(!navigator.onLine)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -49,6 +52,22 @@ function App() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  useEffect(() => {
+    if (isOnline && wasOffline.current) {
+      sileo.success({
+        title: 'Conexión restaurada',
+        description: 'Ya tenés internet de vuelta.',
+      })
+    }
+    if (!isOnline) {
+      wasOffline.current = true
+      sileo.error({
+        title: 'Sin conexión',
+        description: 'No hay internet. Verificá tu red y volvé a intentar.',
+      })
+    }
+  }, [isOnline])
 
   const handleSession = async (u: SessionUser | null) => {
     setUser(u)
@@ -192,7 +211,7 @@ function App() {
 
       <Toaster
         position="top-center"
-        offset={24}
+        offset={48}
         options={{
           fill: '#000000',
           roundness: 12,

@@ -115,32 +115,50 @@ export async function getEmailByUsername(username: string): Promise<string | nul
   return data?.email ?? null
 }
 
+function isNetworkError(err: unknown): boolean {
+  if (!err) return false
+  const msg = err instanceof Error ? err.message : String(err)
+  return /failed to fetch|networkerror|typeerror|err_network|ERR_INTERNET_DISCONNECTED|network request failed/i.test(msg)
+}
+
+const NETWORK_ERROR_MSG = 'No hay conexión a internet. Verificá tu red y volvé a intentar.'
+
 export async function signInWithIdentifier(
   identifier: string,
   password: string
 ): Promise<{ user: SessionUser | null; error: string | null }> {
   let emailToUse = identifier.trim()
 
-  if (!isEmail(emailToUse)) {
-    const resolved = await getEmailByUsername(emailToUse)
-    if (!resolved) {
+  try {
+    if (!isEmail(emailToUse)) {
+      const resolved = await getEmailByUsername(emailToUse)
+      if (!resolved) {
+        return { user: null, error: 'Usuario o contraseña incorrectos' }
+      }
+      emailToUse = resolved
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: emailToUse,
+      password,
+    })
+
+    if (error) {
+      if (isNetworkError(error)) {
+        return { user: null, error: NETWORK_ERROR_MSG }
+      }
       return { user: null, error: 'Usuario o contraseña incorrectos' }
     }
-    emailToUse = resolved
-  }
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email: emailToUse,
-    password,
-  })
-
-  if (error) {
-    return { user: null, error: 'Usuario o contraseña incorrectos' }
-  }
-
-  return {
-    user: data.user ? { id: data.user.id, email: data.user.email ?? null } : null,
-    error: null,
+    return {
+      user: data.user ? { id: data.user.id, email: data.user.email ?? null } : null,
+      error: null,
+    }
+  } catch (err) {
+    if (isNetworkError(err)) {
+      return { user: null, error: NETWORK_ERROR_MSG }
+    }
+    return { user: null, error: 'No se pudo conectar con el servidor' }
   }
 }
 
