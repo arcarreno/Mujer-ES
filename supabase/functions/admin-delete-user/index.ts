@@ -22,7 +22,6 @@ serve(async (req) => {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders })
     }
 
-    // 1. Cliente con sesión del usuario que llama
     const callerClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
@@ -34,18 +33,13 @@ serve(async (req) => {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders })
     }
 
-    // 2. Verificar que el caller es admin
-    const { data: callerProfile } = await callerClient
-      .from('profiles')
-      .select('role')
-      .eq('id', caller.id)
-      .single()
+    const { data: isAdmin } = await callerClient
+      .rpc('is_admin')
 
-    if (callerProfile?.role !== 'admin') {
+    if (!isAdmin) {
       return new Response('Forbidden - admin only', { status: 403, headers: corsHeaders })
     }
 
-    // 3. Obtener el userId a eliminar
     const { user_id } = await req.json()
     if (!user_id) {
       return new Response('user_id is required', { status: 400, headers: corsHeaders })
@@ -55,13 +49,11 @@ serve(async (req) => {
       return new Response('No puedes eliminarte a ti mismo', { status: 400, headers: corsHeaders })
     }
 
-    // 4. Cliente admin con service role
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!
     )
 
-    // 5. Eliminar usuario (cascade borra profile/admins y form_responses)
     const { error } = await adminClient.auth.admin.deleteUser(user_id)
 
     if (error) {

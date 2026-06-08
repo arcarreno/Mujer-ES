@@ -449,29 +449,13 @@ export async function enrollInCourse(courseId: string): Promise<{ qrCodeDataUrl?
   const modality = course?.modality ?? 'virtual'
   const accessCode = modality === 'virtual' ? generateAccessCode() : null
 
-  const insertData: Record<string, unknown> = {
-    user_id: user.id,
-    course_id: courseId,
-    access_code: accessCode,
-  }
-
-  let qrCodeDataUrl: string | undefined
-
-  if (modality === 'presencial') {
-    const tempId = crypto.randomUUID()
-    const payload = generateQrPayload(tempId, courseId, user.id)
-    const dataUrl = await QRCode.toDataURL(payload, {
-      width: 256,
-      margin: 2,
-      color: { dark: '#581C87', light: '#ffffff' },
-    })
-    insertData.qr_code = payload
-    qrCodeDataUrl = dataUrl
-  }
-
   const { data: enrollment, error } = await supabase
     .from('course_enrollments')
-    .insert(insertData)
+    .insert({
+      user_id: user.id,
+      course_id: courseId,
+      access_code: accessCode,
+    })
     .select('id')
     .single()
 
@@ -482,18 +466,19 @@ export async function enrollInCourse(courseId: string): Promise<{ qrCodeDataUrl?
     throw error
   }
 
-  if (modality === 'presencial' && qrCodeDataUrl) {
+  if (modality === 'presencial') {
     const payload = generateQrPayload(enrollment.id, courseId, user.id)
-    const freshDataUrl = await QRCode.toDataURL(payload, {
+    const qrCodeDataUrl = await QRCode.toDataURL(payload, {
       width: 256,
       margin: 2,
       color: { dark: '#581C87', light: '#ffffff' },
     })
-    await supabase
+    const { error: updateErr } = await supabase
       .from('course_enrollments')
       .update({ qr_code: payload })
       .eq('id', enrollment.id)
-    return { qrCodeDataUrl: freshDataUrl, modality }
+    if (updateErr) throw updateErr
+    return { qrCodeDataUrl, modality }
   }
 
   return { accessCode: accessCode ?? undefined, modality }

@@ -32,13 +32,10 @@ serve(async (req) => {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders })
     }
 
-    const { data: callerProfile } = await callerClient
-      .from('profiles')
-      .select('role')
-      .eq('id', caller.id)
-      .single()
+    const { data: isAdmin } = await callerClient
+      .rpc('is_admin')
 
-    if (callerProfile?.role !== 'admin') {
+    if (!isAdmin) {
       return new Response('Forbidden - admin only', { status: 403, headers: corsHeaders })
     }
 
@@ -54,7 +51,7 @@ serve(async (req) => {
 
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!
     )
 
     const { data: newUser, error } = await adminClient.auth.admin.createUser({
