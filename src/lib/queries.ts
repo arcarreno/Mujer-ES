@@ -396,3 +396,70 @@ export async function deleteCourse(id: string): Promise<void> {
 
   if (error) throw error
 }
+
+// =====================================================
+// COURSE ENROLLMENTS
+// =====================================================
+
+export interface Enrollment {
+  id: string
+  user_id: string
+  course_id: string
+  enrolled_at: string
+  profiles?: { username: string; full_name: string } | null
+}
+
+export async function enrollInCourse(courseId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { error } = await supabase
+    .from('course_enrollments')
+    .insert({ user_id: user.id, course_id: courseId })
+
+  if (error) {
+    if (error.code === '23505') {
+      throw new Error('Ya estás inscripto en este curso')
+    }
+    throw error
+  }
+}
+
+export async function unenrollFromCourse(courseId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { error } = await supabase
+    .from('course_enrollments')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('course_id', courseId)
+
+  if (error) throw error
+}
+
+export async function isEnrolledInCourse(courseId: string): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data, error } = await supabase
+    .from('course_enrollments')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('course_id', courseId)
+    .maybeSingle()
+
+  if (error) return false
+  return data !== null
+}
+
+export async function getCourseEnrollments(courseId: string): Promise<Enrollment[]> {
+  const { data, error } = await supabase
+    .from('course_enrollments')
+    .select('id, user_id, course_id, enrolled_at, profiles:user_id(username, full_name)')
+    .eq('course_id', courseId)
+    .order('enrolled_at', { ascending: false })
+
+  if (error) throw error
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    profiles: Array.isArray(row.profiles) ? row.profiles[0] ?? null : row.profiles ?? null,
+  })) as Enrollment[]
+}

@@ -7,15 +7,17 @@ import { listPublishedCourses, type Course } from '../../lib/queries'
 
 function courseIcon(color: string) {
   return L.divIcon({
-    className: 'map-marker-custom',
-    html: `<div style="width:28px;height:28px;background:${color};border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;justify-content:center;">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
-        <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
-      </svg>
-    </div>`,
-    iconSize: [28, 28],
-    iconAnchor: [14, 14],
+    className: 'map-marker-pointer',
+    html: `<svg width="32" height="42" viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M16 0C7.163 0 0 7.163 0 16c0 12 16 26 16 26s16-14 16-26C32 7.163 24.837 0 16 0z" fill="${color}"/>
+      <circle cx="16" cy="16" r="8" fill="white"/>
+      <path d="M12 13.5C12 12.672 12.672 12 13.5 12h5c.828 0 1.5.672 1.5 1.5V17h-1v-3.5a.5.5 0 0 0-.5-.5h-5a.5.5 0 0 0-.5.5V17h-1v-3.5z" fill="${color}"/>
+      <rect x="12" y="17.5" width="8" height="1" rx="0.5" fill="${color}"/>
+      <rect x="12" y="19.5" width="6" height="1" rx="0.5" fill="${color}"/>
+    </svg>`,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42],
+    popupAnchor: [0, -46],
   })
 }
 

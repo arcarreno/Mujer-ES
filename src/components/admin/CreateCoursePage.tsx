@@ -25,10 +25,13 @@ function LocationPicker({ position, onSelect }: {
     <Marker
       position={position}
       icon={L.divIcon({
-        className: 'map-marker-custom',
-        html: '<div style="width:24px;height:24px;background:#581C87;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>',
-        iconSize: [24, 24],
-        iconAnchor: [12, 12],
+        className: 'map-marker-pointer',
+        html: `<svg width="28" height="36" viewBox="0 0 28 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 0C6.268 0 0 6.268 0 14c0 10.5 14 22 14 22s14-11.5 14-22C28 6.268 21.732 0 14 0z" fill="#581C87"/>
+          <circle cx="14" cy="14" r="6" fill="white"/>
+        </svg>`,
+        iconSize: [28, 36],
+        iconAnchor: [14, 36],
       })}
     />
   ) : null
