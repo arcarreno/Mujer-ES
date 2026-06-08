@@ -1,9 +1,9 @@
 import { motion } from 'motion/react'
 import { sileo } from 'sileo'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { UserRow } from '../../lib/admin'
 import { blockUser, unblockUser, adminDeleteUser } from '../../lib/admin'
-import { getErrorMessage } from '../../lib/queries'
+import { getErrorMessage, getUserEnrollments, generateQrDataUrlFromPayload, type Enrollment } from '../../lib/queries'
 
 interface UserDetailModalProps {
   user: UserRow
@@ -29,8 +29,16 @@ const EDUCATION_LABELS: Record<string, string> = {
 
 export default function UserDetailModal({ user, currentUserId, onClose, onUpdate }: UserDetailModalProps) {
   const [loading, setLoading] = useState(false)
+  const [userEnrollments, setUserEnrollments] = useState<(Enrollment & { course_title: string; course_modality: string })[]>([])
+  const [qrModalData, setQrModalData] = useState<{ dataUrl: string; courseName: string } | null>(null)
   const isSelf = user.id === currentUserId
   const isAdmin = user.type === 'admin'
+
+  useEffect(() => {
+    if (!isAdmin) {
+      getUserEnrollments(user.id).then(setUserEnrollments).catch(() => {})
+    }
+  }, [user.id, isAdmin])
 
   const handleBlock = async (hours: number | null) => {
     setLoading(true)
@@ -174,6 +182,48 @@ export default function UserDetailModal({ user, currentUserId, onClose, onUpdate
           </div>
         )}
 
+        {!isAdmin && userEnrollments.length > 0 && (
+          <div className="user-detail-section">
+            <h3 className="user-detail-section-title">Cursos inscripto ({userEnrollments.length})</h3>
+            {userEnrollments.map((enr) => (
+              <div key={enr.id} className="user-enrollment-row">
+                <div className="user-enrollment-info">
+                  <span className="user-enrollment-name">{enr.course_title}</span>
+                  <span className="user-enrollment-meta">
+                    {enr.course_modality === 'presencial' ? 'Presencial' : 'Virtual'}
+                    {enr.attended && ' · Presente'}
+                  </span>
+                </div>
+                {enr.course_modality === 'presencial' && enr.qr_code && (
+                  <button
+                    className="user-enrollment-qr-btn"
+                    onClick={async () => {
+                      try {
+                        const dataUrl = await generateQrDataUrlFromPayload(enr.qr_code!)
+                        setQrModalData({ dataUrl, courseName: enr.course_title })
+                      } catch {
+                        sileo.error({ title: 'Error', description: 'No se pudo generar el QR' })
+                      }
+                    }}
+                    type="button"
+                    title="Ver QR"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="7" height="7" />
+                      <rect x="14" y="3" width="7" height="7" />
+                      <rect x="3" y="14" width="7" height="7" />
+                      <rect x="14" y="14" width="3" height="3" />
+                    </svg>
+                  </button>
+                )}
+                {enr.course_modality === 'virtual' && enr.access_code && (
+                  <span className="user-enrollment-code">{enr.access_code}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {!isSelf && !isAdmin && (
           <div className="user-detail-actions">
             {user.blocked ? (
@@ -209,6 +259,29 @@ export default function UserDetailModal({ user, currentUserId, onClose, onUpdate
         )}
         {isSelf && <p className="user-self-note">No puedes modificar tu propia cuenta desde aquí</p>}
       </motion.div>
+
+      {qrModalData && (
+        <div className="admin-qr-overlay" onClick={(e) => { if (e.target === e.currentTarget) setQrModalData(null) }} style={{ position: 'fixed', inset: 0, zIndex: 10000 }}>
+          <div className="admin-qr-modal">
+            <div className="admin-qr-header">
+              <h3 className="admin-qr-title">QR — {user.username}</h3>
+              <button className="admin-qr-close" onClick={() => setQrModalData(null)} type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="admin-qr-body">
+              <p className="admin-qr-course">{qrModalData.courseName}</p>
+              <div className="admin-qr-img">
+                <img src={qrModalData.dataUrl} alt={`QR de ${user.username}`} width="220" height="220" />
+              </div>
+              <p className="admin-qr-sub">Código QR personal e intransferible</p>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   )
 }

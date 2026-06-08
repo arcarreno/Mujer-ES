@@ -2086,6 +2086,130 @@ input[type="date"].form-input {
   color: #dc2626;
 }
 
+.admin-curso-table-col-qr {
+  width: 40px;
+  text-align: center;
+}
+
+.admin-curso-qr-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 0.4rem;
+  border: none;
+  background: #f5f0fa;
+  color: #581C87;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.admin-curso-qr-btn:hover {
+  background: #ede9fe;
+  transform: scale(1.1);
+}
+
+.admin-qr-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.admin-qr-modal {
+  background: #fff;
+  border-radius: 1.25rem;
+  max-width: 22rem;
+  width: 100%;
+  animation: cardFadeIn 0.3s ease;
+}
+
+.admin-qr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.admin-qr-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 500;
+  font-size: 1rem;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.admin-qr-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #f5f5f5;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.admin-qr-close:hover {
+  background: #e5e7eb;
+}
+
+.admin-qr-body {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-qr-course {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.85rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.admin-qr-img {
+  background: #fff;
+  border: 2px solid #f0f0f0;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+}
+
+.admin-qr-img img {
+  display: block;
+}
+
+.admin-qr-sub {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.admin-qr-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+}
+
+.admin-qr-loading p {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.85rem;
+  color: #9ca3af;
+}
+
 /* ============================================
    CREATE COURSE MODAL
    ============================================ */
@@ -2547,10 +2671,75 @@ input[type="date"].form-input {
 
 .user-self-note {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: #9ca3af;
   font-style: italic;
-  margin: 0.5rem 0 0;
+  text-align: center;
+  margin-top: 0.75rem;
+}
+
+.user-enrollment-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  background: var(--alabaster);
+  border: 1px solid #f0f0f0;
+  border-radius: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.user-enrollment-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.user-enrollment-name {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #1a1a1a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-enrollment-meta {
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+.user-enrollment-qr-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 0.4rem;
+  border: none;
+  background: #f5f0fa;
+  color: #581C87;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.user-enrollment-qr-btn:hover {
+  background: #ede9fe;
+  transform: scale(1.1);
+}
+
+.user-enrollment-code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #581C87;
+  background: #f5f0fa;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.3rem;
+  flex-shrink: 0;
 }
 
 /* ============================================

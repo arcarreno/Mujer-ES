@@ -506,6 +506,30 @@ export async function generateQrDataUrlFromPayload(payload: string): Promise<str
   })
 }
 
+export async function getEnrollmentQrCode(enrollmentId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('course_enrollments')
+    .select('qr_code')
+    .eq('id', enrollmentId)
+    .single()
+  if (error || !data) return null
+  return data.qr_code
+}
+
+export async function getUserEnrollments(userId: string): Promise<(Enrollment & { course_title: string; course_modality: string })[]> {
+  const { data, error } = await supabase
+    .from('course_enrollments')
+    .select('*, courses!inner(title, modality)')
+    .eq('user_id', userId)
+    .order('enrolled_at', { ascending: false })
+  if (error) return []
+  return (data ?? []).map((e: any) => ({
+    ...e,
+    course_title: e.courses?.title ?? 'Curso',
+    course_modality: e.courses?.modality ?? 'virtual',
+  }))
+}
+
 export async function markAttendance(qrPayload: string): Promise<{ username: string; courseName: string }> {
   let parsed: { eid: string; cid: string; uid: string }
   try {

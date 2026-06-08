@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, type Course, type Enrollment } from '../../lib/queries'
+import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, generateQrDataUrlFromPayload, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
 
 interface AdminCursosProps {
@@ -15,6 +15,8 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
   const [enrollmentsLoading, setEnrollmentsLoading] = useState<Record<string, boolean>>({})
   const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({})
   const [scannerCourseId, setScannerCourseId] = useState<string | null>(null)
+  const [qrModalEnrollment, setQrModalEnrollment] = useState<{ enrollmentId: string; username: string; courseName: string } | null>(null)
+  const [qrModalDataUrl, setQrModalDataUrl] = useState<string | null>(null)
 
   const load = async () => {
     try {
@@ -75,6 +77,22 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
       } finally {
         setEnrollmentsLoading((prev) => ({ ...prev, [courseId]: false }))
       }
+    }
+  }
+
+  const showQrModal = async (enrollmentId: string, username: string, courseName: string) => {
+    setQrModalEnrollment({ enrollmentId, username, courseName })
+    setQrModalDataUrl(null)
+    try {
+      const enrollment = enrollments[Object.keys(enrollments).find(k =>
+        enrollments[k].some(e => e.id === enrollmentId)
+      ) ?? '']?.find(e => e.id === enrollmentId)
+      if (enrollment?.qr_code) {
+        const dataUrl = await generateQrDataUrlFromPayload(enrollment.qr_code)
+        setQrModalDataUrl(dataUrl)
+      }
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo generar el código QR' })
     }
   }
 
@@ -249,6 +267,9 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                                   <span className="admin-curso-table-col admin-curso-table-col-username">Usuario</span>
                                   <span className="admin-curso-table-col admin-curso-table-col-date">Inscripción</span>
                                   <span className="admin-curso-table-col admin-curso-table-col-status">Estado</span>
+                                  {course.modality === 'presencial' && (
+                                    <span className="admin-curso-table-col admin-curso-table-col-qr">QR</span>
+                                  )}
                                 </div>
                                 {enrList.map((enr) => (
                                   <div key={enr.id} className={`admin-curso-table-row ${enr.attended ? 'admin-curso-table-row-attended' : ''}`}>
@@ -264,6 +285,25 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                                     <span className={`admin-curso-table-col admin-curso-table-col-status ${enr.attended ? 'admin-curso-status-attended' : 'admin-curso-status-missed'}`}>
                                       {enr.attended ? 'Presente' : 'Ausente'}
                                     </span>
+                                    {course.modality === 'presencial' && (
+                                      <span className="admin-curso-table-col admin-curso-table-col-qr">
+                                        {enr.qr_code && (
+                                          <button
+                                            className="admin-curso-qr-btn"
+                                            onClick={() => showQrModal(enr.id, enr.profiles?.username ?? '?', course.title)}
+                                            type="button"
+                                            title="Ver QR"
+                                          >
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                              <rect x="3" y="3" width="7" height="7" />
+                                              <rect x="14" y="3" width="7" height="7" />
+                                              <rect x="3" y="14" width="7" height="7" />
+                                              <rect x="14" y="14" width="3" height="3" />
+                                            </svg>
+                                          </button>
+                                        )}
+                                      </span>
+                                    )}
                                   </div>
                                 ))}
                               </div>
@@ -306,6 +346,38 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
           }}
           onClose={() => setScannerCourseId(null)}
         />
+      )}
+
+      {qrModalEnrollment && (
+        <div className="admin-qr-overlay" onClick={(e) => { if (e.target === e.currentTarget) setQrModalEnrollment(null) }}>
+          <div className="admin-qr-modal">
+            <div className="admin-qr-header">
+              <h3 className="admin-qr-title">QR — {qrModalEnrollment.username}</h3>
+              <button className="admin-qr-close" onClick={() => setQrModalEnrollment(null)} type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="admin-qr-body">
+              <p className="admin-qr-course">{qrModalEnrollment.courseName}</p>
+              {qrModalDataUrl ? (
+                <>
+                  <div className="admin-qr-img">
+                    <img src={qrModalDataUrl} alt={`QR de ${qrModalEnrollment.username}`} width="220" height="220" />
+                  </div>
+                  <p className="admin-qr-sub">Código QR personal e intransferible</p>
+                </>
+              ) : (
+                <div className="admin-qr-loading">
+                  <div className="curso-detail-spinner" />
+                  <p>Generando código...</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
