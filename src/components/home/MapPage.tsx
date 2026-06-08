@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { sileo } from 'sileo'
 import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, type Course } from '../../lib/queries'
+import { MapControls, MapTileLayer, PUEBLA_CENTER, PUEBLA_ZOOM, type LayerType } from '../ui/MapControls'
+import EnrollmentResult from '../ui/EnrollmentResult'
 
 function courseIcon(color: string) {
   return L.divIcon({
@@ -24,13 +26,15 @@ function courseIcon(color: string) {
 export default function MapPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
-  const [mapCenter] = useState<[number, number]>([-34.6037, -58.3816])
   const [selected, setSelected] = useState<Course | null>(null)
   const [enrolled, setEnrolled] = useState(false)
   const [enrolling, setEnrolling] = useState(false)
   const [enrollCheck, setEnrollCheck] = useState(false)
   const [courseFull, setCourseFull] = useState(false)
   const [enrollmentCount, setEnrollmentCount] = useState(0)
+  const [layerType, setLayerType] = useState<LayerType>('map')
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [enrollmentResult, setEnrollmentResult] = useState<{ modality: string; qrCodeDataUrl?: string; accessCode?: string; courseName: string } | null>(null)
 
   useEffect(() => {
     listPublishedCourses()
@@ -64,9 +68,14 @@ export default function MapPage() {
     if (!selected || enrolling) return
     setEnrolling(true)
     try {
-      await enrollInCourse(selected.id)
+      const result = await enrollInCourse(selected.id)
       setEnrolled(true)
-      sileo.success({ title: 'Inscripción exitosa', description: `Te inscribiste en "${selected.title}"` })
+      setEnrollmentResult({
+        modality: result.modality,
+        qrCodeDataUrl: result.qrCodeDataUrl,
+        accessCode: result.accessCode,
+        courseName: selected.title,
+      })
     } catch (err: any) {
       sileo.error({ title: 'Error', description: err.message || 'No se pudo inscribir' })
     } finally {
@@ -91,101 +100,115 @@ export default function MapPage() {
 
   if (selected) {
     return (
-      <div className="curso-detail">
-        <div className="curso-detail-header">
-          <button
-            className="curso-detail-back"
-            onClick={() => setSelected(null)}
-            type="button"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            Volver al mapa
-          </button>
-          <div className="curso-detail-badges">
-            <span className="curso-detail-badge">{selected.modality === 'virtual' ? 'Virtual' : 'Presencial'}</span>
-            {selected.location_name && (
-              <span className="curso-detail-badge curso-detail-badge-location">
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
+      <>
+        <div className={`curso-detail-layout ${enrollmentResult ? 'curso-detail-layout-with-result' : ''}`}>
+          <div className="curso-detail">
+            <div className="curso-detail-header">
+              <button
+                className="curso-detail-back"
+                onClick={() => { setSelected(null); setEnrollmentResult(null) }}
+                type="button"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6" />
                 </svg>
-                {selected.location_name}
-              </span>
+                Volver al mapa
+              </button>
+            <div className="curso-detail-badges">
+              <span className="curso-detail-badge">{selected.modality === 'virtual' ? 'Virtual' : 'Presencial'}</span>
+              {selected.location_name && (
+                <span className="curso-detail-badge curso-detail-badge-location">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  {selected.location_name}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="curso-detail-body">
+            <h2 className="curso-detail-title">{selected.title}</h2>
+            {selected.subtitle && <p className="curso-detail-subtitle">{selected.subtitle}</p>}
+            {selected.description && <p className="curso-detail-desc">{selected.description}</p>}
+          </div>
+
+          <div className="curso-detail-footer">
+            {selected.max_enrollments && (
+              <div className={`curso-detail-vacancies ${courseFull ? 'curso-detail-vacancies-full' : ''}`}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                </svg>
+                <span>
+                  {enrollmentCount} / {selected.max_enrollments} vacante{selected.max_enrollments !== 1 ? 's' : ''}
+                </span>
+                {courseFull && <span className="curso-detail-vacancies-badge">Lleno</span>}
+              </div>
+            )}
+            {enrollCheck ? (
+              <div className="curso-detail-footer-loading">
+                <div className="curso-detail-spinner" />
+              </div>
+            ) : enrolled ? (
+              <div className="curso-detail-enrolled">
+                <div className="curso-detail-enrolled-badge">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  Inscripto
+                </div>
+                <button className="curso-detail-unenroll-btn" onClick={handleUnenroll} disabled={enrolling} type="button">
+                  {enrolling ? 'Procesando...' : 'Darse de baja'}
+                </button>
+              </div>
+            ) : courseFull ? (
+              <div className="curso-detail-full-msg">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                No hay vacantes disponibles
+              </div>
+            ) : (
+              <button className="curso-detail-enroll-btn" onClick={handleEnroll} disabled={enrolling} type="button">
+                {enrolling ? (
+                  <>
+                    <div className="curso-detail-spinner-light" />
+                    Inscribiendo
+                  </>
+                ) : (
+                  <>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    Inscribirse
+                  </>
+                )}
+              </button>
             )}
           </div>
         </div>
 
-        <div className="curso-detail-body">
-          <h2 className="curso-detail-title">{selected.title}</h2>
-          {selected.subtitle && <p className="curso-detail-subtitle">{selected.subtitle}</p>}
-          {selected.description && <p className="curso-detail-desc">{selected.description}</p>}
+        {enrollmentResult && (
+          <EnrollmentResult
+            modality={enrollmentResult.modality}
+            qrCodeDataUrl={enrollmentResult.qrCodeDataUrl}
+            accessCode={enrollmentResult.accessCode}
+            courseName={enrollmentResult.courseName}
+            onClose={() => setEnrollmentResult(null)}
+          />
+        )}
         </div>
-
-        <div className="curso-detail-footer">
-          {selected.max_enrollments && (
-            <div className={`curso-detail-vacancies ${courseFull ? 'curso-detail-vacancies-full' : ''}`}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-              </svg>
-              <span>
-                {enrollmentCount} / {selected.max_enrollments} vacante{selected.max_enrollments !== 1 ? 's' : ''}
-              </span>
-              {courseFull && <span className="curso-detail-vacancies-badge">Lleno</span>}
-            </div>
-          )}
-          {enrollCheck ? (
-            <div className="curso-detail-footer-loading">
-              <div className="curso-detail-spinner" />
-            </div>
-          ) : enrolled ? (
-            <div className="curso-detail-enrolled">
-              <div className="curso-detail-enrolled-badge">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                Inscripto
-              </div>
-              <button className="curso-detail-unenroll-btn" onClick={handleUnenroll} disabled={enrolling} type="button">
-                {enrolling ? 'Procesando...' : 'Darse de baja'}
-              </button>
-            </div>
-          ) : courseFull ? (
-            <div className="curso-detail-full-msg">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              No hay vacantes disponibles
-            </div>
-          ) : (
-            <button className="curso-detail-enroll-btn" onClick={handleEnroll} disabled={enrolling} type="button">
-              {enrolling ? (
-                <>
-                  <div className="curso-detail-spinner-light" />
-                  Inscribiendo...
-                </>
-              ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 5v14M5 12h14" />
-                  </svg>
-                  Inscribirse
-                </>
-              )}
-            </button>
-          )}
-        </div>
-      </div>
+      </>
     )
   }
 
   if (loading) {
     return (
       <div className="map-page-empty">
-        <p>Cargando mapa...</p>
+        <p>Cargando mapa</p>
       </div>
     )
   }
@@ -204,21 +227,21 @@ export default function MapPage() {
   }
 
   return (
-    <div className="map-page">
-      <div className="map-page-header">
-        <h2 className="cursos-title">Mapa de cursos</h2>
-        <p className="cursos-subtitle">{courses.length} curso{courses.length !== 1 ? 's' : ''} presencial{courses.length !== 1 ? 'es' : ''}</p>
-      </div>
+    <div className={`map-page ${isFullscreen ? 'map-page-fullscreen' : ''}`}>
+      {!isFullscreen && (
+        <div className="map-page-header">
+          <h2 className="cursos-title">Mapa de cursos</h2>
+          <p className="cursos-subtitle">{courses.length} curso{courses.length !== 1 ? 's' : ''} presencial{courses.length !== 1 ? 'es' : ''}</p>
+        </div>
+      )}
       <div className="map-page-container">
         <MapContainer
-          center={mapCenter}
-          zoom={12}
+          key={`${layerType}-${isFullscreen}`}
+          center={PUEBLA_CENTER}
+          zoom={PUEBLA_ZOOM}
           style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0 }}
         >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
+          <MapTileLayer layerType={layerType} />
           {courses.map((course) => (
             <Marker
               key={course.id}
@@ -245,6 +268,12 @@ export default function MapPage() {
             </Marker>
           ))}
         </MapContainer>
+        <MapControls
+          layerType={layerType}
+          onToggleLayer={() => setLayerType((t) => t === 'map' ? 'satellite' : 'map')}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={() => setIsFullscreen((f) => !f)}
+        />
       </div>
     </div>
   )

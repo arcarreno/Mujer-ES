@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet'
+import { MapContainer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { sileo } from 'sileo'
 import { createCourse, type Course } from '../../lib/queries'
 import SubmitButton from '../ui/SubmitButton'
+import { MapControls, MapTileLayer, PUEBLA_CENTER, PUEBLA_ZOOM, type LayerType } from '../ui/MapControls'
 
 interface CreateCoursePageProps {
   onCreated: (course: Course) => void
@@ -48,7 +49,9 @@ export default function CreateCoursePage({ onCreated, onBack }: CreateCoursePage
   const [longitude, setLongitude] = useState<number | null>(null)
   const [locationName, setLocationName] = useState('')
   const [loading, setLoading] = useState(false)
-  const [mapCenter, setMapCenter] = useState<[number, number]>([-34.6037, -58.3816])
+  const [mapCenter, setMapCenter] = useState<[number, number]>(PUEBLA_CENTER)
+  const [layerType, setLayerType] = useState<LayerType>('map')
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -206,18 +209,22 @@ export default function CreateCoursePage({ onCreated, onBack }: CreateCoursePage
 
             <div className="login-field">
               <label>Ubicación en el mapa *{latitude !== null && ` (${latitude.toFixed(4)}, ${longitude!.toFixed(4)})`}</label>
-              <div className="create-course-map">
+              <div className={`create-course-map ${isFullscreen ? 'create-course-map-fullscreen' : ''}`}>
                 <MapContainer
+                  key={`${layerType}-${isFullscreen}`}
                   center={mapCenter}
-                  zoom={13}
-                  style={{ height: '100%', width: '100%', borderRadius: '0.5rem' }}
+                  zoom={PUEBLA_ZOOM}
+                  style={{ height: '100%', width: '100%', borderRadius: isFullscreen ? 0 : '0.5rem' }}
                 >
-                  <TileLayer
-                    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                  />
+                  <MapTileLayer layerType={layerType} />
                   <LocationPicker position={latitude !== null ? [latitude, longitude!] : null} onSelect={handleMapClick} />
                 </MapContainer>
+                <MapControls
+                  layerType={layerType}
+                  onToggleLayer={() => setLayerType((t) => t === 'map' ? 'satellite' : 'map')}
+                  isFullscreen={isFullscreen}
+                  onToggleFullscreen={() => setIsFullscreen((f) => !f)}
+                />
               </div>
               <span className="create-course-map-hint">Hacé clic en el mapa para marcar la ubicación</span>
             </div>

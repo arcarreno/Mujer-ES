@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import QRCode from 'qrcode'
 
 export interface Profile {
   id: string
@@ -313,6 +314,7 @@ export interface Course {
   description: string
   modality: 'virtual' | 'presencial'
   published: boolean
+  concluded: boolean
   created_by: string | null
   latitude: number | null
   longitude: number | null
@@ -337,6 +339,7 @@ export async function listPublishedCourses(): Promise<Course[]> {
     .from('courses')
     .select('*')
     .eq('published', true)
+    .eq('concluded', false)
     .order('created_at', { ascending: false })
 
   if (error) throw error
@@ -400,6 +403,15 @@ export async function deleteCourse(id: string): Promise<void> {
   if (error) throw error
 }
 
+export async function concludeCourse(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('courses')
+    .update({ concluded: true })
+    .eq('id', id)
+
+  if (error) throw error
+}
+
 // =====================================================
 // COURSE ENROLLMENTS
 // =====================================================
@@ -409,21 +421,140 @@ export interface Enrollment {
   user_id: string
   course_id: string
   enrolled_at: string
+  qr_code: string | null
+  access_code: string | null
+  attended: boolean
+  attended_at: string | null
   profiles?: { username: string; full_name: string } | null
 }
 
-export async function enrollInCourse(courseId: string): Promise<void> {
+function generateAccessCode(): string {
+  return Math.floor(1000 + Math.random() * 9000).toString()
+}
+
+function generateQrPayload(enrollmentId: string, courseId: string, userId: string): string {
+  return JSON.stringify({ eid: enrollmentId, cid: courseId, uid: userId, t: Date.now() })
+}
+
+export async function enrollInCourse(courseId: string): Promise<{ qrCodeDataUrl?: string; accessCode?: string; modality: string }> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  const { error } = await supabase
+
+  const { data: course } = await supabase
+    .from('courses')
+    .select('modality')
+    .eq('id', courseId)
+    .single()
+
+  const modality = course?.modality ?? 'virtual'
+  const accessCode = modality === 'virtual' ? generateAccessCode() : null
+
+  const insertData: Record<string, unknown> = {
+    user_id: user.id,
+    course_id: courseId,
+    access_code: accessCode,
+  }
+
+  let qrCodeDataUrl: string | undefined
+
+  if (modality === 'presencial') {
+    const tempId = crypto.randomUUID()
+    const payload = generateQrPayload(tempId, courseId, user.id)
+    const dataUrl = await QRCode.toDataURL(payload, {
+      width: 256,
+      margin: 2,
+      color: { dark: '#581C87', light: '#ffffff' },
+    })
+    insertData.qr_code = payload
+    qrCodeDataUrl = dataUrl
+  }
+
+  const { data: enrollment, error } = await supabase
     .from('course_enrollments')
-    .insert({ user_id: user.id, course_id: courseId })
+    .insert(insertData)
+    .select('id')
+    .single()
 
   if (error) {
     if (error.code === '23505') {
       throw new Error('Ya estás inscripto en este curso')
     }
     throw error
+  }
+
+  if (modality === 'presencial' && qrCodeDataUrl) {
+    const payload = generateQrPayload(enrollment.id, courseId, user.id)
+    const freshDataUrl = await QRCode.toDataURL(payload, {
+      width: 256,
+      margin: 2,
+      color: { dark: '#581C87', light: '#ffffff' },
+    })
+    await supabase
+      .from('course_enrollments')
+      .update({ qr_code: payload })
+      .eq('id', enrollment.id)
+    return { qrCodeDataUrl: freshDataUrl, modality }
+  }
+
+  return { accessCode: accessCode ?? undefined, modality }
+}
+
+export async function getMyEnrollmentForCourse(courseId: string): Promise<Enrollment | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data, error } = await supabase
+    .from('course_enrollments')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('course_id', courseId)
+    .maybeSingle()
+
+  if (error) return null
+  return data as Enrollment | null
+}
+
+export async function markAttendance(qrPayload: string): Promise<{ username: string; courseName: string }> {
+  let parsed: { eid: string; cid: string; uid: string }
+  try {
+    parsed = JSON.parse(qrPayload)
+  } catch {
+    throw new Error('Código QR inválido')
+  }
+
+  const { data: enrollment, error: eErr } = await supabase
+    .from('course_enrollments')
+    .select('id, user_id, course_id, attended')
+    .eq('id', parsed.eid)
+    .eq('user_id', parsed.uid)
+    .eq('course_id', parsed.cid)
+    .eq('qr_code', qrPayload)
+    .maybeSingle()
+
+  if (eErr || !enrollment) throw new Error('Inscripción no encontrada')
+  if (enrollment.attended) throw new Error('Ya se registró asistencia')
+
+  const { error: uErr } = await supabase
+    .from('course_enrollments')
+    .update({ attended: true, attended_at: new Date().toISOString() })
+    .eq('id', enrollment.id)
+
+  if (uErr) throw uErr
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', enrollment.user_id)
+    .single()
+
+  const { data: courseData } = await supabase
+    .from('courses')
+    .select('title')
+    .eq('id', enrollment.course_id)
+    .single()
+
+  return {
+    username: profile?.username ?? 'Desconocido',
+    courseName: courseData?.title ?? 'Curso',
   }
 }
 
@@ -474,7 +605,7 @@ export async function isCourseFull(courseId: string): Promise<boolean> {
 export async function getCourseEnrollments(courseId: string): Promise<Enrollment[]> {
   const { data, error } = await supabase
     .from('course_enrollments')
-    .select('id, user_id, course_id, enrolled_at')
+    .select('*')
     .eq('course_id', courseId)
     .order('enrolled_at', { ascending: false })
 

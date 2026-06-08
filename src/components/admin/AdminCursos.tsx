@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listCourses, deleteCourse, getCourseEnrollments, type Course, type Enrollment } from '../../lib/queries'
+import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, type Course, type Enrollment } from '../../lib/queries'
+import QRScanner from './QRScanner'
 
 interface AdminCursosProps {
   onCreateCourse: () => void
@@ -13,6 +14,7 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
   const [enrollments, setEnrollments] = useState<Record<string, Enrollment[]>>({})
   const [enrollmentsLoading, setEnrollmentsLoading] = useState<Record<string, boolean>>({})
   const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({})
+  const [scannerCourseId, setScannerCourseId] = useState<string | null>(null)
 
   const load = async () => {
     try {
@@ -43,6 +45,17 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
       sileo.success({ title: 'Curso eliminado', description: `"${title}" fue eliminado` })
     } catch {
       sileo.error({ title: 'Error', description: 'No se pudo eliminar el curso' })
+    }
+  }
+
+  const handleConclude = async (id: string, title: string) => {
+    if (!confirm(`¿Concluir el curso "${title}"? Ya no será visible para los usuarios.`)) return
+    try {
+      await concludeCourse(id)
+      setCourses((prev) => prev.map((c) => c.id === id ? { ...c, concluded: true } : c))
+      sileo.success({ title: 'Curso concluido', description: `"${title}" fue concluido` })
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo concluir el curso' })
     }
   }
 
@@ -103,7 +116,7 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
           {courses.map((course, i) => (
             <div
               key={course.id}
-              className="admin-curso-card"
+              className={`admin-curso-card ${course.concluded ? 'admin-curso-card-concluded' : ''}`}
               style={{ animationDelay: `${i * 60}ms` }}
             >
               <div className="admin-curso-card-header">
@@ -114,6 +127,9 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   )}
                 </div>
                 <div className="admin-curso-card-badges">
+                  {course.concluded && (
+                    <span className="admin-curso-badge admin-curso-badge-concluded">Concluido</span>
+                  )}
                   <span className={`admin-curso-badge ${course.published ? 'admin-curso-badge-published' : 'admin-curso-badge-draft'}`}>
                     {course.published ? 'Publicado' : 'Borrador'}
                   </span>
@@ -167,6 +183,20 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   <span className="admin-curso-card-date">
                     {new Date(course.created_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
                   </span>
+                  {!course.concluded && (
+                    <button
+                      className="admin-curso-action-btn admin-curso-conclude-btn"
+                      onClick={() => handleConclude(course.id, course.title)}
+                      type="button"
+                      aria-label={`Concluir curso ${course.title}`}
+                      title="Marcar como concluido"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                        <polyline points="22 4 12 14.01 9 11.01" />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     className="admin-curso-action-btn"
                     onClick={() => handleDelete(course.id, course.title)}
@@ -180,6 +210,7 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   </button>
                 </div>
               </div>
+
               {expandedId === course.id && (
                 <div className="admin-curso-enrollments">
                   {enrollmentsLoading[course.id] ? (
@@ -187,27 +218,94 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   ) : enrollments[course.id]?.length === 0 ? (
                     <p className="admin-curso-enrollments-empty">No hay inscriptos aún</p>
                   ) : (
-                    <div className="admin-curso-enrollments-list">
-                      {enrollments[course.id]?.map((enr) => (
-                        <div key={enr.id} className="admin-curso-enrollment-item">
-                          <div className="admin-curso-enrollment-avatar">
-                            {(enr.profiles?.full_name?.[0] || enr.profiles?.username?.[0] || '?').toUpperCase()}
-                          </div>
-                          <div className="admin-curso-enrollment-info">
-                            <span className="admin-curso-enrollment-name">{enr.profiles?.full_name || enr.profiles?.username || 'Sin nombre'}</span>
-                            <span className="admin-curso-enrollment-date">
-                              {new Date(enr.enrolled_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <>
+                      {(() => {
+                        const enrList = enrollments[course.id] ?? []
+                        const attended = enrList.filter((e) => e.attended)
+                        const notAttended = enrList.filter((e) => !e.attended)
+                        const total = enrList.length
+                        const pct = total > 0 ? Math.round((attended.length / total) * 100) : 0
+
+                        return (
+                          <>
+                            <div className="admin-curso-attendance-chart">
+                              <div className="admin-curso-chart-bar">
+                                <div className="admin-curso-chart-fill" style={{ width: `${pct}%` }} />
+                              </div>
+                              <div className="admin-curso-chart-labels">
+                                <span className="admin-curso-chart-label-attended">
+                                  {attended.length} asistieron ({pct}%)
+                                </span>
+                                <span className="admin-curso-chart-label-missed">
+                                  {notAttended.length} no asistieron
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="admin-curso-enrollments-scroll">
+                              <div className="admin-curso-enrollments-table">
+                                <div className="admin-curso-table-header">
+                                  <span className="admin-curso-table-col admin-curso-table-col-name">Nombre</span>
+                                  <span className="admin-curso-table-col admin-curso-table-col-username">Usuario</span>
+                                  <span className="admin-curso-table-col admin-curso-table-col-date">Inscripción</span>
+                                  <span className="admin-curso-table-col admin-curso-table-col-status">Estado</span>
+                                </div>
+                                {enrList.map((enr) => (
+                                  <div key={enr.id} className={`admin-curso-table-row ${enr.attended ? 'admin-curso-table-row-attended' : ''}`}>
+                                    <span className="admin-curso-table-col admin-curso-table-col-name">
+                                      {enr.profiles?.full_name || '—'}
+                                    </span>
+                                    <span className="admin-curso-table-col admin-curso-table-col-username">
+                                      @{enr.profiles?.username || '?'}
+                                    </span>
+                                    <span className="admin-curso-table-col admin-curso-table-col-date">
+                                      {new Date(enr.enrolled_at).toLocaleDateString('es-MX', { dateStyle: 'short' })}
+                                    </span>
+                                    <span className={`admin-curso-table-col admin-curso-table-col-status ${enr.attended ? 'admin-curso-status-attended' : 'admin-curso-status-missed'}`}>
+                                      {enr.attended ? 'Presente' : 'Ausente'}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {course.modality === 'presencial' && (
+                              <button
+                                className="admin-curso-scan-btn"
+                                onClick={() => setScannerCourseId(course.id)}
+                                type="button"
+                              >
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
+                                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
+                                  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
+                                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
+                                  <line x1="7" y1="12" x2="17" y2="12" />
+                                </svg>
+                                Escanear QR
+                              </button>
+                            )}
+                          </>
+                        )
+                      })()}
+                    </>
                   )}
                 </div>
               )}
             </div>
           ))}
         </div>
+      )}
+
+      {scannerCourseId && (
+        <QRScanner
+          onScanResult={(username, courseName) => {
+            sileo.success({ title: 'Asistencia registrada', description: `${username} — ${courseName}` })
+            setScannerCourseId(null)
+            if (expandedId) toggleEnrollments(expandedId)
+          }}
+          onClose={() => setScannerCourseId(null)}
+        />
       )}
     </div>
   )

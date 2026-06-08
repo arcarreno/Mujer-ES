@@ -56,7 +56,7 @@ export default function WelcomeModal({ username }: WelcomeModalProps) {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.5, duration: 0.4 }}
         >
-          Preparando tu espacio...
+          Preparando tu espacio
         </motion.p>
       </motion.div>
     </motion.div>

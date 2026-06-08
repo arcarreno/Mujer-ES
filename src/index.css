@@ -1927,6 +1927,15 @@ input[type="date"].form-input {
   color: #dc2626;
 }
 
+.admin-curso-badge-concluded {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.admin-curso-card-concluded {
+  opacity: 0.7;
+}
+
 .admin-curso-card-vacancies {
   display: flex;
   align-items: center;
@@ -1986,6 +1995,94 @@ input[type="date"].form-input {
 
 .admin-curso-action-btn:hover {
   background: #fef2f2;
+  color: #dc2626;
+}
+
+.admin-curso-conclude-btn:hover {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.admin-curso-enrollments-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-bottom: 0.75rem;
+  border: 1px solid #f0f0f0;
+  border-radius: 0.6rem;
+}
+
+.admin-curso-enrollments-table {
+  min-width: 380px;
+}
+
+.admin-curso-table-header {
+  display: flex;
+  padding: 0.5rem 0.75rem;
+  background: #f5f3ff;
+  border-bottom: 1px solid #e9d5ff;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #581C87;
+  gap: 0.5rem;
+}
+
+.admin-curso-table-row {
+  display: flex;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f0f0f0;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.78rem;
+  color: #374151;
+  gap: 0.5rem;
+  align-items: center;
+  transition: background 0.15s ease;
+}
+
+.admin-curso-table-row:last-child {
+  border-bottom: none;
+}
+
+.admin-curso-table-row-attended {
+  background: #f0fdf4;
+}
+
+.admin-curso-table-col {
+  flex-shrink: 0;
+}
+
+.admin-curso-table-col-name {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-curso-table-col-username {
+  width: 100px;
+  color: #9ca3af;
+  font-size: 0.72rem;
+}
+
+.admin-curso-table-col-date {
+  width: 80px;
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.admin-curso-table-col-status {
+  width: 70px;
+  text-align: right;
+  font-weight: 500;
+  font-size: 0.72rem;
+}
+
+.admin-curso-status-attended {
+  color: #059669;
+}
+
+.admin-curso-status-missed {
   color: #dc2626;
 }
 
@@ -3300,6 +3397,69 @@ input[type="date"].form-input {
 }
 
 /* ============================================
+   MAP CONTROLS (layer + fullscreen)
+   ============================================ */
+
+.map-controls {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  z-index: 1000;
+}
+
+.map-control-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 0.5rem;
+  border: none;
+  background: #fff;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.map-control-btn:hover {
+  background: #f3f4f6;
+  transform: scale(1.05);
+}
+
+/* Map fullscreen */
+.map-page-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #fafafa;
+  padding: 0;
+}
+
+.map-page-fullscreen .map-page-container {
+  border-radius: 0;
+  border: none;
+  height: 100%;
+}
+
+/* Admin map fullscreen */
+.create-course-map-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  border-radius: 0;
+  height: 100% !important;
+  max-width: none;
+}
+
+.create-course-map-fullscreen .map-controls {
+  top: calc(0.75rem + var(--sat));
+}
+
+/* ============================================
    ADMIN ENROLLMENTS
    ============================================ */
 
@@ -3357,6 +3517,49 @@ input[type="date"].form-input {
   border-radius: 0.6rem;
 }
 
+.admin-curso-enrollment-attended {
+  border-color: #a7f3d0;
+  background: #f0fdf4;
+}
+
+.admin-curso-enrollment-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #581C87;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.admin-curso-enrollment-avatar-attended {
+  background: #059669;
+}
+
+.admin-curso-enrollment-status {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.admin-curso-enrollment-status-attended {
+  background: #dcfce7;
+  color: #059669;
+}
+
+.admin-curso-enrollment-status-missed {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
 .admin-curso-enrollment-avatar {
   width: 30px;
   height: 30px;
@@ -3391,6 +3594,191 @@ input[type="date"].form-input {
 .admin-curso-enrollment-date {
   font-size: 0.72rem;
   color: #9ca3af;
+}
+
+.admin-curso-scan-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #fff;
+  background: #059669;
+  border: none;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  margin-bottom: 0.75rem;
+}
+
+.admin-curso-scan-btn:hover {
+  background: #047857;
+}
+
+.admin-curso-attendance-chart {
+  margin-bottom: 0.75rem;
+}
+
+.admin-curso-chart-bar {
+  width: 100%;
+  height: 8px;
+  background: #fef2f2;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.admin-curso-chart-fill {
+  height: 100%;
+  background: #059669;
+  border-radius: 9999px;
+  transition: width 0.5s ease;
+}
+
+.admin-curso-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.35rem;
+}
+
+.admin-curso-chart-label-attended {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.72rem;
+  color: #059669;
+  font-weight: 500;
+}
+
+.admin-curso-chart-label-missed {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.72rem;
+  color: #dc2626;
+}
+
+/* ============================================
+   QR SCANNER
+   ============================================ */
+
+.qr-scanner-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.qr-scanner-card {
+  background: #fff;
+  border-radius: 1.25rem;
+  max-width: 24rem;
+  width: 100%;
+  overflow: hidden;
+}
+
+.qr-scanner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.qr-scanner-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 500;
+  font-size: 1rem;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.qr-scanner-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: #f5f5f5;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.qr-scanner-close:hover {
+  background: #e5e7eb;
+}
+
+.qr-scanner-body {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.qr-scanner-viewport {
+  width: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.qr-scanner-viewport video {
+  border-radius: 0.75rem;
+}
+
+.qr-scanner-processing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 2rem;
+}
+
+.qr-scanner-processing p {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.9rem;
+  color: #6b7280;
+}
+
+.qr-scanner-error {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.82rem;
+  color: #dc2626;
+  padding: 0.5rem 0.75rem;
+  background: #fef2f2;
+  border-radius: 0.5rem;
+}
+
+.qr-scanner-hint {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.82rem;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.qr-scanner-cancel {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: #6b7280;
+  background: #f5f5f5;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.5rem 1.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.qr-scanner-cancel:hover {
+  background: #e5e7eb;
+  color: #374151;
 }
 
 /* ============================================
@@ -3591,6 +3979,145 @@ input[type="date"].form-input {
   color: #9ca3af;
   font-style: italic;
   padding: 0.75rem;
+}
+
+/* ============================================
+   ENROLLMENT RESULT INLINE
+   ============================================ */
+
+.curso-detail-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .curso-detail-layout-with-result {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .curso-detail-layout-with-result > .curso-detail {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.enrollment-result-inline {
+  animation: cardFadeIn 0.3s ease;
+}
+
+@media (min-width: 768px) {
+  .curso-detail-layout-with-result > .enrollment-result-inline {
+    position: sticky;
+    top: 1rem;
+    width: 20rem;
+    flex-shrink: 0;
+  }
+}
+
+.enrollment-result-card {
+  background: #fff;
+  border-radius: 1.25rem;
+  padding: 2rem 1.5rem;
+  max-width: 22rem;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  animation: cardFadeIn 0.3s ease;
+  border: 1px solid #f0f0f0;
+}
+
+.enrollment-result-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #ecfdf5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.enrollment-result-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #059669;
+  margin: 0;
+}
+
+.enrollment-result-course {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.9rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+.enrollment-result-hint {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin: 0;
+  font-style: italic;
+}
+
+.enrollment-result-qr {
+  background: #fff;
+  border: 2px solid #f0f0f0;
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  margin: 0.25rem 0;
+}
+
+.enrollment-result-qr img {
+  display: block;
+}
+
+.enrollment-result-code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #581C87;
+  background: #f5f0fa;
+  border: 2px dashed #d8b4fe;
+  border-radius: 0.75rem;
+  padding: 0.75rem 2rem;
+  letter-spacing: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.enrollment-result-code:hover {
+  background: #ede9fe;
+}
+
+.enrollment-result-sub {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.enrollment-result-close {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #fff;
+  background: #581C87;
+  border: none;
+  border-radius: 9999px;
+  padding: 0.6rem 2rem;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background 0.2s ease;
+}
+
+.enrollment-result-close:hover {
+  background: #6b21a8;
 }
 
 .curso-detail-unenroll-btn {
