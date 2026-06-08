@@ -544,7 +544,6 @@ export async function markAttendance(qrPayload: string): Promise<{ username: str
     .eq('id', parsed.eid)
     .eq('user_id', parsed.uid)
     .eq('course_id', parsed.cid)
-    .eq('qr_code', qrPayload)
     .maybeSingle()
 
   if (eErr || !enrollment) throw new Error('Inscripción no encontrada')

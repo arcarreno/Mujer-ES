@@ -13,6 +13,7 @@ export default function QRScanner({ onScanResult, onClose }: QRScannerProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scannerRef = useRef<Html5Qrcode | null>(null)
   const activeRef = useRef(false)
+  const processingRef = useRef(false)
 
   useEffect(() => {
     const container = containerRef.current
@@ -36,19 +37,20 @@ export default function QRScanner({ onScanResult, onClose }: QRScannerProps) {
         aspectRatio: 1,
       },
       async (decodedText) => {
-        if (!activeRef.current || processing) return
+        if (!activeRef.current || processingRef.current) return
         activeRef.current = false
+        processingRef.current = true
         setProcessing(true)
 
         try {
           const result = await markAttendance(decodedText)
-          if (activeRef.current === false) onScanResult(result.username, result.courseName)
+          if (!processingRef.current) return
+          onScanResult(result.username, result.courseName)
         } catch (err: any) {
-          if (!activeRef.current) {
-            activeRef.current = true
-            setError(err.message || 'Error al registrar asistencia')
-            setProcessing(false)
-          }
+          activeRef.current = true
+          processingRef.current = false
+          setProcessing(false)
+          setError(err.message || 'Error al registrar asistencia')
         }
       },
       () => {}
