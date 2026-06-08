@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, type Course } from '../../lib/queries'
+import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, type Course } from '../../lib/queries'
 import EnrollmentResult from '../ui/EnrollmentResult'
 
 type View = 'list' | 'detail'
@@ -23,6 +23,10 @@ export default function CursosPage() {
   const [courseFull, setCourseFull] = useState(false)
   const [enrollmentCount, setEnrollmentCount] = useState(0)
   const [enrollmentResult, setEnrollmentResult] = useState<EnrollmentInfo | null>(null)
+  const [myQrPayload, setMyQrPayload] = useState<string | null>(null)
+  const [showQrPanel, setShowQrPanel] = useState(false)
+  const [qrPanelDataUrl, setQrPanelDataUrl] = useState<string | null>(null)
+  const [qrLoading, setQrLoading] = useState(false)
 
   useEffect(() => {
     listPublishedCourses()
@@ -35,6 +39,9 @@ export default function CursosPage() {
     setSelected(course)
     setView('detail')
     setEnrollCheck(true)
+    setShowQrPanel(false)
+    setQrPanelDataUrl(null)
+    setMyQrPayload(null)
     try {
       const [isEnrolled, full, enrollments] = await Promise.all([
         isEnrolledInCourse(course.id),
@@ -44,6 +51,10 @@ export default function CursosPage() {
       setEnrolled(isEnrolled)
       setCourseFull(full)
       setEnrollmentCount(enrollments.length)
+      if (isEnrolled) {
+        const myEnrollment = await getMyEnrollmentForCourse(course.id)
+        if (myEnrollment?.qr_code) setMyQrPayload(myEnrollment.qr_code)
+      }
     } catch {
       setEnrolled(false)
       setCourseFull(false)
@@ -65,6 +76,10 @@ export default function CursosPage() {
         accessCode: result.accessCode,
         courseName: selected.title,
       })
+      if (result.qrCodeDataUrl && selected.modality === 'presencial') {
+        const myEnrollment = await getMyEnrollmentForCourse(selected.id)
+        if (myEnrollment?.qr_code) setMyQrPayload(myEnrollment.qr_code)
+      }
     } catch (err: any) {
       sileo.error({ title: 'Error', description: err.message || 'No se pudo inscribir' })
     } finally {
@@ -79,6 +94,8 @@ export default function CursosPage() {
     try {
       await unenrollFromCourse(selected.id)
       setEnrolled(false)
+      setShowQrPanel(false)
+      setMyQrPayload(null)
       sileo.success({ title: 'Baja exitosa', description: `Te diste de baja de "${selected.title}"` })
     } catch (err: any) {
       sileo.error({ title: 'Error', description: err.message || 'No se pudo dar de baja' })
@@ -87,14 +104,33 @@ export default function CursosPage() {
     }
   }
 
+  const handleShowQr = async () => {
+    if (showQrPanel) {
+      setShowQrPanel(false)
+      return
+    }
+    setShowQrPanel(true)
+    if (qrPanelDataUrl) return
+    if (!myQrPayload) return
+    setQrLoading(true)
+    try {
+      const dataUrl = await generateQrDataUrlFromPayload(myQrPayload)
+      setQrPanelDataUrl(dataUrl)
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo generar el código QR' })
+    } finally {
+      setQrLoading(false)
+    }
+  }
+
   if (view === 'detail' && selected) {
     return (
-      <div className={`curso-detail-layout ${enrollmentResult ? 'curso-detail-layout-with-result' : ''}`}>
+      <div className={`curso-detail-layout ${showQrPanel ? 'curso-detail-layout-with-result' : ''}`}>
         <div className="curso-detail">
           <div className="curso-detail-header">
             <button
               className="curso-detail-back"
-              onClick={() => { setView('list'); setSelected(null); setEnrollmentResult(null) }}
+              onClick={() => { setView('list'); setSelected(null); setEnrollmentResult(null); setShowQrPanel(false) }}
               type="button"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -186,8 +222,48 @@ export default function CursosPage() {
                 )}
               </button>
             )}
+
+            {enrolled && selected.modality === 'presencial' && myQrPayload && (
+              <button
+                className={`curso-detail-qr-btn ${showQrPanel ? 'curso-detail-qr-btn-active' : ''}`}
+                onClick={handleShowQr}
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                  <rect x="14" y="14" width="3" height="3" />
+                </svg>
+                Código QR
+              </button>
+            )}
           </div>
         </div>
+
+        {showQrPanel && (
+          <div className="curso-qr-panel">
+            <div className="curso-qr-panel-card">
+              <h3 className="curso-qr-panel-title">Tu código QR</h3>
+              <p className="curso-qr-panel-hint">Mostrá este código al organizador para registrar tu asistencia</p>
+              {qrLoading ? (
+                <div className="curso-qr-panel-loading">
+                  <div className="curso-detail-spinner" />
+                  <p>Generando código...</p>
+                </div>
+              ) : qrPanelDataUrl ? (
+                <>
+                  <div className="curso-qr-panel-img">
+                    <img src={qrPanelDataUrl} alt="Código QR de asistencia" width="280" height="280" />
+                  </div>
+                  <p className="curso-qr-panel-sub">Código QR personal e intransferible</p>
+                </>
+              ) : (
+                <p className="curso-qr-panel-error">No se pudo generar el código QR</p>
+              )}
+            </div>
+          </div>
+        )}
 
         {enrollmentResult && (
           <EnrollmentResult

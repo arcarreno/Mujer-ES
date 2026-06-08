@@ -513,6 +513,14 @@ export async function getMyEnrollmentForCourse(courseId: string): Promise<Enroll
   return data as Enrollment | null
 }
 
+export async function generateQrDataUrlFromPayload(payload: string): Promise<string> {
+  return QRCode.toDataURL(payload, {
+    width: 400,
+    margin: 2,
+    color: { dark: '#581C87', light: '#ffffff' },
+  })
+}
+
 export async function markAttendance(qrPayload: string): Promise<{ username: string; courseName: string }> {
   let parsed: { eid: string; cid: string; uid: string }
   try {
