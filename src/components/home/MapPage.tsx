@@ -97,7 +97,7 @@ export default function MapPage() {
 
   const handleUnenroll = async () => {
     if (!selected || enrolling) return
-    if (!confirm(`¿Darte de baja de "${selected.title}"?`)) return
+    if (!confirm(`¿Darte de baja de  "${selected.title}"?`)) return
     setEnrolling(true)
     try {
       await unenrollFromCourse(selected.id)
