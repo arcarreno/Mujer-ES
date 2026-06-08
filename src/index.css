@@ -3093,7 +3093,8 @@ input[type="date"].form-input {
 
 .create-course-page {
   width: 100%;
-  max-width: 32rem;
+  max-width: 48rem;
+  margin: 0 auto;
 }
 
 .create-course-page-header {
@@ -3128,6 +3129,8 @@ input[type="date"].form-input {
   background: #fafafa;
   resize: vertical;
   min-height: 5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .create-course-page-form textarea:focus {
@@ -3135,15 +3138,20 @@ input[type="date"].form-input {
   box-shadow: 0 0 0 3px rgba(88, 28, 135, 0.1);
 }
 
+.create-course-page-form input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .create-course-page-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
 }
 
 .create-course-map {
-  height: 250px;
+  height: 300px;
   border-radius: 0.5rem;
   overflow: hidden;
   border: 1px solid #d1d5db;
@@ -3154,6 +3162,16 @@ input[type="date"].form-input {
   color: #9ca3af;
   margin-top: 0.35rem;
   display: block;
+}
+
+@media (max-width: 480px) {
+  .create-course-map {
+    height: 220px;
+  }
+
+  .create-course-page-title {
+    font-size: 1.2rem;
+  }
 }
 
 /* ============================================
