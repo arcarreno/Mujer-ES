@@ -3479,6 +3479,58 @@ input[type="date"].form-input {
 }
 
 /* ============================================
+   CREATE USER PAGE
+   ============================================ */
+
+.create-user-page {
+  width: 100%;
+  max-width: 28rem;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.create-user-page .login-form {
+  width: 100%;
+}
+
+.create-user-page .login-title {
+  margin-bottom: 0.5rem;
+}
+
+.create-user-page .otp-subtitle {
+  margin-bottom: 1.5rem;
+}
+
+.create-page-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.95rem;
+  color: #581C87;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.create-page-back:hover {
+  opacity: 0.7;
+}
+
+@media only screen and (max-width: 480px) {
+  .create-user-page {
+    max-width: 100%;
+    padding: 0 0.5rem;
+  }
+}
+
+/* ============================================
    MAP PAGE (USER)
    ============================================ */
 

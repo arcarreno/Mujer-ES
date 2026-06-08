@@ -3,19 +3,18 @@ import { AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import { listUsers, type UserRow } from '../../lib/admin'
 import UserDetailModal from './UserDetailModal'
-import CreateUserModal from './CreateUserModal'
 import { supabase } from '../../lib/supabase'
 import { getErrorMessage } from '../../lib/queries'
 
 interface ManageUsersProps {
   onCountsChange?: (total: number, blocked: number) => void
+  onCreateUser?: () => void
 }
 
-export default function ManageUsers({ onCountsChange }: ManageUsersProps) {
+export default function ManageUsers({ onCountsChange, onCreateUser }: ManageUsersProps) {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<UserRow | null>(null)
-  const [showCreate, setShowCreate] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string>('')
 
   const loadUsers = async () => {
@@ -49,7 +48,7 @@ export default function ManageUsers({ onCountsChange }: ManageUsersProps) {
           <h2 className="cursos-title">Usuarios</h2>
           <p className="cursos-subtitle">{users.length} registrado{users.length !== 1 ? 's' : ''}</p>
         </div>
-        <button onClick={() => setShowCreate(true)} className="manage-add-btn" type="button">
+        <button onClick={onCreateUser} className="manage-add-btn" type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" x2="12" y1="5" y2="19" />
             <line x1="5" x2="19" y1="12" y2="12" />
@@ -105,12 +104,6 @@ export default function ManageUsers({ onCountsChange }: ManageUsersProps) {
             currentUserId={currentUserId}
             onClose={() => setSelected(null)}
             onUpdate={loadUsers}
-          />
-        )}
-        {showCreate && (
-          <CreateUserModal
-            onClose={() => setShowCreate(false)}
-            onCreated={loadUsers}
           />
         )}
       </AnimatePresence>

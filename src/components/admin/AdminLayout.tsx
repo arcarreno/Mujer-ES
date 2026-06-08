@@ -6,6 +6,7 @@ import AdminDashboard from './AdminDashboard'
 import ManageUsers from './ManageUsers'
 import AdminCursos from './AdminCursos'
 import CreateCoursePage from './CreateCoursePage'
+import CreateUserPage from './CreateUserModal'
 import AdminChats from './AdminChats'
 import { signOut } from '../../lib/queries'
 import { listUsers } from '../../lib/admin'
@@ -21,6 +22,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [userCount, setUserCount] = useState(0)
   const [blockedCount, setBlockedCount] = useState(0)
   const [showCreateCourse, setShowCreateCourse] = useState(false)
+  const [showCreateUser, setShowCreateUser] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -71,6 +73,14 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             }}
             onBack={() => setShowCreateCourse(false)}
           />
+        ) : showCreateUser ? (
+          <CreateUserPage
+            onCreated={() => {
+              setShowCreateUser(false)
+              setActiveTab('users')
+            }}
+            onBack={() => setShowCreateUser(false)}
+          />
         ) : (
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
@@ -97,7 +107,10 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
               >
-                <ManageUsers onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }} />
+                <ManageUsers
+                  onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }}
+                  onCreateUser={() => setShowCreateUser(true)}
+                />
               </motion.div>
             )}
             {activeTab === 'cursos' && (
