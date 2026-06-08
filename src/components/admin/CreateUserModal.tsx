@@ -9,19 +9,12 @@ interface CreateUserModalProps {
   onCreated: () => void
 }
 
-function generatePassword(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789'
-  let pwd = ''
-  for (let i = 0; i < 10; i++) pwd += chars[Math.floor(Math.random() * chars.length)]
-  return pwd
-}
-
 export default function CreateUserModal({ onClose, onCreated }: CreateUserModalProps) {
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [username, setUsername] = useState('')
   const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState(generatePassword())
+  const [password, setPassword] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -39,7 +32,7 @@ export default function CreateUserModal({ onClose, onCreated }: CreateUserModalP
       })
       sileo.success({
         title: isAdmin ? 'Administrador creado' : 'Usuario creado',
-        description: `Contraseña temporal: ${password}. Compartila con la persona por un canal seguro.`,
+        description: 'Ya puede iniciar sesión con su correo y contraseña.',
       })
       onCreated()
       onClose()
@@ -80,7 +73,7 @@ export default function CreateUserModal({ onClose, onCreated }: CreateUserModalP
           {isAdmin ? 'Crear administrador' : 'Crear usuario'}
         </h2>
         <p className="otp-subtitle" style={{ marginBottom: '1.5rem' }}>
-          Se generará una contraseña temporal que podrás compartir
+          Ingresá la contraseña que se usará para iniciar sesión
         </p>
 
         <form onSubmit={handleSubmit} className="login-form">
@@ -101,8 +94,8 @@ export default function CreateUserModal({ onClose, onCreated }: CreateUserModalP
             <input id="cu-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10 dígitos" />
           </div>
           <div className="login-field">
-            <label htmlFor="cu-pwd">Contraseña temporal</label>
-            <input id="cu-pwd" type="text" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <label htmlFor="cu-pwd">Contraseña</label>
+            <input id="cu-pwd" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required minLength={6} />
           </div>
 
           <button

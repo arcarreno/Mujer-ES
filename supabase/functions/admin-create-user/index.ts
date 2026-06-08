@@ -63,7 +63,6 @@ serve(async (req) => {
         username,
         phone: phone || null,
         role,
-        password,
       },
     })
 
@@ -75,7 +74,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, user: newUser.user, temp_password: password }),
+      JSON.stringify({ ok: true, user: newUser.user }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (e) {

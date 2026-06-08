@@ -125,7 +125,7 @@ export interface CreateUserPayload {
 
 export async function adminCreateUser(
   payload: CreateUserPayload
-): Promise<{ temp_password: string; type: UserType }> {
+): Promise<{ type: UserType }> {
   const { data, error } = await supabase.functions.invoke('admin-create-user', {
     body: payload,
   })
@@ -133,7 +133,6 @@ export async function adminCreateUser(
   if (error) throw error
   if (data && 'error' in data) throw new Error(data.error as string)
   return {
-    temp_password: (data as { temp_password: string }).temp_password,
     type: payload.is_admin ? 'admin' : 'user',
   }
 }
