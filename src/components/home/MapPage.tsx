@@ -87,10 +87,7 @@ export default function MapPage() {
         accessCode: result.accessCode,
         courseName: selected.title,
       })
-      if (result.qrCodeDataUrl && selected.modality === 'presencial') {
-        const myEnrollment = await getMyEnrollmentForCourse(selected.id)
-        if (myEnrollment?.qr_code) setMyQrPayload(myEnrollment.qr_code)
-      }
+      if (result.qrPayload) setMyQrPayload(result.qrPayload)
     } catch (err: any) {
       sileo.error({ title: 'Error', description: err.message || 'No se pudo inscribir' })
     } finally {

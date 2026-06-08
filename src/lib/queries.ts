@@ -436,7 +436,7 @@ function generateQrPayload(enrollmentId: string, courseId: string, userId: strin
   return JSON.stringify({ eid: enrollmentId, cid: courseId, uid: userId, t: Date.now() })
 }
 
-export async function enrollInCourse(courseId: string): Promise<{ qrCodeDataUrl?: string; accessCode?: string; modality: string }> {
+export async function enrollInCourse(courseId: string): Promise<{ qrCodeDataUrl?: string; qrPayload?: string; accessCode?: string; modality: string }> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
@@ -478,7 +478,7 @@ export async function enrollInCourse(courseId: string): Promise<{ qrCodeDataUrl?
       .update({ qr_code: payload })
       .eq('id', enrollment.id)
     if (updateErr) throw updateErr
-    return { qrCodeDataUrl, modality }
+    return { qrCodeDataUrl, qrPayload: payload, modality }
   }
 
   return { accessCode: accessCode ?? undefined, modality }
