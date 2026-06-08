@@ -12,11 +12,20 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [enrollments, setEnrollments] = useState<Record<string, Enrollment[]>>({})
   const [enrollmentsLoading, setEnrollmentsLoading] = useState<Record<string, boolean>>({})
+  const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({})
 
   const load = async () => {
     try {
       const data = await listCourses()
       setCourses(data)
+      const counts: Record<string, number> = {}
+      await Promise.all(
+        data.map(async (c) => {
+          const enrollments = await getCourseEnrollments(c.id)
+          counts[c.id] = enrollments.length
+        })
+      )
+      setEnrollmentCounts(counts)
     } catch {
       sileo.error({ title: 'Error', description: 'No se pudieron cargar los cursos' })
     } finally {
@@ -125,6 +134,21 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   {course.location_name}
                 </p>
               )}
+              <div className="admin-curso-card-vacancies">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                  <circle cx="9" cy="7" r="4" />
+                  <line x1="19" x2="19" y1="8" y2="14" />
+                  <line x1="22" x2="16" y1="11" y2="11" />
+                </svg>
+                <span>
+                  {enrollmentCounts[course.id] ?? 0}
+                  {course.max_enrollments ? ` / ${course.max_enrollments}` : ''} inscripto{(enrollmentCounts[course.id] ?? 0) !== 1 ? 's' : ''}
+                </span>
+                {course.max_enrollments && (enrollmentCounts[course.id] ?? 0) >= course.max_enrollments && (
+                  <span className="admin-curso-badge admin-curso-badge-full">Lleno</span>
+                )}
+              </div>
               <div className="admin-curso-card-footer">
                 <button
                   className="admin-curso-enrollments-btn"

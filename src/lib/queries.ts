@@ -317,6 +317,7 @@ export interface Course {
   latitude: number | null
   longitude: number | null
   location_name: string | null
+  max_enrollments: number | null
   created_at: string
   updated_at: string
 }
@@ -351,6 +352,7 @@ export async function createCourse(course: {
   latitude?: number | null
   longitude?: number | null
   location_name?: string | null
+  max_enrollments?: number | null
 }): Promise<Course> {
   const { data: { user } } = await supabase.auth.getUser()
   const { data, error } = await supabase
@@ -364,6 +366,7 @@ export async function createCourse(course: {
       latitude: course.latitude ?? null,
       longitude: course.longitude ?? null,
       location_name: course.location_name ?? null,
+      max_enrollments: course.max_enrollments ?? null,
       created_by: user?.id ?? null,
     })
     .select()
@@ -450,16 +453,44 @@ export async function isEnrolledInCourse(courseId: string): Promise<boolean> {
   return data !== null
 }
 
+export async function isCourseFull(courseId: string): Promise<boolean> {
+  const { data: course, error: cErr } = await supabase
+    .from('courses')
+    .select('max_enrollments')
+    .eq('id', courseId)
+    .single()
+
+  if (cErr || !course?.max_enrollments) return false
+
+  const { count, error } = await supabase
+    .from('course_enrollments')
+    .select('id', { count: 'exact', head: true })
+    .eq('course_id', courseId)
+
+  if (error) return false
+  return (count ?? 0) >= course.max_enrollments
+}
+
 export async function getCourseEnrollments(courseId: string): Promise<Enrollment[]> {
   const { data, error } = await supabase
     .from('course_enrollments')
-    .select('id, user_id, course_id, enrolled_at, profiles:user_id(username, full_name)')
+    .select('id, user_id, course_id, enrolled_at')
     .eq('course_id', courseId)
     .order('enrolled_at', { ascending: false })
 
   if (error) throw error
-  return (data ?? []).map((row: any) => ({
+  if (!data || data.length === 0) return []
+
+  const userIds = [...new Set(data.map((r) => r.user_id))]
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('id, username, full_name')
+    .in('id', userIds)
+
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))
+
+  return data.map((row) => ({
     ...row,
-    profiles: Array.isArray(row.profiles) ? row.profiles[0] ?? null : row.profiles ?? null,
+    profiles: profileMap.get(row.user_id) ?? null,
   })) as Enrollment[]
 }

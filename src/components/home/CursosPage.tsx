@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, type Course } from '../../lib/queries'
+import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, type Course } from '../../lib/queries'
 
 type View = 'list' | 'detail'
 
@@ -12,6 +12,8 @@ export default function CursosPage() {
   const [enrolled, setEnrolled] = useState(false)
   const [enrolling, setEnrolling] = useState(false)
   const [enrollCheck, setEnrollCheck] = useState(true)
+  const [courseFull, setCourseFull] = useState(false)
+  const [enrollmentCount, setEnrollmentCount] = useState(0)
 
   useEffect(() => {
     listPublishedCourses()
@@ -25,10 +27,18 @@ export default function CursosPage() {
     setView('detail')
     setEnrollCheck(true)
     try {
-      const result = await isEnrolledInCourse(course.id)
-      setEnrolled(result)
+      const [isEnrolled, full, enrollments] = await Promise.all([
+        isEnrolledInCourse(course.id),
+        isCourseFull(course.id),
+        getCourseEnrollments(course.id),
+      ])
+      setEnrolled(isEnrolled)
+      setCourseFull(full)
+      setEnrollmentCount(enrollments.length)
     } catch {
       setEnrolled(false)
+      setCourseFull(false)
+      setEnrollmentCount(0)
     } finally {
       setEnrollCheck(false)
     }
@@ -98,6 +108,18 @@ export default function CursosPage() {
         </div>
 
         <div className="curso-detail-footer">
+          {selected.max_enrollments && (
+            <div className={`curso-detail-vacancies ${courseFull ? 'curso-detail-vacancies-full' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <circle cx="9" cy="7" r="4" />
+              </svg>
+              <span>
+                {enrollmentCount} / {selected.max_enrollments} vacante{selected.max_enrollments !== 1 ? 's' : ''}
+              </span>
+              {courseFull && <span className="curso-detail-vacancies-badge">Lleno</span>}
+            </div>
+          )}
           {enrollCheck ? (
             <div className="curso-detail-footer-loading">
               <div className="curso-detail-spinner" />
@@ -118,6 +140,14 @@ export default function CursosPage() {
               >
                 {enrolling ? 'Procesando...' : 'Darse de baja'}
               </button>
+            </div>
+          ) : courseFull ? (
+            <div className="curso-detail-full-msg">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              No hay vacantes disponibles
             </div>
           ) : (
             <button

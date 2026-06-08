@@ -29,8 +29,10 @@ export async function listUsers(): Promise<UserRow[]> {
   if (aErr) throw aErr
 
   const result: UserRow[] = []
+  const adminIds = new Set((admins ?? []).map((a) => a.id))
 
   for (const p of profiles ?? []) {
+    if (adminIds.has(p.id)) continue
     const { data: fr } = await supabase
       .from('form_responses')
       .select('responses')
