@@ -27,6 +27,7 @@ export default function CursosPage() {
   const [showQrPanel, setShowQrPanel] = useState(false)
   const [qrPanelDataUrl, setQrPanelDataUrl] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
+  const [search, setSearch] = useState('')
 
   useEffect(() => {
     listPublishedCourses()
@@ -275,12 +276,32 @@ export default function CursosPage() {
     )
   }
 
+  const filtered = courses.filter(c =>
+    c.title.toLowerCase().includes(search.toLowerCase()) ||
+    c.subtitle?.toLowerCase().includes(search.toLowerCase())
+  )
+
   return (
     <div className="cursos-page">
       <div className="cursos-header">
         <h2 className="cursos-title">Cursos</h2>
         <p className="cursos-subtitle">Aprende a tu ritmo, en cualquier momento</p>
       </div>
+
+      {!selected && (
+        <div className="cursos-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Buscar cursos..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      )}
 
       {loading ? (
         <div className="cursos-loading">
@@ -298,7 +319,7 @@ export default function CursosPage() {
         </div>
       ) : (
         <div className="cursos-list">
-          {courses.map((curso, i) => (
+          {filtered.map((curso, i) => (
             <article
               key={curso.id}
               className="curso-card"

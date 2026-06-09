@@ -17,13 +17,20 @@ export default function Login({ onBack }: LoginProps) {
   const [showRegister, setShowRegister] = useState(false)
   const [showForgot, setShowForgot] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<{identifier?: string; password?: string}>({})
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!identifier.trim() || !contrasena) {
-      sileo.error({ title: 'Faltan datos', description: 'Completá usuario o correo y contraseña' })
+
+    const errors: {identifier?: string; password?: string} = {}
+    if (!identifier.trim()) errors.identifier = 'Este campo es obligatorio'
+    if (!contrasena) errors.password = 'Este campo es obligatorio'
+    if (Object.keys(errors).length > 0) {
+      setFieldErrors(errors)
       return
     }
+    setFieldErrors({})
+
     setLoading(true)
 
     const { user, error } = await signInWithIdentifier(identifier, contrasena)
@@ -63,10 +70,16 @@ export default function Login({ onBack }: LoginProps) {
                   id="identifier"
                   type="text"
                   value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value)
+                    if (fieldErrors.identifier) setFieldErrors((prev) => ({ ...prev, identifier: undefined }))
+                  }}
                   placeholder="tu_usuario o tu@correo.com"
                   autoComplete="username"
+                  className={fieldErrors.identifier ? 'field-invalid' : undefined}
+                  style={{ borderColor: fieldErrors.identifier ? 'var(--color-error)' : undefined }}
                 />
+                {fieldErrors.identifier && <p className="field-error">{fieldErrors.identifier}</p>}
               </div>
               <div className="login-field">
                 <label htmlFor="contrasena">Contraseña</label>
@@ -75,9 +88,14 @@ export default function Login({ onBack }: LoginProps) {
                     id="contrasena"
                     type={showPassword ? 'text' : 'password'}
                     value={contrasena}
-                    onChange={(e) => setContrasena(e.target.value)}
+                    onChange={(e) => {
+                      setContrasena(e.target.value)
+                      if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }))
+                    }}
                     placeholder="Tu contraseña"
                     autoComplete="current-password"
+                    className={fieldErrors.password ? 'field-invalid' : undefined}
+                    style={{ borderColor: fieldErrors.password ? 'var(--color-error)' : undefined }}
                   />
                   <button
                     type="button"
@@ -100,6 +118,7 @@ export default function Login({ onBack }: LoginProps) {
                     )}
                   </button>
                 </div>
+                {fieldErrors.password && <p className="field-error">{fieldErrors.password}</p>}
               </div>
               <SubmitButton loading={loading}>Entrar</SubmitButton>
             </form>

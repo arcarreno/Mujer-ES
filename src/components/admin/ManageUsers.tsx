@@ -5,6 +5,7 @@ import { listUsers, type UserRow } from '../../lib/admin'
 import UserDetailModal from './UserDetailModal'
 import { supabase } from '../../lib/supabase'
 import { getErrorMessage } from '../../lib/queries'
+import Skeleton from '../ui/Skeleton'
 
 interface ManageUsersProps {
   onCountsChange?: (total: number, blocked: number) => void
@@ -58,7 +59,7 @@ export default function ManageUsers({ onCountsChange, onCreateUser }: ManageUser
       </div>
 
       {loading ? (
-        <p className="manage-loading">Cargando...</p>
+        <Skeleton lines={5} />
       ) : users.length === 0 ? (
         <p className="manage-empty">No hay usuarios registrados todavía</p>
       ) : (

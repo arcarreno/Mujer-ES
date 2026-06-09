@@ -5096,3 +5096,74 @@ input[type="date"].form-input {
   color: #1a1a1a;
   margin: 0 0 0.5rem;
 }
+
+/* ============================================
+   SKELETON LOADING
+   ============================================ */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.skeleton-line {
+  height: 1rem;
+  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  border-radius: var(--radius-sm);
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ============================================
+   FIELD VALIDATION ERRORS
+   ============================================ */
+
+.field-error {
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  color: var(--color-error);
+  margin-top: var(--space-1);
+  text-align: left;
+}
+
+.login-field input.field-invalid,
+.login-field input.field-invalid:focus {
+  border-color: var(--color-error);
+}
+
+/* ============================================
+   CURSOS SEARCH
+   ============================================ */
+
+.cursos-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-4);
+}
+
+.cursos-search svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.cursos-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  background: transparent;
+  color: var(--color-text);
+}

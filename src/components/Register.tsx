@@ -41,6 +41,7 @@ export default function Register({ onBack }: RegisterProps) {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [securityAnswers, setSecurityAnswers] = useState<SecurityAnswers | null>(null)
   const [loading, setLoading] = useState(false)
+  const [fieldErrors, setFieldErrors] = useState<{usuario?: string; contrasena?: string; repetirContrasena?: string}>({})
   const captchaContainerRef = useRef<HTMLDivElement | null>(null)
   const captchaWidgetIdRef = useRef<string | null>(null)
 
@@ -271,10 +272,21 @@ export default function Register({ onBack }: RegisterProps) {
                   id="reg-usuario"
                   type="text"
                   value={usuario}
-                  onChange={(e) => setUsuario(e.target.value.toLowerCase())}
+                  onChange={(e) => {
+                    setUsuario(e.target.value.toLowerCase())
+                    if (fieldErrors.usuario) setFieldErrors((prev) => ({ ...prev, usuario: undefined }))
+                  }}
+                  onBlur={() => {
+                    if (usuario.trim() && usuario.trim().length < 3) {
+                      setFieldErrors((prev) => ({ ...prev, usuario: 'Mínimo 3 caracteres' }))
+                    }
+                  }}
                   placeholder="Como te identifiques"
                   autoComplete="username"
+                  className={fieldErrors.usuario ? 'field-invalid' : undefined}
+                  style={{ borderColor: fieldErrors.usuario ? 'var(--color-error)' : undefined }}
                 />
+                {fieldErrors.usuario && <p className="field-error">{fieldErrors.usuario}</p>}
               </div>
               <div className="login-field">
                 <label htmlFor="reg-email">
@@ -296,9 +308,19 @@ export default function Register({ onBack }: RegisterProps) {
                     id="reg-contrasena"
                     type={showPassword ? 'text' : 'password'}
                     value={contrasena}
-                    onChange={(e) => setContrasena(e.target.value)}
+                    onChange={(e) => {
+                      setContrasena(e.target.value)
+                      if (fieldErrors.contrasena) setFieldErrors((prev) => ({ ...prev, contrasena: undefined }))
+                    }}
+                    onBlur={() => {
+                      if (contrasena && contrasena.length < 6) {
+                        setFieldErrors((prev) => ({ ...prev, contrasena: 'Mínimo 6 caracteres' }))
+                      }
+                    }}
                     placeholder="Mínimo 6 caracteres"
                     autoComplete="new-password"
+                    className={fieldErrors.contrasena ? 'field-invalid' : undefined}
+                    style={{ borderColor: fieldErrors.contrasena ? 'var(--color-error)' : undefined }}
                   />
                   <button
                     type="button"
@@ -321,6 +343,7 @@ export default function Register({ onBack }: RegisterProps) {
                     )}
                   </button>
                 </div>
+                {fieldErrors.contrasena && <p className="field-error">{fieldErrors.contrasena}</p>}
                 <p className="login-field-hint">Al menos 6 caracteres, una mayúscula y un número</p>
               </div>
 
@@ -331,9 +354,19 @@ export default function Register({ onBack }: RegisterProps) {
                     id="reg-repetir-contrasena"
                     type={showRepeatPassword ? 'text' : 'password'}
                     value={repetirContrasena}
-                    onChange={(e) => setRepetirContrasena(e.target.value)}
+                    onChange={(e) => {
+                      setRepetirContrasena(e.target.value)
+                      if (fieldErrors.repetirContrasena) setFieldErrors((prev) => ({ ...prev, repetirContrasena: undefined }))
+                    }}
+                    onBlur={() => {
+                      if (repetirContrasena && repetirContrasena !== contrasena) {
+                        setFieldErrors((prev) => ({ ...prev, repetirContrasena: 'Las contraseñas no coinciden' }))
+                      }
+                    }}
                     placeholder="Repetí tu contraseña"
                     autoComplete="new-password"
+                    className={fieldErrors.repetirContrasena ? 'field-invalid' : undefined}
+                    style={{ borderColor: fieldErrors.repetirContrasena ? 'var(--color-error)' : undefined }}
                   />
                   <button
                     type="button"
@@ -356,9 +389,7 @@ export default function Register({ onBack }: RegisterProps) {
                     )}
                   </button>
                 </div>
-                {repetirContrasena.length > 0 && repetirContrasena !== contrasena && (
-                  <p className="login-field-error">Las contraseñas no coinciden</p>
-                )}
+                {fieldErrors.repetirContrasena && <p className="field-error">{fieldErrors.repetirContrasena}</p>}
               </div>
 
               {isCaptchaConfigured() && (

@@ -3,6 +3,7 @@ import { sileo } from 'sileo'
 import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, generateQrDataUrlFromPayload, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
 import EditCoursePage from './EditCoursePage'
+import Skeleton from '../ui/Skeleton'
 
 interface AdminCursosProps {
   onCreateCourse: () => void
@@ -131,7 +132,7 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
 
       {loading ? (
         <div className="admin-cursos-empty">
-          <p>Cargando cursos...</p>
+          <Skeleton lines={3} />
         </div>
       ) : courses.length === 0 ? (
         <div className="admin-cursos-empty">
