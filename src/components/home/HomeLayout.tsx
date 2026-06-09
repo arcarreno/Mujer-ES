@@ -6,6 +6,7 @@ import CursosPage from './CursosPage'
 import MisCursosPage from './MisCursosPage'
 import MapPage from './MapPage'
 import ChatsPage from './ChatsPage'
+import ProfilePage from './ProfilePage'
 import { signOut } from '../../lib/queries'
 
 interface HomeLayoutProps {
@@ -121,6 +122,17 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               transition={{ duration: 0.3 }}
             >
               <ChatsPage onBack={handleBackFromChat} />
+            </motion.div>
+          )}
+          {activeTab === 'perfil' && (
+            <motion.div
+              key="perfil"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <ProfilePage />
             </motion.div>
           )}
         </AnimatePresence>

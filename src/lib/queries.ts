@@ -5,6 +5,9 @@ export interface Profile {
   id: string
   username: string
   full_name: string
+  bio: string | null
+  hobbies: string[] | null
+  avatar_url: string | null
   blocked_until: string | null
   created_at: string
   updated_at: string
@@ -42,6 +45,30 @@ export async function getProfile(userId: string): Promise<Profile | null> {
 
   if (error) throw error
   return data
+}
+
+export async function updateProfile(
+  userId: string,
+  updates: { bio?: string; hobbies?: string[]; avatar_url?: string }
+): Promise<void> {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq('id', userId)
+  if (error) throw error
+}
+
+export async function uploadAvatar(userId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg'
+  const path = `${userId}/avatar.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { upsert: true })
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+  return data.publicUrl
 }
 
 export async function isUserAdmin(userId: string): Promise<boolean> {
@@ -683,6 +710,7 @@ export interface Message {
   created_at: string
   username?: string
   full_name?: string
+  avatar_url?: string
 }
 
 // Get the general chat (seeded via migration — no INSERT needed)
@@ -724,16 +752,17 @@ export function subscribeToMessages(
       },
       async (payload) => {
         const raw = payload.new as Message
-        // Fetch sender profile for username
+        // Fetch sender profile for username + avatar
         const { data: profile } = await supabase
           .from('profiles')
-          .select('username, full_name')
+          .select('username, full_name, avatar_url')
           .eq('id', raw.sender_id)
           .maybeSingle()
         onNewMessage({
           ...raw,
           username: profile?.username,
           full_name: profile?.full_name,
+          avatar_url: profile?.avatar_url,
         })
       }
     )
@@ -759,11 +788,11 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
   }
   // Fetch profiles for all unique sender_ids
   const senderIds = [...new Set((data || []).map((m: any) => m.sender_id))]
-  let profileMap: Record<string, { username: string; full_name: string }> = {}
+  let profileMap: Record<string, { username: string; full_name: string; avatar_url: string | null }> = {}
   if (senderIds.length > 0) {
     const { data: profiles } = await supabase
       .from('profiles')
-      .select('id, username, full_name')
+      .select('id, username, full_name, avatar_url')
       .in('id', senderIds)
     if (profiles) {
       profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]))
@@ -773,6 +802,7 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
     ...m,
     username: profileMap[m.sender_id]?.username,
     full_name: profileMap[m.sender_id]?.full_name,
+    avatar_url: profileMap[m.sender_id]?.avatar_url,
   }))
 }
 

@@ -4890,6 +4890,14 @@ input[type="date"].form-input {
   font-weight: 600;
   font-family: var(--font-body);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.chat-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .chat-avatar-admin {
@@ -5289,4 +5297,299 @@ input[type="date"].form-input {
   font-size: var(--text-sm);
   background: transparent;
   color: var(--color-text);
+}
+
+/* ============================================
+   PROFILE PAGE
+   ============================================ */
+
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.profile-header {
+  margin-bottom: var(--space-2);
+}
+
+.profile-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.75rem;
+  color: #1a1a1a;
+  margin: 0 0 var(--space-1);
+}
+
+.profile-subtitle {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  color: #6b7280;
+  margin: 0;
+}
+
+.profile-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* Avatar */
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.profile-avatar-btn {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  border: 3px solid var(--color-border, #e5e7eb);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--color-primary, #1a1c2e);
+  padding: 0;
+  transition: border-color 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.profile-avatar-btn:hover {
+  border-color: var(--color-accent, #581C87);
+}
+
+.profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: white;
+  font-family: var(--font-body);
+  font-size: 1.75rem;
+  font-weight: 600;
+}
+
+.profile-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+  color: white;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.profile-avatar-btn:hover .profile-avatar-overlay,
+.profile-avatar-btn:focus .profile-avatar-overlay {
+  opacity: 1;
+}
+
+.profile-avatar-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.profile-avatar-hint {
+  font-size: var(--text-xs);
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* Fields */
+.profile-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.profile-label {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: #374151;
+}
+
+.profile-input,
+.profile-textarea {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md);
+  background: white;
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.profile-input:focus,
+.profile-textarea:focus {
+  border-color: var(--color-accent, #581C87);
+}
+
+.profile-input-readonly {
+  background: #f9fafb;
+  color: #6b7280;
+  cursor: default;
+}
+
+.profile-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.profile-char-count {
+  font-size: var(--text-xs);
+  color: #9ca3af;
+  text-align: right;
+}
+
+/* Hobbies */
+.profile-hobbies-input {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.profile-hobbies-input .profile-input {
+  flex: 1;
+}
+
+.profile-hobby-add-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: white;
+  color: var(--color-primary, #1a1c2e);
+  font-size: 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.profile-hobby-add-btn:hover:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.profile-hobby-add-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.profile-hobbies-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.profile-hobby-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  background: var(--color-primary, #1a1c2e);
+  color: white;
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 500;
+}
+
+.profile-hobby-tag button {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+  margin-left: 2px;
+}
+
+.profile-hobby-tag button:hover {
+  color: white;
+}
+
+.profile-hobbies-suggested {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.profile-hobby-suggestion {
+  padding: var(--space-1) var(--space-3);
+  background: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #e5e7eb;
+  border-radius: var(--radius-full);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.profile-hobby-suggestion:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Save / Logout */
+.profile-save-btn {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  padding: var(--space-3) var(--space-6);
+  background: var(--color-primary, #1a1c2e);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.profile-save-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.profile-save-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.profile-logout-btn {
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  padding: var(--space-3) var(--space-6);
+  background: none;
+  color: #ef4444;
+  border: 1px solid #fca5a5;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.profile-logout-btn:hover {
+  background: #fef2f2;
 }

@@ -169,7 +169,11 @@ export default function AdminChats() {
                   {!isMe && (
                     <div className="chat-sender">
                       <div className={`chat-avatar ${isAdmin ? 'chat-avatar-admin' : ''}`}>
-                        {getInitials(msg.full_name || msg.username)}
+                        {msg.avatar_url ? (
+                          <img src={msg.avatar_url} alt="" className="chat-avatar-img" />
+                        ) : (
+                          getInitials(msg.full_name || msg.username)
+                        )}
                       </div>
                       <span className="chat-username">{msg.username || '.usuario'}</span>
                       {isAdmin && <span className="chat-admin-badge">Admin</span>}

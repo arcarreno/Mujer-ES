@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 
-export type TabKey = 'cursos' | 'mis-cursos' | 'mapa' | 'chats'
+export type TabKey = 'cursos' | 'mis-cursos' | 'mapa' | 'chats' | 'perfil'
 
 interface BottomNavProps {
   active: TabKey
@@ -44,6 +44,16 @@ const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+      </svg>
+    ),
+  },
+  {
+    key: 'perfil',
+    label: 'Perfil',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+        <circle cx="12" cy="7" r="4" />
       </svg>
     ),
   },
