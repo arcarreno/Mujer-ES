@@ -12,7 +12,7 @@ interface EnrollmentInfo {
   courseName: string
 }
 
-export default function CursosPage() {
+export default function CursosPage({ onOpenChat }: { onOpenChat?: () => void } = {}) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('list')
@@ -347,6 +347,18 @@ export default function CursosPage() {
             </article>
           ))}
         </div>
+      )}
+      {/* Floating chat button */}
+      {onOpenChat && (
+        <button
+          className="chat-fab"
+          onClick={onOpenChat}
+          aria-label="Abrir chat"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
       )}
     </div>
   )

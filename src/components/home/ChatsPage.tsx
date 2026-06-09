@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
   getGeneralChat,
@@ -12,7 +12,11 @@ import {
 } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
 
-export default function ChatsPage() {
+interface ChatsPageProps {
+  onBack?: () => void
+}
+
+export default function ChatsPage({ onBack }: ChatsPageProps) {
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -21,12 +25,34 @@ export default function ChatsPage() {
   const [myId, setMyId] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
 
   // Get current user id
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setMyId(data.user.id)
     })
+  }, [])
+
+  // Keyboard handling: adjust viewport height on mobile
+  useEffect(() => {
+    const container = chatContainerRef.current
+    if (!container) return
+
+    const viewport = window.visualViewport
+    if (!viewport) return
+
+    function onResize() {
+      // visualViewport.height shrinks when keyboard opens
+      const height = viewport!.height
+      container!.style.height = `${height}px`
+    }
+
+    viewport.addEventListener('resize', onResize)
+    // Set initial height
+    onResize()
+
+    return () => viewport.removeEventListener('resize', onResize)
   }, [])
 
   // Load general chat
@@ -57,7 +83,6 @@ export default function ChatsPage() {
     subscribeToMessages(conversation!.id, (msg) => {
       if (!cancelled) {
         setMessages((prev) => {
-          // Deduplicate: skip if message already exists by id
           if (prev.some((m) => m.id === msg.id)) return prev
           return [...prev, msg]
         })
@@ -88,7 +113,6 @@ export default function ChatsPage() {
     setSending(true)
     try {
       const msg = await sendMessage(conversation.id, text)
-      // Optimistic add — dedup guard in Realtime callback will skip it
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev
         return [...prev, msg]
@@ -127,10 +151,17 @@ export default function ChatsPage() {
 
   if (loading) {
     return (
-      <div className="chats-page">
-        <div className="chats-header">
-          <h2 className="chats-title">Chat general</h2>
-          <p className="chats-subtitle">Canal abierto para todas las usuarias</p>
+      <div className="chat-fullscreen" ref={chatContainerRef}>
+        <div className="chat-fullscreen-header">
+          {onBack && (
+            <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              <span>Atrás</span>
+            </button>
+          )}
+          <h2 className="chat-fullscreen-title">Chat general</h2>
         </div>
         <div className="chat-empty">
           <div className="manage-loading">Cargando...</div>
@@ -140,13 +171,20 @@ export default function ChatsPage() {
   }
 
   return (
-    <div className="chats-page">
-      <div className="chats-header">
-        <h2 className="chats-title">Chat general</h2>
-        <p className="chats-subtitle">Canal abierto para todas las usuarias</p>
+    <div className="chat-fullscreen" ref={chatContainerRef}>
+      <div className="chat-fullscreen-header">
+        {onBack && (
+          <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span>Atrás</span>
+          </button>
+        )}
+        <h2 className="chat-fullscreen-title">Chat general</h2>
       </div>
 
-      <div className="chat-container">
+      <div className="chat-container" style={{ height: 'auto', flex: 1 }}>
         <div className="chat-messages">
           {messages.length === 0 && (
             <div className="chat-empty" style={{ flex: 1 }}>

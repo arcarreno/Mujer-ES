@@ -1518,6 +1518,57 @@ input[type="date"].form-input {
   gap: 1.25rem;
 }
 
+/* Chat fullscreen mode — takes full viewport, no header/nav */
+.chat-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface, #fff);
+}
+
+.chat-fullscreen-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: calc(var(--space-3) + var(--sat, 0px)) var(--space-4) var(--space-3);
+  background: var(--alabaster);
+  border-bottom: 1px solid var(--color-border, #e5e7eb);
+  flex-shrink: 0;
+}
+
+.chat-fullscreen-title {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 1.1rem;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.chat-back-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  color: var(--color-primary, #1a1c2e);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+  padding: var(--space-2);
+  margin: calc(-1 * var(--space-2));
+  border-radius: var(--radius-md);
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-back-btn:hover,
+.chat-back-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
 .cursos-header,
 .chats-header {
   margin-bottom: 0.25rem;
@@ -4773,6 +4824,8 @@ input[type="date"].form-input {
 .chat-container {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   height: calc(100dvh - var(--sat, 0px) - 70px - 56px);
 }
 
@@ -4948,6 +5001,36 @@ input[type="date"].form-input {
 
 .chat-start-btn:active {
   transform: scale(0.97);
+}
+
+/* Floating chat action button */
+.chat-fab {
+  position: fixed;
+  bottom: calc(80px + var(--sab, 0px));
+  right: var(--space-4);
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-primary, #1a1c2e);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  z-index: 30;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-fab:hover {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.chat-fab:active {
+  transform: scale(0.95);
 }
 
 @keyframes fadeUp {
