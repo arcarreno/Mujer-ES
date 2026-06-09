@@ -52,9 +52,10 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
         {showHeader && (
           <motion.header
             className="home-header"
-            initial={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           >
             <div className="home-header-left">
               <span className="home-greeting">Hola,</span>
@@ -128,9 +129,10 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
       <AnimatePresence>
         {showNav && (
           <motion.div
-            initial={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 60 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           >
             <BottomNav active={activeTab} onChange={handleTabChange} />
           </motion.div>
