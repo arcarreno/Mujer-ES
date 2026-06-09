@@ -683,33 +683,55 @@ export interface Message {
   created_at: string
 }
 
-// Get or create the general chat (shared by all users + admins)
+// Get the general chat (seeded via migration — no INSERT needed)
 export async function getGeneralChat(): Promise<Conversation> {
-  // Try to find existing general chat
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('conversations')
     .select('*')
     .eq('type', 'general')
     .maybeSingle()
-
-  if (data) return data
-
-  // Create it if it doesn't exist (first time)
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) throw new Error('Not authenticated')
-
-  const { data: newConv, error } = await supabase
-    .from('conversations')
-    .insert({
-      user_id: user.id,
-      type: 'general',
-      state: 'open',
-      participants: [],
-    })
-    .select()
-    .single()
   if (error) throw error
-  return newConv
+  if (!data) throw new Error('Chat general no disponible')
+  return data
+}
+
+// =====================================================
+// REALTIME SUBSCRIPTIONS
+// =====================================================
+
+let messagesChannel: ReturnType<typeof supabase.channel> | null = null
+
+export function subscribeToMessages(
+  conversationId: string,
+  onNewMessage: (msg: Message) => void
+): void {
+  // Clean up previous subscription
+  if (messagesChannel) {
+    supabase.removeChannel(messagesChannel)
+  }
+
+  messagesChannel = supabase
+    .channel(`messages:${conversationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      (payload) => {
+        onNewMessage(payload.new as Message)
+      }
+    )
+    .subscribe()
+}
+
+export function unsubscribeFromMessages(): void {
+  if (messagesChannel) {
+    supabase.removeChannel(messagesChannel)
+    messagesChannel = null
+  }
 }
 
 export async function getMessages(conversationId: string): Promise<Message[]> {

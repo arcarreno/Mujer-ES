@@ -5,6 +5,8 @@ import {
   getMessages,
   sendMessage,
   markMessagesRead,
+  subscribeToMessages,
+  unsubscribeFromMessages,
   type Conversation,
   type Message,
 } from '../../lib/queries'
@@ -28,7 +30,7 @@ export default function AdminChats() {
     return () => { cancelled = true }
   }, [])
 
-  // Load messages
+  // Load messages + subscribe to real-time
   useEffect(() => {
     if (!conversation) return
     let cancelled = false
@@ -41,8 +43,16 @@ export default function AdminChats() {
     }
 
     loadMessages()
-    const interval = setInterval(loadMessages, 5000)
-    return () => { cancelled = true; clearInterval(interval) }
+
+    // Subscribe to new messages via Realtime
+    subscribeToMessages(conversation!.id, (msg) => {
+      if (!cancelled) setMessages((prev) => [...prev, msg])
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribeFromMessages()
+    }
   }, [conversation])
 
   // Mark as read
