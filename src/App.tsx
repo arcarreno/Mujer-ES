@@ -136,7 +136,7 @@ function App() {
               className="absolute inset-0 z-10"
             >
               <div className="site-header absolute left-0 w-full text-center z-10">
-                <div className="inline-flex items-baseline">
+                <h1 className="inline-flex items-baseline m-0">
                   <BlurText
                     text="Mujer"
                     animateBy="letters"
@@ -153,7 +153,7 @@ function App() {
                     stepDuration={0.4}
                     className="site-title-italic"
                   />
-                </div>
+                </h1>
                 <motion.button
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}

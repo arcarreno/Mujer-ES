@@ -73,6 +73,15 @@ export default function QRScanner({ onScanResult, onClose }: QRScannerProps) {
     }
   }, [])
 
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const handleClose = () => {
     activeRef.current = false
     try {
@@ -86,7 +95,7 @@ export default function QRScanner({ onScanResult, onClose }: QRScannerProps) {
   }
 
   return (
-    <div className="qr-scanner-overlay" onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}>
+    <div className="qr-scanner-overlay" role="dialog" aria-modal="true" aria-label="Escanear código QR" onClick={(e) => { if (e.target === e.currentTarget) handleClose() }}>
       <div className="qr-scanner-card">
         <div className="qr-scanner-header">
           <h3 className="qr-scanner-title">Escanear código QR</h3>

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 
 const phrases = [
@@ -78,6 +78,16 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
     setIsPaused(false)
   }, [])
 
+  // Escape key to close modal
+  useEffect(() => {
+    if (!modal) return
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleCloseModal()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [modal, handleCloseModal])
+
   const modalImage = modal !== null ? images[modal.index] : null
   const modalPhrase = modal !== null ? phrases[modal.index] : null
 
@@ -126,6 +136,9 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
           <div className="modal-overlay" onClick={handleCloseModal} />
           <div
             className="modal-card is-animating"
+            role="dialog"
+            aria-modal="true"
+            aria-label={modalPhrase.title}
             style={{
               left: `${modal.startX}px`,
               top: `${modal.startY}px`,

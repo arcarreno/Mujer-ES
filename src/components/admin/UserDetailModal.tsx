@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 import { sileo } from 'sileo'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { UserRow } from '../../lib/admin'
 import { blockUser, unblockUser, adminDeleteUser } from '../../lib/admin'
 import { getErrorMessage, getUserEnrollments, generateQrDataUrlFromPayload, type Enrollment } from '../../lib/queries'
@@ -31,8 +31,26 @@ export default function UserDetailModal({ user, currentUserId, onClose, onUpdate
   const [loading, setLoading] = useState(false)
   const [userEnrollments, setUserEnrollments] = useState<(Enrollment & { course_title: string; course_modality: string })[]>([])
   const [qrModalData, setQrModalData] = useState<{ dataUrl: string; courseName: string } | null>(null)
+  const modalRef = useRef<HTMLDivElement>(null)
   const isSelf = user.id === currentUserId
   const isAdmin = user.type === 'admin'
+
+  // Escape key handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
+
+  // Focus trap
+  useEffect(() => {
+    const modal = modalRef.current
+    if (!modal) return
+    const focusable = modal.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')
+    if (focusable.length > 0) focusable[0].focus()
+  }, [])
 
   useEffect(() => {
     if (!isAdmin) {
@@ -99,7 +117,11 @@ export default function UserDetailModal({ user, currentUserId, onClose, onUpdate
       onClick={onClose}
     >
       <motion.div
+        ref={modalRef}
         className="user-detail-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Perfil de ${user.full_name}`}
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 20 }}

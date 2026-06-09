@@ -5,6 +5,7 @@ type BlurTextProps = {
   text?: string
   delay?: number
   className?: string
+  as?: 'h1' | 'h2' | 'h3' | 'p'
   animateBy?: 'words' | 'letters'
   direction?: 'top' | 'bottom'
   threshold?: number
@@ -33,6 +34,7 @@ const BlurText: React.FC<BlurTextProps> = ({
   text = '',
   delay = 200,
   className = '',
+  as = 'p',
   animateBy = 'words',
   direction = 'top',
   threshold = 0.1,
@@ -87,8 +89,10 @@ const BlurText: React.FC<BlurTextProps> = ({
   const totalDuration = stepDuration * (stepCount - 1)
   const times = Array.from({ length: stepCount }, (_, i) => (stepCount === 1 ? 0 : i / (stepCount - 1)))
 
+  const Tag = as
+
   return (
-    <p ref={ref} className={`blur-text ${className} inline-flex flex-wrap m-0`}>
+    <Tag ref={ref} className={`blur-text ${className} inline-flex flex-wrap m-0`}>
       {elements.map((segment, index) => {
         const animateKeyframes = buildKeyframes(fromSnapshot, toSnapshots)
 
@@ -116,7 +120,7 @@ const BlurText: React.FC<BlurTextProps> = ({
           </motion.span>
         )
       })}
-    </p>
+    </Tag>
   )
 }
 

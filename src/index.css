@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /* ============================================
@@ -14,6 +15,57 @@
   --sab: env(safe-area-inset-bottom);
   --sal: env(safe-area-inset-left);
   --sar: env(safe-area-inset-right);
+  
+  /* Color system */
+  --color-primary: #1a1c2e;
+  --color-primary-hover: #2d2f42;
+  --color-accent: #581C87;
+  --color-accent-light: #7C3AED;
+  --color-surface: #F2F0EB;
+  --color-surface-raised: #ffffff;
+  --color-border: #e5e7eb;
+  --color-border-light: #f0f0f0;
+  --color-text: #1a1a1a;
+  --color-text-secondary: #6b7280;
+  --color-text-muted: #9ca3af;
+  --color-error: #dc2626;
+  --color-error-bg: #fef2f2;
+  --color-success: #059669;
+  --color-success-bg: #ecfdf5;
+  --color-warning: #d97706;
+  --color-warning-bg: #fffbeb;
+  
+  /* Typography */
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 2rem;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+  
+  /* Spacing (8px grid) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  
+  /* Border radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-full: 999px;
 }
 
 /* Override Tailwind's bg-white utility so it uses the warm white */
@@ -32,6 +84,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: var(--alabaster);
+  font-family: var(--font-body);
 }
 
 #root {
@@ -521,7 +574,7 @@ html, body {
 }
 
 .login-title {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-display);
   font-weight: 400;
   font-size: 1.75rem;
   color: #1a1a1a;
@@ -543,14 +596,14 @@ html, body {
 }
 
 .login-field label {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.85rem;
   color: #4a4a4a;
   letter-spacing: 0.03em;
 }
 
 .login-field input {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.95rem;
   padding: 0.75rem 1rem;
   border: 1px solid #d1d5db;
@@ -581,7 +634,7 @@ input::-ms-clear {
   font-weight: 500;
   padding: 0.8rem;
   margin-top: 0.5rem;
-  background: #1a1a1a;
+  background: var(--color-primary);
   color: #ffffff;
   border: none;
   border-radius: 0.5rem;
@@ -866,7 +919,7 @@ input::-ms-clear {
    ============================================ */
 
 .otp-subtitle {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.85rem;
   color: #4a4a4a;
   text-align: center;
@@ -1003,9 +1056,9 @@ input::-ms-clear {
   font-size: 1.1rem;
   font-weight: 400;
   letter-spacing: 0.1em;
-  color: #1a1a1a;
+  color: var(--color-primary);
   background: transparent;
-  border: 1.5px solid #1a1a1a;
+  border: 1.5px solid var(--color-primary);
   border-radius: 2rem;
   padding: 0.65rem 2.5rem;
   cursor: pointer;
@@ -1017,7 +1070,7 @@ input::-ms-clear {
 }
 
 .comenzar-btn:hover {
-  background: #1a1a1a;
+  background: var(--color-primary);
   color: #ffffff;
 }
 
@@ -1470,7 +1523,7 @@ input[type="date"].form-input {
 
 .cursos-title,
 .chats-title {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-display);
   font-weight: 500;
   font-size: 1.75rem;
   color: #1a1a1a;
@@ -1754,7 +1807,7 @@ input[type="date"].form-input {
 }
 
 .admin-card-title {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-display);
   font-weight: 600;
   font-size: 1.05rem;
   color: #1a1a1a;
@@ -1769,7 +1822,7 @@ input[type="date"].form-input {
 }
 
 .admin-card-desc {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.82rem;
   color: #6b7280;
   margin: 0;
@@ -1786,6 +1839,27 @@ input[type="date"].form-input {
   margin-top: 0.4rem;
   align-self: flex-start;
   font-weight: 500;
+}
+
+.admin-card-soon {
+  font-size: var(--text-xs);
+  color: var(--color-text-secondary);
+  background: #f3f4f6;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  margin-top: var(--space-2);
+  align-self: flex-start;
+  font-weight: 500;
+}
+
+.admin-card--coming-soon {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.admin-card--coming-soon:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* ============================================
@@ -1814,7 +1888,7 @@ input[type="date"].form-input {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 0.85rem;
   font-weight: 500;
-  background: #1a1a1a;
+  background: var(--color-primary);
   color: #ffffff;
   border: none;
   border-radius: 0.5rem;
@@ -1980,8 +2054,10 @@ input[type="date"].form-input {
 }
 
 .admin-curso-action-btn {
-  width: 32px;
-  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 0.5rem;
   border: none;
   background: #f5f5f5;
@@ -2092,8 +2168,10 @@ input[type="date"].form-input {
 }
 
 .admin-curso-qr-btn {
-  width: 28px;
-  height: 28px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 0.4rem;
   border: none;
   background: #f5f0fa;
@@ -2311,7 +2389,7 @@ input[type="date"].form-input {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 0.85rem;
   font-weight: 500;
-  background: #1a1a1a;
+  background: var(--color-primary);
   color: #ffffff;
   border: none;
   border-radius: 0.6rem;
@@ -2324,14 +2402,43 @@ input[type="date"].form-input {
   background: #333;
 }
 
-.manage-loading,
+.manage-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+}
+
+.manage-loading::before {
+  content: '';
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
 .manage-empty {
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 0.9rem;
-  color: #9ca3af;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
   text-align: center;
-  padding: 2rem 1rem;
-  font-style: italic;
+  color: var(--color-text-secondary);
+  font-family: var(--font-body);
+}
+
+.manage-empty svg {
+  width: 48px;
+  height: 48px;
+  stroke: var(--color-text-muted);
+  opacity: 0.5;
 }
 
 .manage-users-list {
@@ -2401,7 +2508,7 @@ input[type="date"].form-input {
 }
 
 .manage-user-name {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-weight: 600;
   font-size: 0.9rem;
   color: #1a1a1a;
@@ -2424,7 +2531,7 @@ input[type="date"].form-input {
 }
 
 .manage-user-meta {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.78rem;
   color: #6b7280;
   margin: 0;
@@ -2438,7 +2545,7 @@ input[type="date"].form-input {
 }
 
 .manage-user-status {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.65rem;
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
@@ -2712,8 +2819,10 @@ input[type="date"].form-input {
 }
 
 .user-enrollment-qr-btn {
-  width: 28px;
-  height: 28px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 0.4rem;
   border: none;
   background: #f5f0fa;
@@ -2789,7 +2898,7 @@ input[type="date"].form-input {
   flex: 1;
   text-align: center;
   padding: 0.55rem 0.75rem;
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-body);
   font-size: 0.85rem;
   font-weight: 500;
   color: #6b7280;
@@ -3652,8 +3761,10 @@ input[type="date"].form-input {
 }
 
 .map-control-btn {
-  width: 36px;
-  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 0.5rem;
   border: none;
   background: #fff;
@@ -4162,7 +4273,7 @@ input[type="date"].form-input {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 0.95rem;
   font-weight: 500;
-  background: #581C87;
+  background: var(--color-primary);
   color: #fff;
   border: none;
   border-radius: 0.6rem;
@@ -4171,7 +4282,7 @@ input[type="date"].form-input {
 }
 
 .curso-detail-enroll-btn:hover:not(:disabled) {
-  background: #6b21a8;
+  background: var(--color-primary-hover);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(88, 28, 135, 0.3);
 }
@@ -4523,10 +4634,14 @@ input[type="date"].form-input {
 .cursos-spinner {
   width: 28px;
   height: 28px;
-  border: 2.5px solid #e5e7eb;
-  border-top-color: #581C87;
+  border: 2.5px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 .cursos-empty {

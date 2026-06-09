@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useEffect, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { sileo } from 'sileo'
@@ -30,6 +30,15 @@ export default function RecoveryFlow({ onClose }: RecoveryFlowProps) {
   const [step, setStep] = useState<RecoveryStep>({ kind: 'request' })
   const [identifier, setIdentifier] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // Escape key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   const handleRequest = async (e: FormEvent) => {
     e.preventDefault()
@@ -105,6 +114,9 @@ export default function RecoveryFlow({ onClose }: RecoveryFlowProps) {
           >
             <motion.div
               className="privacy-modal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Recuperar contraseña"
               initial={{ opacity: 0, scale: 0.85, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}

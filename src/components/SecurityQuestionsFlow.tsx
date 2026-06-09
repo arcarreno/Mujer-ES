@@ -47,6 +47,15 @@ export default function SecurityQuestionsFlow({
 
   const inputRef = useRef<HTMLInputElement | null>(null)
 
+  // Escape key to cancel
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [onCancel])
+
   // Auto-focus the input when user picks "Otra respuesta"
   useEffect(() => {
     if (step !== 'notice' && modes[step.index] === 'other') {
@@ -146,6 +155,9 @@ export default function SecurityQuestionsFlow({
         >
           <motion.div
             className="privacy-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Preguntas de seguridad"
             initial={{ opacity: 0, scale: 0.85, y: 16 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 16 }}
