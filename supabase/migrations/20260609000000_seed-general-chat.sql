@@ -1,3 +1,15 @@
+-- Drop ALL check constraints on conversations table and recreate with needed values
+DO $$ DECLARE
+  r RECORD;
+BEGIN
+  FOR r IN SELECT conname FROM pg_constraint WHERE conrelid = 'public.conversations'::regclass AND contype = 'c' LOOP
+    EXECUTE 'ALTER TABLE public.conversations DROP CONSTRAINT IF EXISTS ' || r.conname;
+  END LOOP;
+END $$;
+
+ALTER TABLE public.conversations ADD CONSTRAINT conv_type_check CHECK (type IN ('user_support', 'general'));
+ALTER TABLE public.conversations ADD CONSTRAINT conv_state_check CHECK (state IN ('open', 'closed', 'archived'));
+
 -- Seed the general chat conversation
 INSERT INTO public.conversations (id, user_id, type, state, participants)
 SELECT
@@ -5,7 +17,7 @@ SELECT
   (SELECT id FROM auth.users LIMIT 1),
   'general',
   'open',
-  '[]'::jsonb
+  ARRAY[]::uuid[]
 ON CONFLICT (id) DO NOTHING;
 
 -- Allow all authenticated users to read the general conversation
