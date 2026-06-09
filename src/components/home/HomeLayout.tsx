@@ -25,8 +25,11 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
 
   const handleTabChange = useCallback((tab: TabKey) => {
     setActiveTab(tab)
-    // When switching away from chats, exit fullscreen
-    if (tab !== 'chats') setChatFullscreen(false)
+    if (tab === 'chats') {
+      setChatFullscreen(true)
+    } else {
+      setChatFullscreen(false)
+    }
   }, [])
 
   const handleOpenChat = useCallback(() => {
