@@ -1472,19 +1472,21 @@ input[type="date"].form-input {
   position: relative;
   z-index: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  padding: 0.65rem 0.5rem;
+  gap: 0.15rem;
+  padding: 0.5rem 0.25rem;
   background: none;
   border: none;
   cursor: pointer;
-  font-family: 'Playfair Display', Georgia, serif;
-  font-size: 0.88rem;
+  font-family: var(--font-body);
+  font-size: 0.65rem;
   font-weight: 500;
   color: #6b7280;
   transition: color 0.3s ease;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
+  min-width: 0;
 }
 
 .bottom-nav-btn.active {

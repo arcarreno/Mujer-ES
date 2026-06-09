@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import {
-  getMyConversation,
-  createConversation,
+  getGeneralChat,
   getMessages,
   sendMessage,
   markMessagesRead,
@@ -19,25 +18,17 @@ export default function ChatsPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Load conversation
+  // Load general chat
   useEffect(() => {
     let cancelled = false
-    async function load() {
-      try {
-        const conv = await getMyConversation()
-        if (!cancelled) {
-          setConversation(conv)
-          setLoading(false)
-        }
-      } catch {
-        if (!cancelled) setLoading(false)
-      }
-    }
-    load()
+    getGeneralChat()
+      .then((conv) => { if (!cancelled) setConversation(conv) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
 
-  // Load messages when conversation exists
+  // Load messages
   useEffect(() => {
     if (!conversation) return
     let cancelled = false
@@ -46,9 +37,7 @@ export default function ChatsPage() {
       try {
         const msgs = await getMessages(conversation!.id)
         if (!cancelled) setMessages(msgs)
-      } catch {
-        // ignore
-      }
+      } catch {}
     }
 
     loadMessages()
@@ -56,25 +45,16 @@ export default function ChatsPage() {
     return () => { cancelled = true; clearInterval(interval) }
   }, [conversation])
 
-  // Mark messages as read when conversation loads
+  // Mark as read
   useEffect(() => {
     if (!conversation) return
     markMessagesRead(conversation.id)
   }, [conversation, messages])
 
-  // Auto-scroll to bottom
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
-
-  async function handleStartConversation() {
-    try {
-      const conv = await createConversation()
-      setConversation(conv)
-    } catch {
-      // ignore
-    }
-  }
 
   async function handleSend() {
     if (!input.trim() || !conversation || sending) return
@@ -115,8 +95,8 @@ export default function ChatsPage() {
     return (
       <div className="chats-page">
         <div className="chats-header">
-          <h2 className="chats-title">Chats</h2>
-          <p className="chats-subtitle">Conversación con el equipo de apoyo</p>
+          <h2 className="chats-title">Chat general</h2>
+          <p className="chats-subtitle">Canal abierto para todas las usuarias</p>
         </div>
         <div className="chat-empty">
           <div className="manage-loading">Cargando...</div>
@@ -125,37 +105,25 @@ export default function ChatsPage() {
     )
   }
 
-  if (!conversation) {
-    return (
-      <div className="chats-page">
-        <div className="chats-header">
-          <h2 className="chats-title">Chats</h2>
-          <p className="chats-subtitle">Conversación con el equipo de apoyo</p>
-        </div>
-        <div className="chat-empty">
-          <svg className="chat-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-          </svg>
-          <p className="chat-empty-text">
-            ¿Tenés alguna pregunta o necesitás ayuda? Iniciá una conversación con nuestro equipo.
-          </p>
-          <button className="chat-start-btn" onClick={handleStartConversation}>
-            Iniciar conversación
-          </button>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="chats-page">
       <div className="chats-header">
-        <h2 className="chats-title">Chats</h2>
-        <p className="chats-subtitle">Conversación con el equipo de apoyo</p>
+        <h2 className="chats-title">Chat general</h2>
+        <p className="chats-subtitle">Canal abierto para todas las usuarias</p>
       </div>
 
       <div className="chat-container">
         <div className="chat-messages">
+          {messages.length === 0 && (
+            <div className="chat-empty" style={{ flex: 1 }}>
+              <svg className="chat-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+              </svg>
+              <p className="chat-empty-text">
+                Sé la primera en escribir. Este chat es un espacio seguro para todas.
+              </p>
+            </div>
+          )}
           <AnimatePresence initial={false}>
             {messages.map((msg) => {
               const isUser = msg.sender_role === 'user'

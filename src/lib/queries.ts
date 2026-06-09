@@ -683,28 +683,33 @@ export interface Message {
   created_at: string
 }
 
-export async function getMyConversation(): Promise<Conversation | null> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return null
+// Get or create the general chat (shared by all users + admins)
+export async function getGeneralChat(): Promise<Conversation> {
+  // Try to find existing general chat
   const { data } = await supabase
     .from('conversations')
     .select('*')
-    .eq('user_id', user.id)
-    .eq('type', 'user_support')
+    .eq('type', 'general')
     .maybeSingle()
-  return data
-}
 
-export async function createConversation(): Promise<Conversation> {
+  if (data) return data
+
+  // Create it if it doesn't exist (first time)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
-  const { data, error } = await supabase
+
+  const { data: newConv, error } = await supabase
     .from('conversations')
-    .insert({ user_id: user.id, type: 'user_support', state: 'open', participants: [user.id] })
+    .insert({
+      user_id: user.id,
+      type: 'general',
+      state: 'open',
+      participants: [],
+    })
     .select()
     .single()
   if (error) throw error
-  return data
+  return newConv
 }
 
 export async function getMessages(conversationId: string): Promise<Message[]> {
@@ -721,7 +726,6 @@ export async function sendMessage(conversationId: string, content: string): Prom
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Determine role
   const { data: isAdmin } = await supabase.rpc('is_admin')
 
   const { data, error } = await supabase
@@ -736,13 +740,9 @@ export async function sendMessage(conversationId: string, content: string): Prom
     .single()
   if (error) throw error
 
-  // Update last_message_at and unread counters
   await supabase
     .from('conversations')
-    .update({
-      last_message_at: new Date().toISOString(),
-      ...(isAdmin ? { unread_user: 0 } : { unread_admin: 0 }),
-    })
+    .update({ last_message_at: new Date().toISOString() })
     .eq('id', conversationId)
 
   return data
@@ -751,24 +751,16 @@ export async function sendMessage(conversationId: string, content: string): Prom
 export async function markMessagesRead(conversationId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
-  const { data: isAdmin } = await supabase.rpc('is_admin')
 
-  // Mark all unread messages as read
   await supabase
     .from('messages')
     .update({ read: true })
     .eq('conversation_id', conversationId)
     .eq('read', false)
     .neq('sender_id', user.id)
-
-  // Reset unread counter
-  await supabase
-    .from('conversations')
-    .update(isAdmin ? { unread_admin: 0 } : { unread_user: 0 })
-    .eq('id', conversationId)
 }
 
-// Admin: get all conversations
+// Admin: get all conversations (for admin panel)
 export async function getAllConversations(): Promise<(Conversation & { username: string; full_name: string })[]> {
   const { data: conversations, error } = await supabase
     .from('conversations')
@@ -777,7 +769,6 @@ export async function getAllConversations(): Promise<(Conversation & { username:
   if (error) throw error
   if (!conversations) return []
 
-  // Fetch profiles for each conversation
   const results = await Promise.all(
     conversations.map(async (conv) => {
       const { data: profile } = await supabase
