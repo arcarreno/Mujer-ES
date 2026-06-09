@@ -681,6 +681,8 @@ export interface Message {
   content: string
   read: boolean
   created_at: string
+  username?: string
+  full_name?: string
 }
 
 // Get the general chat (seeded via migration — no INSERT needed)
@@ -720,8 +722,19 @@ export function subscribeToMessages(
         table: 'messages',
         filter: `conversation_id=eq.${conversationId}`,
       },
-      (payload) => {
-        onNewMessage(payload.new as Message)
+      async (payload) => {
+        const raw = payload.new as Message
+        // Fetch sender profile for username
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username, full_name')
+          .eq('id', raw.sender_id)
+          .maybeSingle()
+        onNewMessage({
+          ...raw,
+          username: profile?.username,
+          full_name: profile?.full_name,
+        })
       }
     )
     .subscribe()
@@ -737,11 +750,15 @@ export function unsubscribeFromMessages(): void {
 export async function getMessages(conversationId: string): Promise<Message[]> {
   const { data, error } = await supabase
     .from('messages')
-    .select('*')
+    .select('*, profiles!messages_sender_id_fkey(username, full_name)')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
   if (error) throw error
-  return data || []
+  return (data || []).map((m: any) => ({
+    ...m,
+    username: m.profiles?.username,
+    full_name: m.profiles?.full_name,
+  }))
 }
 
 export async function sendMessage(conversationId: string, content: string): Promise<Message> {

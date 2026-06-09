@@ -10,6 +10,7 @@ import {
   type Conversation,
   type Message,
 } from '../../lib/queries'
+import { supabase } from '../../lib/supabase'
 
 export default function AdminChats() {
   const [conversation, setConversation] = useState<Conversation | null>(null)
@@ -17,8 +18,16 @@ export default function AdminChats() {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
+  const [myId, setMyId] = useState<string>('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // Get current user id
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setMyId(data.user.id)
+    })
+  }, [])
 
   // Load general chat
   useEffect(() => {
@@ -46,7 +55,12 @@ export default function AdminChats() {
 
     // Subscribe to new messages via Realtime
     subscribeToMessages(conversation!.id, (msg) => {
-      if (!cancelled) setMessages((prev) => [...prev, msg])
+      if (!cancelled) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev
+          return [...prev, msg]
+        })
+      }
     })
 
     return () => {
@@ -73,7 +87,10 @@ export default function AdminChats() {
     setSending(true)
     try {
       const msg = await sendMessage(conversation.id, text)
-      setMessages((prev) => [...prev, msg])
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev
+        return [...prev, msg]
+      })
       inputRef.current?.focus()
     } catch {
       setInput(text)
@@ -99,6 +116,11 @@ export default function AdminChats() {
     const diffH = Math.floor(diffMin / 60)
     if (diffH < 24) return `${diffH}h`
     return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
+  }
+
+  function getInitials(name?: string) {
+    if (!name) return '?'
+    return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
   }
 
   if (loading) {
@@ -134,6 +156,7 @@ export default function AdminChats() {
           )}
           <AnimatePresence initial={false}>
             {messages.map((msg) => {
+              const isMe = msg.sender_id === myId
               const isAdmin = msg.sender_role === 'admin'
               return (
                 <motion.div
@@ -141,9 +164,18 @@ export default function AdminChats() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.2 }}
-                  className={`chat-bubble ${isAdmin ? 'chat-bubble-user' : 'chat-bubble-admin'}`}
+                  className={`chat-bubble ${isMe ? 'chat-bubble-me' : 'chat-bubble-other'}`}
                 >
-                  <div>{msg.content}</div>
+                  {!isMe && (
+                    <div className="chat-sender">
+                      <div className={`chat-avatar ${isAdmin ? 'chat-avatar-admin' : ''}`}>
+                        {getInitials(msg.full_name || msg.username)}
+                      </div>
+                      <span className="chat-username">{msg.username || '.usuario'}</span>
+                      {isAdmin && <span className="chat-admin-badge">Admin</span>}
+                    </div>
+                  )}
+                  <div className="chat-bubble-content">{msg.content}</div>
                   <div className="chat-time">{formatTime(msg.created_at)}</div>
                 </motion.div>
               )
