@@ -55,12 +55,27 @@ export default function ChatsPage({ onBack }: ChatsPageProps) {
     return () => viewport.removeEventListener('resize', onResize)
   }, [])
 
-  // Load general chat
+  // Load general chat (cache in localStorage to avoid flash)
   useEffect(() => {
     let cancelled = false
+
+    // Try cache first
+    try {
+      const cached = localStorage.getItem('chat_general_conv')
+      if (cached) {
+        const conv = JSON.parse(cached) as Conversation
+        if (!cancelled) setConversation(conv)
+      }
+    } catch {}
+
     getGeneralChat()
-      .then((conv) => { if (!cancelled) setConversation(conv) })
-      .catch(() => {})
+      .then((conv) => {
+        if (!cancelled) {
+          setConversation(conv)
+          localStorage.setItem('chat_general_conv', JSON.stringify(conv))
+        }
+      })
+      .catch((e) => { console.error('[Chat] getGeneralChat failed:', e) })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
   }, [])
@@ -73,8 +88,11 @@ export default function ChatsPage({ onBack }: ChatsPageProps) {
     async function loadMessages() {
       try {
         const msgs = await getMessages(conversation!.id)
+        console.log(`[Chat] Loaded ${msgs.length} messages for conv ${conversation!.id}`)
         if (!cancelled) setMessages(msgs)
-      } catch {}
+      } catch (e) {
+        console.error('[Chat] getMessages failed:', e)
+      }
     }
 
     loadMessages()
@@ -113,6 +131,7 @@ export default function ChatsPage({ onBack }: ChatsPageProps) {
     setSending(true)
     try {
       const msg = await sendMessage(conversation.id, text)
+      console.log('[Chat] Sent message:', msg.id, msg.content)
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev
         return [...prev, msg]

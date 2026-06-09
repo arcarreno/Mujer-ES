@@ -750,14 +750,29 @@ export function unsubscribeFromMessages(): void {
 export async function getMessages(conversationId: string): Promise<Message[]> {
   const { data, error } = await supabase
     .from('messages')
-    .select('*, profiles!messages_sender_id_fkey(username, full_name)')
+    .select('*')
     .eq('conversation_id', conversationId)
     .order('created_at', { ascending: true })
-  if (error) throw error
+  if (error) {
+    console.error('[ queries ] getMessages error:', error)
+    throw error
+  }
+  // Fetch profiles for all unique sender_ids
+  const senderIds = [...new Set((data || []).map((m: any) => m.sender_id))]
+  let profileMap: Record<string, { username: string; full_name: string }> = {}
+  if (senderIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, username, full_name')
+      .in('id', senderIds)
+    if (profiles) {
+      profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]))
+    }
+  }
   return (data || []).map((m: any) => ({
     ...m,
-    username: m.profiles?.username,
-    full_name: m.profiles?.full_name,
+    username: profileMap[m.sender_id]?.username,
+    full_name: profileMap[m.sender_id]?.full_name,
   }))
 }
 
