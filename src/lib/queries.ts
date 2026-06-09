@@ -381,7 +381,7 @@ export async function createCourse(course: {
 
 export async function updateCourse(
   id: string,
-  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published'>>
+  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published' | 'max_enrollments' | 'latitude' | 'longitude' | 'location_name'>>
 ): Promise<Course> {
   const { data, error } = await supabase
     .from('courses')
@@ -426,6 +426,7 @@ export interface Enrollment {
   attended: boolean
   attended_at: string | null
   profiles?: { username: string; full_name: string } | null
+  course?: Course | null
 }
 
 function generateAccessCode(): string {
@@ -600,6 +601,18 @@ export async function isEnrolledInCourse(courseId: string): Promise<boolean> {
   return data !== null
 }
 
+export async function getMyEnrollments(): Promise<(Enrollment & { course: Course | null })[]> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+  const { data, error } = await supabase
+    .from('course_enrollments')
+    .select('*, course:courses(*)')
+    .eq('user_id', user.id)
+    .order('enrolled_at', { ascending: false })
+  if (error) throw error
+  return (data ?? []) as (Enrollment & { course: Course | null })[]
+}
+
 export async function isCourseFull(courseId: string): Promise<boolean> {
   const { data: course, error: cErr } = await supabase
     .from('courses')
@@ -640,4 +653,144 @@ export async function getCourseEnrollments(courseId: string): Promise<Enrollment
     ...row,
     profiles: profileMap.get(row.user_id) ?? null,
   })) as Enrollment[]
+}
+
+// =====================================================
+// CHAT FUNCTIONS
+// =====================================================
+
+export interface Conversation {
+  id: string
+  user_id: string
+  participants: any
+  type: string
+  state: string
+  assigned_admin_id: string | null
+  bot_step: number
+  last_message_at: string | null
+  unread_user: number
+  unread_admin: number
+  created_at: string
+}
+
+export interface Message {
+  id: string
+  conversation_id: string
+  sender_id: string
+  sender_role: string
+  content: string
+  read: boolean
+  created_at: string
+}
+
+export async function getMyConversation(): Promise<Conversation | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('type', 'user_support')
+    .maybeSingle()
+  return data
+}
+
+export async function createConversation(): Promise<Conversation> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({ user_id: user.id, type: 'user_support', state: 'open', participants: [user.id] })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function getMessages(conversationId: string): Promise<Message[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('conversation_id', conversationId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return data || []
+}
+
+export async function sendMessage(conversationId: string, content: string): Promise<Message> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Determine role
+  const { data: isAdmin } = await supabase.rpc('is_admin')
+
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({
+      conversation_id: conversationId,
+      sender_id: user.id,
+      sender_role: isAdmin ? 'admin' : 'user',
+      content: content.trim(),
+    })
+    .select()
+    .single()
+  if (error) throw error
+
+  // Update last_message_at and unread counters
+  await supabase
+    .from('conversations')
+    .update({
+      last_message_at: new Date().toISOString(),
+      ...(isAdmin ? { unread_user: 0 } : { unread_admin: 0 }),
+    })
+    .eq('id', conversationId)
+
+  return data
+}
+
+export async function markMessagesRead(conversationId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  const { data: isAdmin } = await supabase.rpc('is_admin')
+
+  // Mark all unread messages as read
+  await supabase
+    .from('messages')
+    .update({ read: true })
+    .eq('conversation_id', conversationId)
+    .eq('read', false)
+    .neq('sender_id', user.id)
+
+  // Reset unread counter
+  await supabase
+    .from('conversations')
+    .update(isAdmin ? { unread_admin: 0 } : { unread_user: 0 })
+    .eq('id', conversationId)
+}
+
+// Admin: get all conversations
+export async function getAllConversations(): Promise<(Conversation & { username: string; full_name: string })[]> {
+  const { data: conversations, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+  if (error) throw error
+  if (!conversations) return []
+
+  // Fetch profiles for each conversation
+  const results = await Promise.all(
+    conversations.map(async (conv) => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('username, full_name')
+        .eq('id', conv.user_id)
+        .maybeSingle()
+      return {
+        ...conv,
+        username: profile?.username || 'unknown',
+        full_name: profile?.full_name || 'Unknown',
+      }
+    })
+  )
+  return results
 }

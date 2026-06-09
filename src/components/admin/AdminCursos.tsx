@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
 import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, generateQrDataUrlFromPayload, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
+import EditCoursePage from './EditCoursePage'
 
 interface AdminCursosProps {
   onCreateCourse: () => void
@@ -17,6 +18,7 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
   const [scannerCourseId, setScannerCourseId] = useState<string | null>(null)
   const [qrModalEnrollment, setQrModalEnrollment] = useState<{ enrollmentId: string; username: string; courseName: string } | null>(null)
   const [qrModalDataUrl, setQrModalDataUrl] = useState<string | null>(null)
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null)
 
   const load = async () => {
     try {
@@ -98,6 +100,17 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
 
   return (
     <div className="admin-cursos">
+      {editingCourse && (
+        <EditCoursePage
+          course={editingCourse}
+          enrollmentCount={enrollmentCounts[editingCourse.id] ?? 0}
+          onUpdated={() => { setEditingCourse(null); load() }}
+          onBack={() => setEditingCourse(null)}
+        />
+      )}
+
+      {!editingCourse && (
+      <>
       <div className="admin-cursos-header">
         <div>
           <h2 className="cursos-title">Cursos</h2>
@@ -201,6 +214,18 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   <span className="admin-curso-card-date">
                     {new Date(course.created_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
                   </span>
+                  <button
+                    className="admin-curso-action-btn"
+                    onClick={() => setEditingCourse(course)}
+                    type="button"
+                    aria-label={`Editar curso ${course.title}`}
+                    title="Editar"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                      <path d="m15 5 4 4" />
+                    </svg>
+                  </button>
                   {!course.concluded && (
                     <button
                       className="admin-curso-action-btn admin-curso-conclude-btn"
@@ -335,6 +360,8 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
 
       {scannerCourseId && (

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import BottomNav, { type TabKey } from './BottomNav'
 import CursosPage from './CursosPage'
+import MisCursosPage from './MisCursosPage'
 import MapPage from './MapPage'
 import ChatsPage from './ChatsPage'
 import { signOut } from '../../lib/queries'
@@ -53,6 +54,17 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               transition={{ duration: 0.3 }}
             >
               <CursosPage />
+            </motion.div>
+          )}
+          {activeTab === 'mis-cursos' && (
+            <motion.div
+              key="mis-cursos"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              transition={{ duration: 0.3 }}
+            >
+              <MisCursosPage />
             </motion.div>
           )}
           {activeTab === 'mapa' && (
