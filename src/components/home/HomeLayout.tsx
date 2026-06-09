@@ -33,11 +33,6 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
     }
   }, [])
 
-  const handleOpenChat = useCallback(() => {
-    setActiveTab('chats')
-    setChatFullscreen(true)
-  }, [])
-
   const handleBackFromChat = useCallback(() => {
     setChatFullscreen(false)
     setActiveTab('cursos')
@@ -88,7 +83,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <CursosPage onOpenChat={handleOpenChat} />
+              <CursosPage />
             </motion.div>
           )}
           {activeTab === 'mis-cursos' && (

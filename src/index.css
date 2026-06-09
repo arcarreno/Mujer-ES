@@ -1460,7 +1460,7 @@ input[type="date"].form-input {
   position: absolute;
   top: 0.35rem;
   left: 0.35rem;
-  width: calc(25% - 0.175rem);
+  width: calc(20% - 0.14rem);
   height: calc(100% - 0.7rem);
   background: #1a1a1a;
   border-radius: 999px;
@@ -5009,36 +5009,6 @@ input[type="date"].form-input {
 
 .chat-start-btn:active {
   transform: scale(0.97);
-}
-
-/* Floating chat action button */
-.chat-fab {
-  position: fixed;
-  bottom: calc(80px + var(--sab, 0px));
-  right: var(--space-4);
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--color-primary, #1a1c2e);
-  color: white;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  z-index: 30;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.chat-fab:hover {
-  transform: scale(1.05);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.chat-fab:active {
-  transform: scale(0.95);
 }
 
 @keyframes fadeUp {
