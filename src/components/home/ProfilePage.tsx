@@ -28,7 +28,23 @@ export default function ProfilePage() {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-      const p = await getProfile(user.id)
+      let p = await getProfile(user.id)
+      // If no profile exists (e.g. admin), create one from admins table
+      if (!p) {
+        const { data: admin } = await supabase
+          .from('admins')
+          .select('username, full_name')
+          .eq('id', user.id)
+          .maybeSingle()
+        if (admin) {
+          await supabase.from('profiles').insert({
+            id: user.id,
+            username: admin.username,
+            full_name: admin.full_name,
+          })
+          p = await getProfile(user.id)
+        }
+      }
       if (p) {
         setProfile(p)
         setBio(p.bio || '')

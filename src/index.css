@@ -1865,7 +1865,7 @@ input[type="date"].form-input {
 }
 
 .admin-bottom-nav .bottom-nav-pill {
-  width: calc(25% - 0.175rem);
+  width: calc(20% - 0.14rem);
 }
 
 /* ============================================

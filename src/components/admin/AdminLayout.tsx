@@ -8,6 +8,7 @@ import AdminCursos from './AdminCursos'
 import CreateCoursePage from './CreateCoursePage'
 import CreateUserPage from './CreateUserPage'
 import AdminChats from './AdminChats'
+import ProfilePage from '../home/ProfilePage'
 import { signOut } from '../../lib/queries'
 import { listUsers } from '../../lib/admin'
 import type { Course } from '../../lib/queries'
@@ -133,6 +134,17 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 transition={{ duration: 0.3 }}
               >
                 <AdminChats />
+              </motion.div>
+            )}
+            {activeTab === 'perfil' && (
+              <motion.div
+                key="perfil"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <ProfilePage />
               </motion.div>
             )}
           </AnimatePresence>
