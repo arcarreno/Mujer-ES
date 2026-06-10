@@ -1,8 +1,12 @@
 interface AdminDashboardProps {
   userCount: number
   blockedCount: number
+  formCount: number
+  enrollmentCount: number
   onGoToUsers: () => void
   onGoToChats: () => void
+  onGoToForms: () => void
+  onGoToReports: () => void
 }
 
 interface AdminCard {
@@ -11,12 +15,11 @@ interface AdminCard {
   description: string
   count?: number
   badge?: string
-  comingSoon?: boolean
   icon: React.ReactNode
   onClick: () => void
 }
 
-export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, onGoToChats }: AdminDashboardProps) {
+export default function AdminDashboard({ userCount, blockedCount, formCount, enrollmentCount, onGoToUsers, onGoToChats, onGoToForms, onGoToReports }: AdminDashboardProps) {
   const cards: AdminCard[] = [
     {
       id: 'users',
@@ -38,7 +41,6 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
       id: 'chats',
       title: 'Chats',
       description: 'Conversaciones con usuarios y asistente',
-      comingSoon: true,
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -50,7 +52,7 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
       id: 'forms',
       title: 'Formularios',
       description: 'Respuestas de los cuestionarios iniciales',
-      comingSoon: true,
+      count: formCount,
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -59,13 +61,13 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
           <line x1="9" x2="15" y1="17" y2="17" />
         </svg>
       ),
-      onClick: () => {},
+      onClick: onGoToForms,
     },
     {
       id: 'reports',
       title: 'Reportes',
       description: 'Estadísticas y métricas de la plataforma',
-      comingSoon: true,
+      count: enrollmentCount,
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" x2="18" y1="20" y2="10" />
@@ -73,7 +75,7 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
           <line x1="6" x2="6" y1="20" y2="14" />
         </svg>
       ),
-      onClick: () => {},
+      onClick: onGoToReports,
     },
   ]
 
@@ -89,9 +91,8 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
           <button
             key={card.id}
             onClick={card.onClick}
-            className={`admin-card ${card.comingSoon ? 'admin-card--coming-soon' : ''}`}
+            className="admin-card"
             type="button"
-            disabled={card.comingSoon && card.id !== 'chats'}
             style={{ animationDelay: `${i * 60}ms` }}
           >
             <div className="admin-card-icon">{card.icon}</div>
@@ -105,9 +106,6 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
               <p className="admin-card-desc">{card.description}</p>
               {card.badge && (
                 <span className="admin-card-badge">{card.badge}</span>
-              )}
-              {card.comingSoon && (
-                <span className="admin-card-soon">Próximamente</span>
               )}
             </div>
           </button>
