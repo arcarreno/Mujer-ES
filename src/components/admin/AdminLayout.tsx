@@ -75,11 +75,6 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
     setChatFullscreen(false)
   }, [])
 
-  const handleBackFromChat = useCallback(() => {
-    setChatFullscreen(false)
-    setActiveTab('dashboard')
-  }, [])
-
   const handleChatFullscreenChange = useCallback((fullscreen: boolean) => {
     setChatFullscreen(fullscreen)
   }, [])
@@ -175,8 +170,6 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             </button>
             <MapPage />
           </div>
-        ) : chatFullscreen ? (
-          <AdminChats onBack={handleBackFromChat} onChatStateChange={handleChatFullscreenChange} />
         ) : adminDMChat ? (
           <ChatView
             conversationId={adminDMChat}
