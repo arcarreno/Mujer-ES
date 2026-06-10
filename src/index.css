@@ -805,6 +805,55 @@ input::-ms-clear {
   z-index: 5;
 }
 
+/* Compact version for fullscreen pages */
+.volver-btn-sm {
+  background: none;
+  text-align: left;
+  border-radius: 0.5rem;
+  height: 2rem;
+  position: relative;
+  color: #000000;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.volver-btn-sm-bg {
+  background: var(--alabaster);
+  border-radius: 0.4rem;
+  height: 1.75rem;
+  width: 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 0;
+  top: 2px;
+  z-index: 10;
+  transition: width 0.35s ease;
+}
+
+.volver-btn-sm:hover .volver-btn-sm-bg {
+  width: calc(100% - 2px);
+}
+
+.volver-btn-sm-text {
+  transform: translateX(0.25rem);
+  margin: 0;
+  position: relative;
+  z-index: 5;
+  white-space: nowrap;
+}
+
 /* ============================================
    PRIVACY MODAL
    ============================================ */

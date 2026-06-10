@@ -53,12 +53,14 @@ export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProp
       exit={{ opacity: 0, y: 20 }}
       transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
     >
-      <button onClick={onBack} className="create-page-back" type="button">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="19" x2="5" y1="12" y2="12" />
-          <polyline points="12 19 5 12 12 5" />
-        </svg>
-        Volver
+      <button onClick={onBack} className="volver-btn-sm" type="button">
+        <div className="volver-btn-sm-bg">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+            <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+            <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+          </svg>
+        </div>
+        <p className="volver-btn-sm-text">Volver</p>
       </button>
 
       <h2 className="login-title">

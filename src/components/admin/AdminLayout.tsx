@@ -159,10 +159,16 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
           <div>
             <button
               onClick={() => setShowReports(false)}
-              className="create-course-back"
+              className="volver-btn-sm"
               type="button"
             >
-              ← Atrás
+              <div className="volver-btn-sm-bg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+                  <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+                  <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+                </svg>
+              </div>
+              <p className="volver-btn-sm-text">Volver</p>
             </button>
             <AdminReports />
           </div>
@@ -170,10 +176,16 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
           <div>
             <button
               onClick={() => setShowMapas(false)}
-              className="create-course-back"
+              className="volver-btn-sm"
               type="button"
             >
-              ← Atrás
+              <div className="volver-btn-sm-bg">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+                  <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+                  <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+                </svg>
+              </div>
+              <p className="volver-btn-sm-text">Volver</p>
             </button>
             <MapPage />
           </div>

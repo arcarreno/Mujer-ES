@@ -79,7 +79,15 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
   if (loading) {
     return (
       <div className="course-detail-page">
-        <button className="create-course-back" onClick={onBack} type="button">← Atrás</button>
+        <button onClick={onBack} className="volver-btn-sm" type="button">
+          <div className="volver-btn-sm-bg">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+              <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+              <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+            </svg>
+          </div>
+          <p className="volver-btn-sm-text">Volver</p>
+        </button>
         <Skeleton lines={6} />
       </div>
     )
@@ -88,7 +96,15 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
   return (
     <div className="course-detail-page">
       <div className="course-detail-header">
-        <button className="create-course-back" onClick={onBack} type="button">← Atrás</button>
+        <button onClick={onBack} className="volver-btn-sm" type="button">
+          <div className="volver-btn-sm-bg">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+              <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+              <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+            </svg>
+          </div>
+          <p className="volver-btn-sm-text">Volver</p>
+        </button>
         <div className="course-detail-title-row">
           <h2 className="course-detail-title">{course.title}</h2>
           {course.subtitle && <p className="course-detail-subtitle">{course.subtitle}</p>}
