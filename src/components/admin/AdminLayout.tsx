@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import AdminBottomNav, { type AdminTabKey } from './AdminBottomNav'
@@ -9,8 +9,10 @@ import CreateCoursePage from './CreateCoursePage'
 import CreateUserPage from './CreateUserPage'
 import AdminChats from './AdminChats'
 import ProfilePage from '../home/ProfilePage'
+import UserDetailPage from './UserDetailPage'
 import { signOut } from '../../lib/queries'
-import { listUsers } from '../../lib/admin'
+import { listUsers, type UserRow } from '../../lib/admin'
+import { supabase } from '../../lib/supabase'
 import type { Course } from '../../lib/queries'
 
 interface AdminLayoutProps {
@@ -24,6 +26,8 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [blockedCount, setBlockedCount] = useState(0)
   const [showCreateCourse, setShowCreateCourse] = useState(false)
   const [showCreateUser, setShowCreateUser] = useState(false)
+  const [selectedUser, setSelectedUser] = useState<UserRow | null>(null)
+  const [currentUserId, setCurrentUserId] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -37,34 +41,63 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
     return () => { cancelled = true }
   }, [activeTab])
 
+  // Get current user id for self-check
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id)
+    })
+  }, [])
+
   const handleLogout = async () => {
     await signOut()
     sileo.info({ title: 'Sesión cerrada', description: 'Hasta pronto' })
     onLogout()
   }
 
+  const handleSelectUser = useCallback((user: UserRow) => {
+    setSelectedUser(user)
+  }, [])
+
+  const handleCloseUser = useCallback(() => {
+    setSelectedUser(null)
+  }, [])
+
+  // When viewing user detail, hide header and nav
+  const showHeader = !selectedUser
+  const showNav = !selectedUser
+
   return (
     <div className="home-layout admin-layout">
-      <header className="home-header">
-        <div className="home-header-left">
-          <span className="home-greeting">Admin ·</span>
-          <h1 className="home-username">{username}</h1>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="home-logout"
-          type="button"
-          aria-label="Cerrar sesión"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-            <polyline points="16 17 21 12 16 7" />
-            <line x1="21" x2="9" y1="12" y2="12" />
-          </svg>
-        </button>
-      </header>
+      <AnimatePresence>
+        {showHeader && (
+          <motion.header
+            className="home-header"
+            initial={{ opacity: 0, y: -40 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -40 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <div className="home-header-left">
+              <span className="home-greeting">Admin ·</span>
+              <h1 className="home-username">{username}</h1>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="home-logout"
+              type="button"
+              aria-label="Cerrar sesión"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" x2="9" y1="12" y2="12" />
+              </svg>
+            </button>
+          </motion.header>
+        )}
+      </AnimatePresence>
 
-      <main className="home-main">
+      <main className="home-main" style={selectedUser ? { paddingBottom: 0 } : undefined}>
         {showCreateCourse ? (
           <CreateCoursePage
             onCreated={(course: Course) => {
@@ -81,6 +114,13 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
               setActiveTab('users')
             }}
             onBack={() => setShowCreateUser(false)}
+          />
+        ) : selectedUser ? (
+          <UserDetailPage
+            user={selectedUser}
+            currentUserId={currentUserId}
+            onBack={handleCloseUser}
+            onUpdate={() => {}}
           />
         ) : (
           <AnimatePresence mode="wait">
@@ -111,6 +151,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 <ManageUsers
                   onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }}
                   onCreateUser={() => setShowCreateUser(true)}
+                  onSelectUser={handleSelectUser}
                 />
               </motion.div>
             )}
@@ -151,7 +192,18 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
         )}
       </main>
 
-      <AdminBottomNav active={activeTab} onChange={setActiveTab} />
+      <AnimatePresence>
+        {showNav && (
+          <motion.div
+            initial={{ opacity: 0, y: 60 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 60 }}
+            transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+          >
+            <AdminBottomNav active={activeTab} onChange={setActiveTab} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

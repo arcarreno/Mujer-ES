@@ -1,22 +1,18 @@
 import { useState, useEffect, useMemo } from 'react'
-import { AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import { listUsers, type UserRow } from '../../lib/admin'
-import UserDetailModal from './UserDetailModal'
-import { supabase } from '../../lib/supabase'
 import { getErrorMessage } from '../../lib/queries'
 import Skeleton from '../ui/Skeleton'
 
 interface ManageUsersProps {
   onCountsChange?: (total: number, blocked: number) => void
   onCreateUser?: () => void
+  onSelectUser?: (user: UserRow) => void
 }
 
-export default function ManageUsers({ onCountsChange, onCreateUser }: ManageUsersProps) {
+export default function ManageUsers({ onCountsChange, onCreateUser, onSelectUser }: ManageUsersProps) {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<UserRow | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string>('')
   const [searchQuery, setSearchQuery] = useState('')
 
   const filteredUsers = useMemo(() => {
@@ -48,9 +44,6 @@ export default function ManageUsers({ onCountsChange, onCreateUser }: ManageUser
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id)
-    })
     loadUsers()
   }, [])
 
@@ -113,7 +106,7 @@ export default function ManageUsers({ onCountsChange, onCreateUser }: ManageUser
           {filteredUsers.map((u, i) => (
             <button
               key={u.id}
-              onClick={() => setSelected(u)}
+              onClick={() => onSelectUser?.(u)}
               className="manage-user-row"
               type="button"
               style={{ animationDelay: `${i * 40}ms` }}
@@ -147,17 +140,6 @@ export default function ManageUsers({ onCountsChange, onCreateUser }: ManageUser
           ))}
         </div>
       )}
-
-      <AnimatePresence>
-        {selected && (
-          <UserDetailModal
-            user={selected}
-            currentUserId={currentUserId}
-            onClose={() => setSelected(null)}
-            onUpdate={loadUsers}
-          />
-        )}
-      </AnimatePresence>
     </div>
   )
 }
