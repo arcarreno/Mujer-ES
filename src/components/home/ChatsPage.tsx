@@ -1,157 +1,87 @@
-import { useState, useEffect, useRef } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { useState, useEffect, useCallback } from 'react'
+import { AnimatePresence } from 'motion/react'
+import { sileo } from 'sileo'
 import {
-  getGeneralChat,
-  getMessages,
-  sendMessage,
-  markMessagesRead,
-  subscribeToMessages,
-  unsubscribeFromMessages,
-  type Conversation,
-  type Message,
+  getUserConversations,
+  createDMConversation,
+  subscribeToConversations,
+  unsubscribeFromConversations,
+  checkUserBlocked,
+  type ConversationListItem,
 } from '../../lib/queries'
-import { supabase } from '../../lib/supabase'
+import ChatView from './ChatView'
+import ProfileModal from './ProfileModal'
+import ReportModal from './ReportModal'
+import BlockedModal from './BlockedModal'
+import Skeleton from '../ui/Skeleton'
 
 interface ChatsPageProps {
   onBack?: () => void
+  onChatStateChange?: (fullscreen: boolean) => void
 }
 
-export default function ChatsPage({ onBack }: ChatsPageProps) {
-  const [conversation, setConversation] = useState<Conversation | null>(null)
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
+export default function ChatsPage({ onChatStateChange }: ChatsPageProps) {
+  const [conversations, setConversations] = useState<ConversationListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
-  const [myId, setMyId] = useState<string>('')
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const chatContainerRef = useRef<HTMLDivElement>(null)
+  const [activeChat, setActiveChat] = useState<string | null>(null)
+  const [profileModalUser, setProfileModalUser] = useState<string | null>(null)
+  const [reportModalUser, setReportModalUser] = useState<string | null>(null)
+  const [blockedInfo, setBlockedInfo] = useState<{ blocked: boolean; until: string | null }>({ blocked: false, until: null })
 
-  // Get current user id
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setMyId(data.user.id)
-    })
-  }, [])
-
-  // Keyboard handling: adjust viewport height on mobile
-  useEffect(() => {
-    const container = chatContainerRef.current
-    if (!container) return
-
-    const viewport = window.visualViewport
-    if (!viewport) return
-
-    function onResize() {
-      // visualViewport.height shrinks when keyboard opens
-      const height = viewport!.height
-      container!.style.height = `${height}px`
-    }
-
-    viewport.addEventListener('resize', onResize)
-    // Set initial height
-    onResize()
-
-    return () => viewport.removeEventListener('resize', onResize)
-  }, [])
-
-  // Load general chat (cache in localStorage to avoid flash)
-  useEffect(() => {
-    let cancelled = false
-
-    // Try cache first
+  const loadConversations = useCallback(async () => {
     try {
-      const cached = localStorage.getItem('chat_general_conv')
-      if (cached) {
-        const conv = JSON.parse(cached) as Conversation
-        if (!cancelled) setConversation(conv)
-      }
-    } catch {}
-
-    getGeneralChat()
-      .then((conv) => {
-        if (!cancelled) {
-          setConversation(conv)
-          localStorage.setItem('chat_general_conv', JSON.stringify(conv))
-        }
-      })
-      .catch((e) => { console.error('[Chat] getGeneralChat failed:', e) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
-  }, [])
-
-  // Load messages + subscribe to real-time
-  useEffect(() => {
-    if (!conversation) return
-    let cancelled = false
-
-    async function loadMessages() {
-      try {
-        const msgs = await getMessages(conversation!.id)
-        console.log(`[Chat] Loaded ${msgs.length} messages for conv ${conversation!.id}`)
-        if (!cancelled) setMessages(msgs)
-      } catch (e) {
-        console.error('[Chat] getMessages failed:', e)
-      }
-    }
-
-    loadMessages()
-
-    // Subscribe to new messages via Realtime
-    subscribeToMessages(conversation!.id, (msg) => {
-      if (!cancelled) {
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev
-          return [...prev, msg]
-        })
-      }
-    })
-
-    return () => {
-      cancelled = true
-      unsubscribeFromMessages()
-    }
-  }, [conversation])
-
-  // Mark as read
-  useEffect(() => {
-    if (!conversation) return
-    markMessagesRead(conversation.id)
-  }, [conversation, messages])
-
-  // Auto-scroll
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
-
-  async function handleSend() {
-    if (!input.trim() || !conversation || sending) return
-    const text = input.trim()
-    setInput('')
-    setSending(true)
-    try {
-      const msg = await sendMessage(conversation.id, text)
-      console.log('[Chat] Sent message:', msg.id, msg.content)
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev
-        return [...prev, msg]
-      })
-      inputRef.current?.focus()
+      const convs = await getUserConversations()
+      setConversations(convs)
     } catch {
-      setInput(text)
+      // silent
     } finally {
-      setSending(false)
+      setLoading(false)
     }
+  }, [])
+
+  // Load conversations
+  useEffect(() => {
+    loadConversations()
+  }, [loadConversations])
+
+  // Subscribe to real-time changes
+  useEffect(() => {
+    subscribeToConversations(() => {
+      loadConversations()
+    })
+    return () => { unsubscribeFromConversations() }
+  }, [loadConversations])
+
+  // Check if blocked
+  useEffect(() => {
+    checkUserBlocked().then((info) => {
+      if (info.blocked) setBlockedInfo(info)
+    })
+  }, [])
+
+  const handleStartChat = useCallback(async (targetUserId: string) => {
+    setProfileModalUser(null)
+    try {
+      const conv = await createDMConversation(targetUserId)
+      setActiveChat(conv.id)
+      onChatStateChange?.(true)
+    } catch (e: any) {
+      sileo.error({ title: 'Error', description: e.message || 'No se pudo crear el chat' })
+    }
+  }, [onChatStateChange])
+
+  const handleReport = useCallback((userId: string) => {
+    setProfileModalUser(null)
+    setReportModalUser(userId)
+  }, [])
+
+  function getInitials(name?: string) {
+    if (!name) return '?'
+    return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      handleSend()
-    }
-  }
-
-  function formatTime(dateStr: string) {
+  function formatTime(dateStr: string | null | undefined) {
+    if (!dateStr) return ''
     const d = new Date(dateStr)
     const now = new Date()
     const diffMs = now.getTime() - d.getTime()
@@ -163,116 +93,108 @@ export default function ChatsPage({ onBack }: ChatsPageProps) {
     return d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })
   }
 
-  function getInitials(name?: string) {
-    if (!name) return '?'
-    return name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
-  }
-
-  if (loading) {
+  // If viewing a chat, show ChatView
+  if (activeChat) {
     return (
-      <div className="chat-fullscreen" ref={chatContainerRef}>
-        <div className="chat-fullscreen-header">
-          {onBack && (
-            <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              <span>Atrás</span>
-            </button>
-          )}
-          <h2 className="chat-fullscreen-title">Chat general</h2>
-        </div>
-        <div className="chat-empty">
-          <div className="manage-loading">Cargando...</div>
-        </div>
-      </div>
+      <ChatView
+        conversationId={activeChat}
+        onBack={() => {
+          setActiveChat(null)
+          onChatStateChange?.(false)
+        }}
+        onOpenProfile={(userId) => setProfileModalUser(userId)}
+      />
     )
   }
 
   return (
-    <div className="chat-fullscreen" ref={chatContainerRef}>
-      <div className="chat-fullscreen-header">
-        {onBack && (
-          <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            <span>Atrás</span>
-          </button>
-        )}
-        <h2 className="chat-fullscreen-title">Chat general</h2>
+    <div className="chat-list-page">
+      <div className="chat-list-header">
+        <h2 className="cursos-title">Chats</h2>
+        <p className="cursos-subtitle">Conversaciones activas</p>
       </div>
 
-      <div className="chat-container" style={{ height: 'auto', flex: 1 }}>
-        <div className="chat-messages">
-          {messages.length === 0 && (
-            <div className="chat-empty" style={{ flex: 1 }}>
-              <svg className="chat-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-              <p className="chat-empty-text">
-                Sé la primera en escribir. Este chat es un espacio seguro para todas.
-              </p>
-            </div>
-          )}
-          <AnimatePresence initial={false}>
-            {messages.map((msg) => {
-              const isMe = msg.sender_id === myId
-              const isAdmin = msg.sender_role === 'admin'
-              return (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className={`chat-bubble ${isMe ? 'chat-bubble-me' : 'chat-bubble-other'}`}
-                >
-                  {!isMe && (
-                    <div className="chat-sender">
-                      <div className={`chat-avatar ${isAdmin ? 'chat-avatar-admin' : ''}`}>
-                        {msg.avatar_url ? (
-                          <img src={msg.avatar_url} alt="" className="chat-avatar-img" />
-                        ) : (
-                          getInitials(msg.full_name || msg.username)
-                        )}
-                      </div>
-                      <span className="chat-username">{msg.username || '.usuario'}</span>
-                      {isAdmin && <span className="chat-admin-badge">Admin</span>}
-                    </div>
+      {loading ? (
+        <Skeleton lines={4} />
+      ) : conversations.length === 0 ? (
+        <div className="chat-list-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <p>No hay conversaciones aún</p>
+        </div>
+      ) : (
+        <div className="chat-list-grid">
+          {conversations.map((conv) => {
+            const other = conv.other_user
+            const isActive = conv.type === 'general'
+            const hasUnread = (conv.unread_count || 0) > 0
+
+            return (
+              <button
+                key={conv.id}
+                className={`chat-list-card ${hasUnread ? 'unread' : ''}`}
+                onClick={() => {
+                  setActiveChat(conv.id)
+                  onChatStateChange?.(true)
+                }}
+                type="button"
+              >
+                <div className="chat-list-card-avatar">
+                  {other?.avatar_url ? (
+                    <img src={other.avatar_url} alt="" className="chat-list-card-avatar-img" />
+                  ) : (
+                    <span className="chat-list-card-avatar-initials">
+                      {isActive ? (
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                        </svg>
+                      ) : (
+                        getInitials(other?.full_name)
+                      )}
+                    </span>
                   )}
-                  <div className="chat-bubble-content">{msg.content}</div>
-                  <div className="chat-time">{formatTime(msg.created_at)}</div>
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-          <div ref={messagesEndRef} />
-        </div>
+                  {hasUnread && <span className="chat-list-card-badge">{conv.unread_count}</span>}
+                </div>
 
-        <div className="chat-input-bar">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Escribí tu mensaje..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            maxLength={500}
-            disabled={sending}
-          />
-          <button
-            className="chat-send-btn"
-            onClick={handleSend}
-            disabled={!input.trim() || sending}
-            aria-label="Enviar mensaje"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13" />
-              <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-          </button>
+                <div className="chat-list-card-info">
+                  <div className="chat-list-card-top">
+                    <h3 className="chat-list-card-name">
+                      {isActive ? 'Chat General' : other?.full_name || '.usuario'}
+                    </h3>
+                    <span className="chat-list-card-time">
+                      {formatTime(conv.last_message_time)}
+                    </span>
+                  </div>
+                  <p className="chat-list-card-preview">
+                    {conv.last_message || 'Sin mensajes aún'}
+                  </p>
+                </div>
+              </button>
+            )
+          })}
         </div>
-      </div>
+      )}
+
+      <AnimatePresence>
+        {profileModalUser && (
+          <ProfileModal
+            userId={profileModalUser}
+            onClose={() => setProfileModalUser(null)}
+            onStartChat={handleStartChat}
+            onReport={handleReport}
+          />
+        )}
+        {reportModalUser && (
+          <ReportModal
+            userId={reportModalUser}
+            onClose={() => setReportModalUser(null)}
+          />
+        )}
+        {blockedInfo.blocked && (
+          <BlockedModal until={blockedInfo.until!} />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

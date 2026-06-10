@@ -8,9 +8,10 @@ interface ManageUsersProps {
   onCountsChange?: (total: number, blocked: number) => void
   onCreateUser?: () => void
   onSelectUser?: (user: UserRow) => void
+  onSendMessage?: (userId: string) => void
 }
 
-export default function ManageUsers({ onCountsChange, onCreateUser, onSelectUser }: ManageUsersProps) {
+export default function ManageUsers({ onCountsChange, onCreateUser, onSelectUser, onSendMessage }: ManageUsersProps) {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -135,6 +136,18 @@ export default function ManageUsers({ onCountsChange, onCreateUser, onSelectUser
                   <span className="manage-user-status pending">Sin form</span>
                 )}
                 {u.blocked && <span className="manage-user-status blocked">Bloqueado</span>}
+                {u.type === 'user' && onSendMessage && (
+                  <button
+                    className="manage-user-msg-btn"
+                    onClick={(e) => { e.stopPropagation(); onSendMessage(u.id) }}
+                    type="button"
+                    aria-label="Enviar mensaje"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </button>
+                )}
               </div>
             </button>
           ))}

@@ -11,6 +11,8 @@ import AdminChats from './AdminChats'
 import AdminReports from './AdminReports'
 import MapPage from '../home/MapPage'
 import ProfilePage from '../home/ProfilePage'
+import ChatView from '../home/ChatView'
+import { createDMConversation } from '../../lib/queries'
 import UserDetailPage from './UserDetailPage'
 import { signOut } from '../../lib/queries'
 import { listUsers, type UserRow } from '../../lib/admin'
@@ -33,6 +35,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [showReports, setShowReports] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [showMapas, setShowMapas] = useState(false)
+  const [adminDMChat, setAdminDMChat] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -81,9 +84,18 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
     setActiveTab('dashboard')
   }, [])
 
+  const handleSendMessage = useCallback(async (userId: string) => {
+    try {
+      const conv = await createDMConversation(userId)
+      setAdminDMChat(conv.id)
+    } catch (e: any) {
+      sileo.error({ title: 'Error', description: e.message || 'No se pudo crear el chat' })
+    }
+  }, [])
+
   // When viewing user detail, hide header and nav
-  const showHeader = !selectedUser && !chatFullscreen && !showReports && !showMapas
-  const showNav = !selectedUser && !chatFullscreen && !showReports && !showMapas
+  const showHeader = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat
+  const showNav = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat
 
   return (
     <div className="home-layout admin-layout">
@@ -165,6 +177,11 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
           </div>
         ) : chatFullscreen ? (
           <AdminChats onBack={handleBackFromChat} />
+        ) : adminDMChat ? (
+          <ChatView
+            conversationId={adminDMChat}
+            onBack={() => setAdminDMChat(null)}
+          />
         ) : (
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
@@ -203,6 +220,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                   onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }}
                   onCreateUser={() => setShowCreateUser(true)}
                   onSelectUser={handleSelectUser}
+                  onSendMessage={handleSendMessage}
                 />
               </motion.div>
             )}

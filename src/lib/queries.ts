@@ -869,3 +869,201 @@ export async function getAllConversations(): Promise<(Conversation & { username:
   )
   return results
 }
+
+// =====================================================
+// DM CONVERSATIONS
+// =====================================================
+
+// Get all conversations for current user (general + DMs)
+export interface ConversationListItem extends Conversation {
+  last_message?: string
+  last_message_time?: string
+  other_user?: { id: string; username: string; full_name: string; avatar_url: string | null }
+  unread_count?: number
+}
+
+export async function getUserConversations(): Promise<ConversationListItem[]> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  // Get all conversations user participates in
+  const { data: convs, error } = await supabase
+    .from('conversations')
+    .select('*')
+    .or(`user_id.eq.${user.id},participants.cs.{${user.id}}`)
+    .eq('state', 'open')
+    .order('last_message_at', { ascending: false, nullsFirst: false })
+  if (error) throw error
+  if (!convs) return []
+
+  const items = await Promise.all(
+    convs.map(async (conv) => {
+      let otherUser: ConversationListItem['other_user'] = undefined
+      let unreadCount = 0
+
+      if (conv.type === 'dm') {
+        // Find the other participant
+        const participants = (conv.participants || []) as string[]
+        const otherId = participants.find((p) => p !== user.id) || conv.user_id
+        if (otherId !== user.id) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('id, username, full_name, avatar_url')
+            .eq('id', otherId)
+            .maybeSingle()
+          if (profile) {
+            otherUser = { id: profile.id, username: profile.username, full_name: profile.full_name, avatar_url: profile.avatar_url }
+          }
+        }
+        // Count unread messages from others
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conv.id)
+          .eq('read', false)
+          .neq('sender_id', user.id)
+        unreadCount = count || 0
+      } else {
+        // General chat
+        otherUser = { id: 'general', username: 'Chat General', full_name: 'Chat General', avatar_url: null }
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('conversation_id', conv.id)
+          .eq('read', false)
+          .neq('sender_id', user.id)
+        unreadCount = count || 0
+      }
+
+      // Get last message
+      const { data: lastMsg } = await supabase
+        .from('messages')
+        .select('content, created_at')
+        .eq('conversation_id', conv.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      return {
+        ...conv,
+        last_message: lastMsg?.content || '',
+        last_message_time: lastMsg?.created_at || conv.last_message_at,
+        other_user: otherUser,
+        unread_count: unreadCount,
+      }
+    })
+  )
+
+  // Sort by last message time
+  return items.sort((a, b) => {
+    const ta = a.last_message_time ? new Date(a.last_message_time).getTime() : 0
+    const tb = b.last_message_time ? new Date(b.last_message_time).getTime() : 0
+    return tb - ta
+  })
+}
+
+// Create or get existing DM conversation
+export async function createDMConversation(targetUserId: string): Promise<Conversation> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  if (targetUserId === user.id) throw new Error('No puedes chatear contigo misma')
+
+  // Check if DM already exists
+  const { data: existing } = await supabase
+    .from('conversations')
+    .select('*')
+    .eq('type', 'dm')
+    .eq('state', 'open')
+    .or(`and(user_id.eq.${user.id},participants.cs.{${targetUserId}}),and(user_id.eq.${targetUserId},participants.cs.{${user.id}})`)
+    .maybeSingle()
+
+  if (existing) return existing
+
+  // Create new DM
+  const { data, error } = await supabase
+    .from('conversations')
+    .insert({
+      user_id: user.id,
+      type: 'dm',
+      state: 'open',
+      participants: [user.id, targetUserId],
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+// =====================================================
+// REPORTS
+// =====================================================
+
+export async function reportUser(reportedId: string, reason: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+  if (reportedId === user.id) throw new Error('No te puedes reportar a ti misma')
+
+  const { error } = await supabase
+    .from('reports')
+    .insert({
+      reporter_id: user.id,
+      reported_id: reportedId,
+      reason: reason.trim(),
+    })
+  if (error) {
+    if (error.message?.includes('unique')) {
+      throw new Error('Ya reportaste a este usuario')
+    }
+    throw error
+  }
+}
+
+// Check if current user is blocked
+export async function checkUserBlocked(): Promise<{ blocked: boolean; until: string | null }> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { blocked: false, until: null }
+
+  const { data } = await supabase
+    .from('profiles')
+    .select('blocked_until')
+    .eq('id', user.id)
+    .maybeSingle()
+
+  if (!data?.blocked_until) return { blocked: false, until: null }
+
+  const until = new Date(data.blocked_until)
+  if (until > new Date()) {
+    return { blocked: true, until: data.blocked_until }
+  }
+  return { blocked: false, until: null }
+}
+
+// Subscribe to conversations list changes (new messages, new convos)
+let conversationsChannel: ReturnType<typeof supabase.channel> | null = null
+
+export function subscribeToConversations(onChange: () => void): void {
+  if (conversationsChannel) {
+    supabase.removeChannel(conversationsChannel)
+  }
+
+  conversationsChannel = supabase
+    .channel('conversations-list')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'conversations' },
+      () => onChange()
+    )
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'messages' },
+      () => onChange()
+    )
+    .subscribe()
+}
+
+export function unsubscribeFromConversations(): void {
+  if (conversationsChannel) {
+    supabase.removeChannel(conversationsChannel)
+    conversationsChannel = null
+  }
+}

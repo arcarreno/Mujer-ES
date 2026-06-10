@@ -26,16 +26,11 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
 
   const handleTabChange = useCallback((tab: TabKey) => {
     setActiveTab(tab)
-    if (tab === 'chats') {
-      setChatFullscreen(true)
-    } else {
-      setChatFullscreen(false)
-    }
+    setChatFullscreen(false)
   }, [])
 
-  const handleBackFromChat = useCallback(() => {
-    setChatFullscreen(false)
-    setActiveTab('mapa')
+  const handleChatFullscreenChange = useCallback((fullscreen: boolean) => {
+    setChatFullscreen(fullscreen)
   }, [])
 
   // When in chat fullscreen, hide header and nav
@@ -116,7 +111,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <ChatsPage onBack={handleBackFromChat} />
+              <ChatsPage onChatStateChange={handleChatFullscreenChange} />
             </motion.div>
           )}
           {activeTab === 'perfil' && (
