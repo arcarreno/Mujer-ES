@@ -44,7 +44,28 @@ export async function getProfile(userId: string): Promise<Profile | null> {
     .maybeSingle()
 
   if (error) throw error
-  return data
+  if (data) return data
+
+  // Fallback: check admins table
+  const { data: admin } = await supabase
+    .from('admins')
+    .select('id, username, full_name')
+    .eq('id', userId)
+    .maybeSingle()
+  if (admin) {
+    return {
+      id: admin.id,
+      username: admin.username,
+      full_name: admin.full_name,
+      bio: null,
+      hobbies: null,
+      avatar_url: null,
+      blocked_until: null,
+      created_at: '',
+      updated_at: '',
+    }
+  }
+  return null
 }
 
 export async function updateProfile(
@@ -752,17 +773,30 @@ export function subscribeToMessages(
       },
       async (payload) => {
         const raw = payload.new as Message
-        // Fetch sender profile for username + avatar
-        const { data: profile } = await supabase
+        // Fetch sender profile from profiles OR admins
+        let profile: { username: string; full_name: string; avatar_url: string | null } | null = null
+        const { data: profileData } = await supabase
           .from('profiles')
           .select('username, full_name, avatar_url')
           .eq('id', raw.sender_id)
           .maybeSingle()
+        if (profileData) {
+          profile = profileData
+        } else {
+          const { data: adminData } = await supabase
+            .from('admins')
+            .select('username, full_name')
+            .eq('id', raw.sender_id)
+            .maybeSingle()
+          if (adminData) {
+            profile = { username: adminData.username, full_name: adminData.full_name, avatar_url: null }
+          }
+        }
         onNewMessage({
           ...raw,
           username: profile?.username,
           full_name: profile?.full_name,
-          avatar_url: profile?.avatar_url,
+          avatar_url: profile?.avatar_url ?? undefined,
         })
       }
     )
@@ -786,16 +820,25 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
     console.error('[ queries ] getMessages error:', error)
     throw error
   }
-  // Fetch profiles for all unique sender_ids
+  // Fetch profiles for all unique sender_ids from both profiles AND admins tables
   const senderIds = [...new Set((data || []).map((m: any) => m.sender_id))]
   let profileMap: Record<string, { username: string; full_name: string; avatar_url: string | null }> = {}
   if (senderIds.length > 0) {
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, username, full_name, avatar_url')
-      .in('id', senderIds)
-    if (profiles) {
-      profileMap = Object.fromEntries(profiles.map((p: any) => [p.id, p]))
+    const [profilesResult, adminsResult] = await Promise.all([
+      supabase.from('profiles').select('id, username, full_name, avatar_url').in('id', senderIds),
+      supabase.from('admins').select('id, username, full_name').in('id', senderIds),
+    ])
+    if (profilesResult.data) {
+      profilesResult.data.forEach((p: any) => {
+        profileMap[p.id] = { username: p.username, full_name: p.full_name, avatar_url: p.avatar_url }
+      })
+    }
+    if (adminsResult.data) {
+      adminsResult.data.forEach((a: any) => {
+        if (!profileMap[a.id]) {
+          profileMap[a.id] = { username: a.username, full_name: a.full_name, avatar_url: null }
+        }
+      })
     }
   }
   return (data || []).map((m: any) => ({
@@ -886,54 +929,70 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Get all conversations user participates in
+  // Get general chat + DMs where user participates
   const { data: convs, error } = await supabase
     .from('conversations')
     .select('*')
-    .or(`user_id.eq.${user.id},participants.cs.{${user.id}}`)
+    .or(`type.eq.general,and(user_id.eq.${user.id}),and(participants.cs.{${user.id}})`)
     .eq('state', 'open')
     .order('last_message_at', { ascending: false, nullsFirst: false })
   if (error) throw error
   if (!convs) return []
+
+  // Pre-fetch all profiles + admins for participant lookups
+  const allUserIds = new Set<string>()
+  convs.forEach((c) => {
+    const participants = (c.participants || []) as string[]
+    participants.forEach((p) => allUserIds.add(p))
+    if (c.user_id) allUserIds.add(c.user_id)
+  })
+  const userIdArr = [...allUserIds]
+
+  let profileMap: Record<string, { id: string; username: string; full_name: string; avatar_url: string | null }> = {}
+  if (userIdArr.length > 0) {
+    const [profilesResult, adminsResult] = await Promise.all([
+      supabase.from('profiles').select('id, username, full_name, avatar_url').in('id', userIdArr),
+      supabase.from('admins').select('id, username, full_name').in('id', userIdArr),
+    ])
+    if (profilesResult.data) {
+      profilesResult.data.forEach((p) => {
+        profileMap[p.id] = { id: p.id, username: p.username, full_name: p.full_name, avatar_url: p.avatar_url }
+      })
+    }
+    // Admins don't have avatar_url in table, but may have it via profiles
+    if (adminsResult.data) {
+      adminsResult.data.forEach((a) => {
+        if (!profileMap[a.id]) {
+          profileMap[a.id] = { id: a.id, username: a.username, full_name: a.full_name, avatar_url: null }
+        }
+      })
+    }
+  }
 
   const items = await Promise.all(
     convs.map(async (conv) => {
       let otherUser: ConversationListItem['other_user'] = undefined
       let unreadCount = 0
 
-      if (conv.type === 'dm') {
-        // Find the other participant
+      if (conv.type === 'general') {
+        otherUser = { id: 'general', username: 'Chat General', full_name: 'Chat General', avatar_url: null }
+      } else if (conv.type === 'dm') {
         const participants = (conv.participants || []) as string[]
         const otherId = participants.find((p) => p !== user.id) || conv.user_id
-        if (otherId !== user.id) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('id, username, full_name, avatar_url')
-            .eq('id', otherId)
-            .maybeSingle()
-          if (profile) {
-            otherUser = { id: profile.id, username: profile.username, full_name: profile.full_name, avatar_url: profile.avatar_url }
-          }
+        if (otherId !== user.id && profileMap[otherId]) {
+          const p = profileMap[otherId]
+          otherUser = { id: p.id, username: p.username, full_name: p.full_name, avatar_url: p.avatar_url }
         }
-        // Count unread messages from others
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conv.id)
-          .eq('read', false)
-          .neq('sender_id', user.id)
-        unreadCount = count || 0
-      } else {
-        // General chat
-        otherUser = { id: 'general', username: 'Chat General', full_name: 'Chat General', avatar_url: null }
-        const { count } = await supabase
-          .from('messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('conversation_id', conv.id)
-          .eq('read', false)
-          .neq('sender_id', user.id)
-        unreadCount = count || 0
       }
+
+      // Count unread messages
+      const { count } = await supabase
+        .from('messages')
+        .select('*', { count: 'exact', head: true })
+        .eq('conversation_id', conv.id)
+        .eq('read', false)
+        .neq('sender_id', user.id)
+      unreadCount = count || 0
 
       // Get last message
       const { data: lastMsg } = await supabase
@@ -954,8 +1013,10 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
     })
   )
 
-  // Sort by last message time
+  // Sort by last message time, general always first
   return items.sort((a, b) => {
+    if (a.type === 'general') return -1
+    if (b.type === 'general') return 1
     const ta = a.last_message_time ? new Date(a.last_message_time).getTime() : 0
     const tb = b.last_message_time ? new Date(b.last_message_time).getTime() : 0
     return tb - ta
