@@ -10,9 +10,10 @@ import Skeleton from '../ui/Skeleton'
 
 interface AdminChatsProps {
   onBack?: () => void
+  onChatStateChange?: (fullscreen: boolean) => void
 }
 
-export default function AdminChats(_props: AdminChatsProps) {
+export default function AdminChats({ onChatStateChange }: AdminChatsProps) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [activeChat, setActiveChat] = useState<string | null>(null)
@@ -61,7 +62,10 @@ export default function AdminChats(_props: AdminChatsProps) {
     return (
       <ChatView
         conversationId={activeChat}
-        onBack={() => setActiveChat(null)}
+        onBack={() => {
+          setActiveChat(null)
+          onChatStateChange?.(false)
+        }}
       />
     )
   }
@@ -93,7 +97,10 @@ export default function AdminChats(_props: AdminChatsProps) {
               <button
                 key={conv.id}
                 className={`chat-list-card ${hasUnread ? 'unread' : ''}`}
-                onClick={() => setActiveChat(conv.id)}
+                onClick={() => {
+                  setActiveChat(conv.id)
+                  onChatStateChange?.(true)
+                }}
                 type="button"
               >
                 <div className="chat-list-card-avatar">

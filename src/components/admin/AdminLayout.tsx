@@ -72,16 +72,16 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
 
   const handleTabChange = useCallback((tab: AdminTabKey) => {
     setActiveTab(tab)
-    if (tab === 'chats') {
-      setChatFullscreen(true)
-    } else {
-      setChatFullscreen(false)
-    }
+    setChatFullscreen(false)
   }, [])
 
   const handleBackFromChat = useCallback(() => {
     setChatFullscreen(false)
     setActiveTab('dashboard')
+  }, [])
+
+  const handleChatFullscreenChange = useCallback((fullscreen: boolean) => {
+    setChatFullscreen(fullscreen)
   }, [])
 
   const handleSendMessage = useCallback(async (userId: string) => {
@@ -176,7 +176,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             <MapPage />
           </div>
         ) : chatFullscreen ? (
-          <AdminChats onBack={handleBackFromChat} />
+          <AdminChats onBack={handleBackFromChat} onChatStateChange={handleChatFullscreenChange} />
         ) : adminDMChat ? (
           <ChatView
             conversationId={adminDMChat}
