@@ -19,6 +19,7 @@ export interface Admin {
   full_name: string
   phone: string | null
   password: string | null
+  avatar_url: string | null
   created_at: string
   updated_at: string
 }
@@ -49,7 +50,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
   // Fallback: check admins table
   const { data: admin } = await supabase
     .from('admins')
-    .select('id, username, full_name')
+    .select('id, username, full_name, avatar_url')
     .eq('id', userId)
     .maybeSingle()
   if (admin) {
@@ -59,7 +60,7 @@ export async function getProfile(userId: string): Promise<Profile | null> {
       full_name: admin.full_name,
       bio: null,
       hobbies: null,
-      avatar_url: null,
+      avatar_url: admin.avatar_url ?? null,
       blocked_until: null,
       created_at: '',
       updated_at: '',
@@ -785,11 +786,11 @@ export function subscribeToMessages(
         } else {
           const { data: adminData } = await supabase
             .from('admins')
-            .select('username, full_name')
+            .select('username, full_name, avatar_url')
             .eq('id', raw.sender_id)
             .maybeSingle()
           if (adminData) {
-            profile = { username: adminData.username, full_name: adminData.full_name, avatar_url: null }
+            profile = { username: adminData.username, full_name: adminData.full_name, avatar_url: adminData.avatar_url ?? null }
           }
         }
         onNewMessage({
@@ -826,7 +827,7 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
   if (senderIds.length > 0) {
     const [profilesResult, adminsResult] = await Promise.all([
       supabase.from('profiles').select('id, username, full_name, avatar_url').in('id', senderIds),
-      supabase.from('admins').select('id, username, full_name').in('id', senderIds),
+      supabase.from('admins').select('id, username, full_name, avatar_url').in('id', senderIds),
     ])
     if (profilesResult.data) {
       profilesResult.data.forEach((p: any) => {
@@ -836,7 +837,7 @@ export async function getMessages(conversationId: string): Promise<Message[]> {
     if (adminsResult.data) {
       adminsResult.data.forEach((a: any) => {
         if (!profileMap[a.id]) {
-          profileMap[a.id] = { username: a.username, full_name: a.full_name, avatar_url: null }
+          profileMap[a.id] = { username: a.username, full_name: a.full_name, avatar_url: a.avatar_url ?? null }
         }
       })
     }
@@ -963,7 +964,7 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
   if (userIdArr.length > 0) {
     const [profilesResult, adminsResult] = await Promise.all([
       supabase.from('profiles').select('id, username, full_name, avatar_url').in('id', userIdArr),
-      supabase.from('admins').select('id, username, full_name').in('id', userIdArr),
+      supabase.from('admins').select('id, username, full_name, avatar_url').in('id', userIdArr),
     ])
     if (profilesResult.data) {
       profilesResult.data.forEach((p) => {
@@ -973,7 +974,7 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
     if (adminsResult.data) {
       adminsResult.data.forEach((a) => {
         if (!profileMap[a.id]) {
-          profileMap[a.id] = { id: a.id, username: a.username, full_name: a.full_name, avatar_url: null }
+          profileMap[a.id] = { id: a.id, username: a.username, full_name: a.full_name, avatar_url: a.avatar_url ?? null }
         }
         // Also check profiles for admin avatar
         if (!profileMap[a.id]?.avatar_url) {

@@ -96,14 +96,32 @@ export default function ChatsPage({ onChatStateChange }: ChatsPageProps) {
   // If viewing a chat, show ChatView
   if (activeChat) {
     return (
-      <ChatView
-        conversationId={activeChat}
-        onBack={() => {
-          setActiveChat(null)
-          onChatStateChange?.(false)
-        }}
-        onOpenProfile={(userId) => setProfileModalUser(userId)}
-      />
+      <>
+        <ChatView
+          conversationId={activeChat}
+          onBack={() => {
+            setActiveChat(null)
+            onChatStateChange?.(false)
+          }}
+          onOpenProfile={(userId) => setProfileModalUser(userId)}
+        />
+        <AnimatePresence>
+          {profileModalUser && (
+            <ProfileModal
+              userId={profileModalUser}
+              onClose={() => setProfileModalUser(null)}
+              onStartChat={handleStartChat}
+              onReport={handleReport}
+            />
+          )}
+          {reportModalUser && (
+            <ReportModal
+              userId={reportModalUser}
+              onClose={() => setReportModalUser(null)}
+            />
+          )}
+        </AnimatePresence>
+      </>
     )
   }
 

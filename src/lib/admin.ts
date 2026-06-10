@@ -32,15 +32,10 @@ export async function listUsers(): Promise<UserRow[]> {
   const result: UserRow[] = []
   const adminIds = new Set((admins ?? []).map((a) => a.id))
 
-  // Build a map of admin profiles for avatar_url
+  // Build a map of admin profiles for avatar_url (use admins.avatar_url directly)
   const adminProfileMap = new Map<string, string | null>()
   for (const a of admins ?? []) {
-    const { data: ap } = await supabase
-      .from('profiles')
-      .select('avatar_url')
-      .eq('id', a.id)
-      .maybeSingle()
-    adminProfileMap.set(a.id, ap?.avatar_url ?? null)
+    adminProfileMap.set(a.id, a.avatar_url ?? null)
   }
 
   for (const p of profiles ?? []) {

@@ -235,6 +235,17 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} />
               </motion.div>
             )}
+            {activeTab === 'chats' && (
+              <motion.div
+                key="chats"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+                transition={{ duration: 0.3 }}
+              >
+                <AdminChats onChatStateChange={handleChatFullscreenChange} />
+              </motion.div>
+            )}
             {activeTab === 'perfil' && (
               <motion.div
                 key="perfil"
