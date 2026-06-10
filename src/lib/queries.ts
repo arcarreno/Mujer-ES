@@ -929,24 +929,35 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  // Get general chat + DMs where user participates
-  const { data: convs, error } = await supabase
+  // 1. Get general chat separately (always present)
+  const generalConv = await getGeneralChat().catch(() => null)
+
+  // 2. Get DMs where user participates
+  const { data: dmConvs, error: dmError } = await supabase
     .from('conversations')
     .select('*')
-    .or(`type.eq.general,and(user_id.eq.${user.id}),and(participants.cs.{${user.id}})`)
+    .eq('type', 'dm')
     .eq('state', 'open')
+    .or(`user_id.eq.${user.id},participants.cs.{${user.id}}`)
     .order('last_message_at', { ascending: false, nullsFirst: false })
-  if (error) throw error
-  if (!convs) return []
+
+  // Combine: general first, then DMs
+  const allConvs: Conversation[] = []
+  if (generalConv) allConvs.push(generalConv)
+  if (dmConvs && !dmError) allConvs.push(...dmConvs)
+
+  if (allConvs.length === 0) return []
 
   // Pre-fetch all profiles + admins for participant lookups
   const allUserIds = new Set<string>()
-  convs.forEach((c) => {
+  allConvs.forEach((c) => {
     const participants = (c.participants || []) as string[]
     participants.forEach((p) => allUserIds.add(p))
     if (c.user_id) allUserIds.add(c.user_id)
   })
-  const userIdArr = [...allUserIds]
+  // Remove general chat's seeded user_id if it's just a placeholder
+  allUserIds.delete(user.id)
+  const userIdArr = [...allUserIds].filter((id) => id !== user.id)
 
   let profileMap: Record<string, { id: string; username: string; full_name: string; avatar_url: string | null }> = {}
   if (userIdArr.length > 0) {
@@ -959,18 +970,24 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
         profileMap[p.id] = { id: p.id, username: p.username, full_name: p.full_name, avatar_url: p.avatar_url }
       })
     }
-    // Admins don't have avatar_url in table, but may have it via profiles
     if (adminsResult.data) {
       adminsResult.data.forEach((a) => {
         if (!profileMap[a.id]) {
           profileMap[a.id] = { id: a.id, username: a.username, full_name: a.full_name, avatar_url: null }
+        }
+        // Also check profiles for admin avatar
+        if (!profileMap[a.id]?.avatar_url) {
+          const profAvatar = profilesResult.data?.find((p) => p.id === a.id)
+          if (profAvatar?.avatar_url) {
+            profileMap[a.id] = { ...profileMap[a.id], avatar_url: profAvatar.avatar_url }
+          }
         }
       })
     }
   }
 
   const items = await Promise.all(
-    convs.map(async (conv) => {
+    allConvs.map(async (conv) => {
       let otherUser: ConversationListItem['other_user'] = undefined
       let unreadCount = 0
 
@@ -1013,7 +1030,7 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
     })
   )
 
-  // Sort by last message time, general always first
+  // Sort: general always first, then by last message time
   return items.sort((a, b) => {
     if (a.type === 'general') return -1
     if (b.type === 'general') return 1

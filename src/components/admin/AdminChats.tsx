@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback } from 'react'
+import { AnimatePresence } from 'motion/react'
 import {
   getUserConversations,
+  createDMConversation,
   subscribeToConversations,
   unsubscribeFromConversations,
   type ConversationListItem,
 } from '../../lib/queries'
 import ChatView from '../home/ChatView'
+import ProfileModal from '../home/ProfileModal'
+import ReportModal from '../home/ReportModal'
 import Skeleton from '../ui/Skeleton'
 
 interface AdminChatsProps {
@@ -17,6 +21,8 @@ export default function AdminChats({ onChatStateChange }: AdminChatsProps) {
   const [conversations, setConversations] = useState<ConversationListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [activeChat, setActiveChat] = useState<string | null>(null)
+  const [profileModalUser, setProfileModalUser] = useState<string | null>(null)
+  const [reportModalUser, setReportModalUser] = useState<string | null>(null)
 
   const loadConversations = useCallback(async () => {
     try {
@@ -60,13 +66,40 @@ export default function AdminChats({ onChatStateChange }: AdminChatsProps) {
 
   if (activeChat) {
     return (
-      <ChatView
-        conversationId={activeChat}
-        onBack={() => {
-          setActiveChat(null)
-          onChatStateChange?.(false)
-        }}
-      />
+      <>
+        <ChatView
+          conversationId={activeChat}
+          onBack={() => {
+            setActiveChat(null)
+            onChatStateChange?.(false)
+          }}
+          onOpenProfile={(userId) => setProfileModalUser(userId)}
+        />
+        <AnimatePresence>
+          {profileModalUser && (
+            <ProfileModal
+              userId={profileModalUser}
+              onClose={() => setProfileModalUser(null)}
+              onStartChat={async (userId) => {
+                setProfileModalUser(null)
+                const conv = await createDMConversation(userId)
+                setActiveChat(conv.id)
+                onChatStateChange?.(true)
+              }}
+              onReport={(userId) => {
+                setProfileModalUser(null)
+                setReportModalUser(userId)
+              }}
+            />
+          )}
+          {reportModalUser && (
+            <ReportModal
+              userId={reportModalUser}
+              onClose={() => setReportModalUser(null)}
+            />
+          )}
+        </AnimatePresence>
+      </>
     )
   }
 
