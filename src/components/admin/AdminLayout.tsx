@@ -8,7 +8,6 @@ import AdminCursos from './AdminCursos'
 import CreateCoursePage from './CreateCoursePage'
 import CreateUserPage from './CreateUserPage'
 import AdminChats from './AdminChats'
-import AdminForms from './AdminForms'
 import AdminReports from './AdminReports'
 import ProfilePage from '../home/ProfilePage'
 import UserDetailPage from './UserDetailPage'
@@ -30,7 +29,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null)
   const [currentUserId, setCurrentUserId] = useState('')
-  const [formCount, setFormCount] = useState(0)
+  const [showReports, setShowReports] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -42,17 +41,6 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [activeTab])
-
-  // Load form count for dashboard
-  useEffect(() => {
-    if (activeTab !== 'dashboard') return
-    Promise.resolve(
-      supabase
-        .from('form_responses')
-        .select('*', { count: 'exact', head: true })
-        .eq('form_type', 'initial_profile')
-    ).then(({ count }) => setFormCount(count || 0)).catch(() => {})
   }, [activeTab])
 
   // Get current user id for self-check
@@ -136,6 +124,17 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             onBack={handleCloseUser}
             onUpdate={() => {}}
           />
+        ) : showReports ? (
+          <div>
+            <button
+              onClick={() => setShowReports(false)}
+              className="create-course-back"
+              type="button"
+            >
+              ← Atrás
+            </button>
+            <AdminReports />
+          </div>
         ) : (
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
@@ -149,12 +148,12 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 <AdminDashboard
                   userCount={userCount}
                   blockedCount={blockedCount}
-                  formCount={formCount}
                   enrollmentCount={0}
                   onGoToUsers={() => setActiveTab('users')}
                   onGoToChats={() => setActiveTab('chats')}
-                  onGoToForms={() => setActiveTab('forms')}
-                  onGoToReports={() => setActiveTab('reports')}
+                  onGoToReports={() => {
+                    setShowReports(true)
+                  }}
                 />
               </motion.div>
             )}
@@ -193,28 +192,6 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 transition={{ duration: 0.3 }}
               >
                 <AdminChats />
-              </motion.div>
-            )}
-            {activeTab === 'forms' && (
-              <motion.div
-                key="forms"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <AdminForms />
-              </motion.div>
-            )}
-            {activeTab === 'reports' && (
-              <motion.div
-                key="reports"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <AdminReports />
               </motion.div>
             )}
             {activeTab === 'perfil' && (

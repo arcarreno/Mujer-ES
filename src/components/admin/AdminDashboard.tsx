@@ -1,11 +1,9 @@
 interface AdminDashboardProps {
   userCount: number
   blockedCount: number
-  formCount: number
   enrollmentCount: number
   onGoToUsers: () => void
   onGoToChats: () => void
-  onGoToForms: () => void
   onGoToReports: () => void
 }
 
@@ -19,7 +17,7 @@ interface AdminCard {
   onClick: () => void
 }
 
-export default function AdminDashboard({ userCount, blockedCount, formCount, enrollmentCount, onGoToUsers, onGoToChats, onGoToForms, onGoToReports }: AdminDashboardProps) {
+export default function AdminDashboard({ userCount, blockedCount, enrollmentCount, onGoToUsers, onGoToChats, onGoToReports }: AdminDashboardProps) {
   const cards: AdminCard[] = [
     {
       id: 'users',
@@ -47,21 +45,6 @@ export default function AdminDashboard({ userCount, blockedCount, formCount, enr
         </svg>
       ),
       onClick: onGoToChats,
-    },
-    {
-      id: 'forms',
-      title: 'Formularios',
-      description: 'Respuestas de los cuestionarios iniciales',
-      count: formCount,
-      icon: (
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <polyline points="14 2 14 8 20 8" />
-          <line x1="9" x2="15" y1="13" y2="13" />
-          <line x1="9" x2="15" y1="17" y2="17" />
-        </svg>
-      ),
-      onClick: onGoToForms,
     },
     {
       id: 'reports',

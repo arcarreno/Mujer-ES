@@ -1865,7 +1865,7 @@ input[type="date"].form-input {
 }
 
 .admin-bottom-nav .bottom-nav-pill {
-  width: calc(100% / 7 - 0.14rem);
+  width: calc(20% - 0.14rem);
 }
 
 /* ============================================
@@ -5682,88 +5682,6 @@ input[type="date"].form-input {
 
 .profile-logout-btn:hover {
   background: #fef2f2;
-}
-
-/* ====== Admin Forms ====== */
-
-.admin-forms-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  padding-bottom: var(--space-20);
-}
-
-.admin-form-card {
-  background: var(--color-card, #fff);
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  overflow: hidden;
-  transition: box-shadow 0.2s;
-}
-
-.admin-form-card.expanded {
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-}
-
-.admin-form-header {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--space-4);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  -webkit-tap-highlight-color: transparent;
-  gap: var(--space-3);
-}
-
-.admin-form-user {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  flex: 1;
-}
-
-.admin-form-chevron {
-  color: var(--color-muted, #6b7280);
-  flex-shrink: 0;
-  transition: transform 0.2s ease;
-}
-
-.admin-form-chevron.rotated {
-  transform: rotate(180deg);
-}
-
-.admin-form-body {
-  padding: 0 var(--space-4) var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  padding-top: var(--space-3);
-}
-
-.admin-form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.admin-form-label {
-  font-size: var(--text-xs);
-  color: var(--color-muted, #6b7280);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.admin-form-field strong {
-  font-size: var(--text-sm);
-  color: var(--color-text, #1a1c2e);
-  font-weight: 500;
 }
 
 /* ====== Admin Reports ====== */
