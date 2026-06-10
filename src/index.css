@@ -811,6 +811,7 @@ input::-ms-clear {
   border-radius: 0.6rem;
   height: 2.5rem;
   width: 2.5rem;
+  min-width: 2.5rem;
   position: relative;
   color: #000000;
   border: none;
@@ -820,13 +821,9 @@ input::-ms-clear {
   align-items: center;
   justify-content: center;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   -webkit-tap-highlight-color: transparent;
-  transition: width 0.35s ease;
-}
-
-.volver-btn-sm:hover {
-  width: calc(100% - 2px);
+  z-index: 20;
 }
 
 .volver-btn-sm-bg {
@@ -845,7 +842,7 @@ input::-ms-clear {
 }
 
 .volver-btn-sm:hover .volver-btn-sm-bg {
-  width: calc(100% - 2px);
+  width: 18rem;
 }
 
 .volver-btn-sm-text {
