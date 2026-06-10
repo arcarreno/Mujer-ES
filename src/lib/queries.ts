@@ -474,7 +474,7 @@ export interface Enrollment {
   access_code: string | null
   attended: boolean
   attended_at: string | null
-  profiles?: { username: string; full_name: string } | null
+  profiles?: { username: string; full_name: string; avatar_url: string | null } | null
   course?: Course | null
 }
 
@@ -624,6 +624,31 @@ export async function markAttendance(qrPayload: string): Promise<{ username: str
   }
 }
 
+export async function markBulkAttendance(enrollmentIds: string[]): Promise<{ marked: number; alreadyMarked: number }> {
+  if (enrollmentIds.length === 0) return { marked: 0, alreadyMarked: 0 }
+
+  const { data: existing, error: fetchErr } = await supabase
+    .from('course_enrollments')
+    .select('id, attended')
+    .in('id', enrollmentIds)
+
+  if (fetchErr) throw fetchErr
+
+  const alreadyMarked = (existing ?? []).filter((e) => e.attended).length
+  const toMark = (existing ?? []).filter((e) => !e.attended).map((e) => e.id)
+
+  if (toMark.length > 0) {
+    const { error: updateErr } = await supabase
+      .from('course_enrollments')
+      .update({ attended: true, attended_at: new Date().toISOString() })
+      .in('id', toMark)
+
+    if (updateErr) throw updateErr
+  }
+
+  return { marked: toMark.length, alreadyMarked }
+}
+
 export async function unenrollFromCourse(courseId: string): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
@@ -693,7 +718,7 @@ export async function getCourseEnrollments(courseId: string): Promise<Enrollment
   const userIds = [...new Set(data.map((r) => r.user_id))]
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, username, full_name')
+    .select('id, username, full_name, avatar_url')
     .in('id', userIds)
 
   const profileMap = new Map((profiles ?? []).map((p) => [p.id, p]))

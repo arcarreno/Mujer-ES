@@ -1,24 +1,18 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, generateQrDataUrlFromPayload, type Course, type Enrollment } from '../../lib/queries'
-import QRScanner from './QRScanner'
+import { listCourses, deleteCourse, concludeCourse, getCourseEnrollments, type Course } from '../../lib/queries'
 import EditCoursePage from './EditCoursePage'
 import Skeleton from '../ui/Skeleton'
 
 interface AdminCursosProps {
   onCreateCourse: () => void
+  onSelectCourse: (course: Course) => void
 }
 
-export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
+export default function AdminCursos({ onCreateCourse, onSelectCourse }: AdminCursosProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [enrollments, setEnrollments] = useState<Record<string, Enrollment[]>>({})
-  const [enrollmentsLoading, setEnrollmentsLoading] = useState<Record<string, boolean>>({})
   const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({})
-  const [scannerCourseId, setScannerCourseId] = useState<string | null>(null)
-  const [qrModalEnrollment, setQrModalEnrollment] = useState<{ enrollmentId: string; username: string; courseName: string } | null>(null)
-  const [qrModalDataUrl, setQrModalDataUrl] = useState<string | null>(null)
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
 
   const load = async () => {
@@ -61,41 +55,6 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
       sileo.success({ title: 'Curso concluido', description: `"${title}" fue concluido` })
     } catch {
       sileo.error({ title: 'Error', description: 'No se pudo concluir el curso' })
-    }
-  }
-
-  const toggleEnrollments = async (courseId: string) => {
-    if (expandedId === courseId) {
-      setExpandedId(null)
-      return
-    }
-    setExpandedId(courseId)
-    if (!enrollments[courseId]) {
-      setEnrollmentsLoading((prev) => ({ ...prev, [courseId]: true }))
-      try {
-        const data = await getCourseEnrollments(courseId)
-        setEnrollments((prev) => ({ ...prev, [courseId]: data }))
-      } catch {
-        sileo.error({ title: 'Error', description: 'No se pudieron cargar inscripciones' })
-      } finally {
-        setEnrollmentsLoading((prev) => ({ ...prev, [courseId]: false }))
-      }
-    }
-  }
-
-  const showQrModal = async (enrollmentId: string, username: string, courseName: string) => {
-    setQrModalEnrollment({ enrollmentId, username, courseName })
-    setQrModalDataUrl(null)
-    try {
-      const enrollment = enrollments[Object.keys(enrollments).find(k =>
-        enrollments[k].some(e => e.id === enrollmentId)
-      ) ?? '']?.find(e => e.id === enrollmentId)
-      if (enrollment?.qr_code) {
-        const dataUrl = await generateQrDataUrlFromPayload(enrollment.qr_code)
-        setQrModalDataUrl(dataUrl)
-      }
-    } catch {
-      sileo.error({ title: 'Error', description: 'No se pudo generar el código QR' })
     }
   }
 
@@ -150,6 +109,10 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
               key={course.id}
               className={`admin-curso-card ${course.concluded ? 'admin-curso-card-concluded' : ''}`}
               style={{ animationDelay: `${i * 60}ms` }}
+              onClick={() => onSelectCourse(course)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectCourse(course) } }}
             >
               <div className="admin-curso-card-header">
                 <div className="admin-curso-card-info">
@@ -198,23 +161,10 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                 )}
               </div>
               <div className="admin-curso-card-footer">
-                <button
-                  className="admin-curso-enrollments-btn"
-                  onClick={() => toggleEnrollments(course.id)}
-                  type="button"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-                    <circle cx="9" cy="7" r="4" />
-                    <line x1="19" x2="19" y1="8" y2="14" />
-                    <line x1="22" x2="16" y1="11" y2="11" />
-                  </svg>
-                  Inscriptos
-                </button>
-                <div className="admin-curso-card-actions">
-                  <span className="admin-curso-card-date">
-                    {new Date(course.created_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
-                  </span>
+                <span className="admin-curso-card-date">
+                  {new Date(course.created_at).toLocaleDateString('es-MX', { dateStyle: 'medium' })}
+                </span>
+                <div className="admin-curso-card-actions" onClick={(e) => e.stopPropagation()}>
                   <button
                     className="admin-curso-action-btn"
                     onClick={() => setEditingCourse(course)}
@@ -254,158 +204,11 @@ export default function AdminCursos({ onCreateCourse }: AdminCursosProps) {
                   </button>
                 </div>
               </div>
-
-              {expandedId === course.id && (
-                <div className="admin-curso-enrollments">
-                  {enrollmentsLoading[course.id] ? (
-                    <p className="admin-curso-enrollments-loading">Cargando inscriptos...</p>
-                  ) : enrollments[course.id]?.length === 0 ? (
-                    <p className="admin-curso-enrollments-empty">No hay inscriptos aún</p>
-                  ) : (
-                    <>
-                      {(() => {
-                        const enrList = enrollments[course.id] ?? []
-                        const attended = enrList.filter((e) => e.attended)
-                        const notAttended = enrList.filter((e) => !e.attended)
-                        const total = enrList.length
-                        const pct = total > 0 ? Math.round((attended.length / total) * 100) : 0
-
-                        return (
-                          <>
-                            <div className="admin-curso-attendance-chart">
-                              <div className="admin-curso-chart-bar">
-                                <div className="admin-curso-chart-fill" style={{ width: `${pct}%` }} />
-                              </div>
-                              <div className="admin-curso-chart-labels">
-                                <span className="admin-curso-chart-label-attended">
-                                  {attended.length} asistieron ({pct}%)
-                                </span>
-                                <span className="admin-curso-chart-label-missed">
-                                  {notAttended.length} no asistieron
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="admin-curso-enrollments-scroll">
-                              <div className="admin-curso-enrollments-table">
-                                <div className="admin-curso-table-header">
-                                  <span className="admin-curso-table-col admin-curso-table-col-name">Nombre</span>
-                                  <span className="admin-curso-table-col admin-curso-table-col-username">Usuario</span>
-                                  <span className="admin-curso-table-col admin-curso-table-col-date">Inscripción</span>
-                                  <span className="admin-curso-table-col admin-curso-table-col-status">Estado</span>
-                                  {course.modality === 'presencial' && (
-                                    <span className="admin-curso-table-col admin-curso-table-col-qr">QR</span>
-                                  )}
-                                </div>
-                                {enrList.map((enr) => (
-                                  <div key={enr.id} className={`admin-curso-table-row ${enr.attended ? 'admin-curso-table-row-attended' : ''}`}>
-                                    <span className="admin-curso-table-col admin-curso-table-col-name">
-                                      {enr.profiles?.full_name || '—'}
-                                    </span>
-                                    <span className="admin-curso-table-col admin-curso-table-col-username">
-                                      @{enr.profiles?.username || '?'}
-                                    </span>
-                                    <span className="admin-curso-table-col admin-curso-table-col-date">
-                                      {new Date(enr.enrolled_at).toLocaleDateString('es-MX', { dateStyle: 'short' })}
-                                    </span>
-                                    <span className={`admin-curso-table-col admin-curso-table-col-status ${enr.attended ? 'admin-curso-status-attended' : 'admin-curso-status-missed'}`}>
-                                      {enr.attended ? 'Presente' : 'Ausente'}
-                                    </span>
-                                    {course.modality === 'presencial' && (
-                                      <span className="admin-curso-table-col admin-curso-table-col-qr">
-                                        {enr.qr_code && (
-                                          <button
-                                            className="admin-curso-qr-btn"
-                                            onClick={() => showQrModal(enr.id, enr.profiles?.username ?? '?', course.title)}
-                                            type="button"
-                                            title="Ver QR"
-                                          >
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                              <rect x="3" y="3" width="7" height="7" />
-                                              <rect x="14" y="3" width="7" height="7" />
-                                              <rect x="3" y="14" width="7" height="7" />
-                                              <rect x="14" y="14" width="3" height="3" />
-                                            </svg>
-                                          </button>
-                                        )}
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-
-                            {course.modality === 'presencial' && (
-                              <button
-                                className="admin-curso-scan-btn"
-                                onClick={() => setScannerCourseId(course.id)}
-                                type="button"
-                              >
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M3 7V5a2 2 0 0 1 2-2h2" />
-                                  <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-                                  <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-                                  <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-                                  <line x1="7" y1="12" x2="17" y2="12" />
-                                </svg>
-                                Escanear QR
-                              </button>
-                            )}
-                          </>
-                        )
-                      })()}
-                    </>
-                  )}
-                </div>
-              )}
             </div>
           ))}
         </div>
       )}
       </>
-      )}
-
-      {scannerCourseId && (
-        <QRScanner
-          onScanResult={(username, courseName) => {
-            sileo.success({ title: 'Asistencia registrada', description: `${username} — ${courseName}` })
-            setScannerCourseId(null)
-            if (expandedId) toggleEnrollments(expandedId)
-          }}
-          onClose={() => setScannerCourseId(null)}
-        />
-      )}
-
-      {qrModalEnrollment && (
-        <div className="admin-qr-overlay" onClick={(e) => { if (e.target === e.currentTarget) setQrModalEnrollment(null) }}>
-          <div className="admin-qr-modal">
-            <div className="admin-qr-header">
-              <h3 className="admin-qr-title">QR — {qrModalEnrollment.username}</h3>
-              <button className="admin-qr-close" onClick={() => setQrModalEnrollment(null)} type="button">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="admin-qr-body">
-              <p className="admin-qr-course">{qrModalEnrollment.courseName}</p>
-              {qrModalDataUrl ? (
-                <>
-                  <div className="admin-qr-img">
-                    <img src={qrModalDataUrl} alt={`QR de ${qrModalEnrollment.username}`} width="220" height="220" />
-                  </div>
-                  <p className="admin-qr-sub">Código QR personal e intransferible</p>
-                </>
-              ) : (
-                <div className="admin-qr-loading">
-                  <div className="curso-detail-spinner" />
-                  <p>Generando código...</p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       )}
     </div>
   )

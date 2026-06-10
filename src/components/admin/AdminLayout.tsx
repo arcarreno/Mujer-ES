@@ -5,6 +5,7 @@ import AdminBottomNav, { type AdminTabKey } from './AdminBottomNav'
 import AdminDashboard from './AdminDashboard'
 import ManageUsers from './ManageUsers'
 import AdminCursos from './AdminCursos'
+import CourseDetailPage from './CourseDetailPage'
 import CreateCoursePage from './CreateCoursePage'
 import CreateUserPage from './CreateUserPage'
 import AdminChats from './AdminChats'
@@ -29,6 +30,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [userCount, setUserCount] = useState(0)
   const [blockedCount, setBlockedCount] = useState(0)
   const [showCreateCourse, setShowCreateCourse] = useState(false)
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null)
   const [showCreateUser, setShowCreateUser] = useState(false)
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null)
   const [currentUserId, setCurrentUserId] = useState('')
@@ -89,8 +91,8 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   }, [])
 
   // When viewing user detail, hide header and nav
-  const showHeader = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat
-  const showNav = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat
+  const showHeader = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat && !selectedCourse && !showCreateCourse
+  const showNav = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat && !selectedCourse && !showCreateCourse
 
   return (
     <div className="home-layout admin-layout">
@@ -124,7 +126,12 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
       </AnimatePresence>
 
       <main className="home-main" style={selectedUser ? { paddingBottom: 0 } : undefined}>
-        {showCreateCourse ? (
+        {selectedCourse ? (
+          <CourseDetailPage
+            course={selectedCourse}
+            onBack={() => setSelectedCourse(null)}
+          />
+        ) : showCreateCourse ? (
           <CreateCoursePage
             onCreated={(course: Course) => {
               setShowCreateCourse(false)
@@ -225,7 +232,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
               >
-                <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} />
+                <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} onSelectCourse={setSelectedCourse} />
               </motion.div>
             )}
             {activeTab === 'chats' && (
