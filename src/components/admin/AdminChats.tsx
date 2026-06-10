@@ -28,8 +28,8 @@ export default function AdminChats({ onChatStateChange }: AdminChatsProps) {
     try {
       const convs = await getUserConversations()
       setConversations(convs)
-    } catch {
-      // silent
+    } catch (e) {
+      console.error('[AdminChats] loadConversations error:', e)
     } finally {
       setLoading(false)
     }

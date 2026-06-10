@@ -32,8 +32,8 @@ export default function ChatsPage({ onChatStateChange }: ChatsPageProps) {
     try {
       const convs = await getUserConversations()
       setConversations(convs)
-    } catch {
-      // silent
+    } catch (e) {
+      console.error('[ChatsPage] loadConversations error:', e)
     } finally {
       setLoading(false)
     }
