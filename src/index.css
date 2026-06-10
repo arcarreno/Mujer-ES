@@ -2511,6 +2511,65 @@ input[type="date"].form-input {
   margin-bottom: 0.25rem;
 }
 
+.manage-users-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.manage-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.manage-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.manage-search-input {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 0.55rem 2rem 0.55rem 2.25rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: white;
+  color: #1a1a1a;
+  outline: none;
+  width: 180px;
+  transition: border-color 0.15s, width 0.2s;
+}
+
+.manage-search-input:focus {
+  border-color: var(--color-accent, #581C87);
+  width: 220px;
+}
+
+.manage-search-input::placeholder {
+  color: #9ca3af;
+}
+
+.manage-search-clear {
+  position: absolute;
+  right: 0.4rem;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.manage-search-clear:hover {
+  color: #374151;
+}
+
 .manage-add-btn {
   display: inline-flex;
   align-items: center;
@@ -2612,6 +2671,13 @@ input[type="date"].form-input {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
   font-size: 0.95rem;
+  overflow: hidden;
+}
+
+.manage-user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .manage-user-blocked-dot {
@@ -3005,6 +3071,16 @@ input[type="date"].form-input {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+  }
+  .manage-users-actions {
+    width: 100%;
+  }
+  .manage-search-input {
+    width: 100%;
+    min-width: 0;
+  }
+  .manage-search-input:focus {
+    width: 100%;
   }
   .user-detail-modal,
   .create-user-modal {

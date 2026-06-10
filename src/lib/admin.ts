@@ -15,6 +15,7 @@ export interface UserRow {
   blocked_until: string | null
   form_completed: boolean
   form_responses: Record<string, unknown> | null
+  avatar_url: string | null
   created_at: string
 }
 
@@ -30,6 +31,17 @@ export async function listUsers(): Promise<UserRow[]> {
 
   const result: UserRow[] = []
   const adminIds = new Set((admins ?? []).map((a) => a.id))
+
+  // Build a map of admin profiles for avatar_url
+  const adminProfileMap = new Map<string, string | null>()
+  for (const a of admins ?? []) {
+    const { data: ap } = await supabase
+      .from('profiles')
+      .select('avatar_url')
+      .eq('id', a.id)
+      .maybeSingle()
+    adminProfileMap.set(a.id, ap?.avatar_url ?? null)
+  }
 
   for (const p of profiles ?? []) {
     if (adminIds.has(p.id)) continue
@@ -51,7 +63,7 @@ export async function listUsers(): Promise<UserRow[]> {
       .eq('form_type', 'initial_profile')
       .maybeSingle()
 
-    result.push(adminToRow(a, fr?.responses as Record<string, unknown> | null))
+    result.push(adminToRow(a, fr?.responses as Record<string, unknown> | null, adminProfileMap.get(a.id) ?? null))
   }
 
   result.sort((x, y) => (y.created_at > x.created_at ? 1 : -1))
@@ -71,11 +83,12 @@ function profileToRow(p: Profile, formResponses: Record<string, unknown> | null)
     blocked_until: p.blocked_until,
     form_completed: !!formResponses,
     form_responses: formResponses,
+    avatar_url: p.avatar_url ?? null,
     created_at: p.created_at,
   }
 }
 
-function adminToRow(a: Admin, formResponses: Record<string, unknown> | null): UserRow {
+function adminToRow(a: Admin, formResponses: Record<string, unknown> | null, avatarUrl: string | null): UserRow {
   return {
     id: a.id,
     username: a.username,
@@ -88,6 +101,7 @@ function adminToRow(a: Admin, formResponses: Record<string, unknown> | null): Us
     blocked_until: null,
     form_completed: !!formResponses,
     form_responses: formResponses,
+    avatar_url: avatarUrl,
     created_at: a.created_at,
   }
 }
