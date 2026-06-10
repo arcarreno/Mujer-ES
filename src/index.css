@@ -841,6 +841,11 @@ input::-ms-clear {
   left: 0;
   top: 2px;
   z-index: 10;
+  transition: width 0.35s ease;
+}
+
+.volver-btn-sm:hover .volver-btn-sm-bg {
+  width: calc(100% - 2px);
 }
 
 .volver-btn-sm-text {
