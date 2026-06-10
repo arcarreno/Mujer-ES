@@ -130,11 +130,14 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
     return (
       <div className="chat-fullscreen" ref={chatContainerRef}>
         <div className="chat-fullscreen-header">
-          <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="15 18 9 12 15 6" />
-            </svg>
-            <span>Atrás</span>
+          <button className="volver-btn-sm" onClick={onBack} aria-label="Volver">
+            <div className="volver-btn-sm-bg">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+                <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+                <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+              </svg>
+            </div>
+            <p className="volver-btn-sm-text">Volver</p>
           </button>
           <h2 className="chat-fullscreen-title">Chat</h2>
         </div>
@@ -148,11 +151,14 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
   return (
     <div className="chat-fullscreen" ref={chatContainerRef}>
       <div className="chat-fullscreen-header">
-        <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-          <span>Atrás</span>
+        <button className="volver-btn-sm" onClick={onBack} aria-label="Volver">
+          <div className="volver-btn-sm-bg">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
+              <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
+              <path d="m237.248 512 265.408 265.344a32 32 0 0 1-45.312 45.312l-288-288a32 32 0 0 1 0-45.312l288-288a32 32 0 1 1 45.312 45.312L237.248 512z" fill="#000000" />
+            </svg>
+          </div>
+          <p className="volver-btn-sm-text">Volver</p>
         </button>
         <h2 className="chat-fullscreen-title">Chat</h2>
       </div>
