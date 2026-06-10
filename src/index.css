@@ -809,19 +809,19 @@ input::-ms-clear {
 .volver-btn-sm {
   background: none;
   text-align: left;
-  border-radius: 0.5rem;
-  height: 2rem;
+  border-radius: 0.6rem;
+  height: 2.5rem;
   position: relative;
   color: #000000;
   font-family: 'Inter', sans-serif;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 500;
   border: none;
   cursor: pointer;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.5rem;
   padding: 0;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
@@ -829,9 +829,9 @@ input::-ms-clear {
 
 .volver-btn-sm-bg {
   background: var(--alabaster);
-  border-radius: 0.4rem;
-  height: 1.75rem;
-  width: 1.75rem;
+  border-radius: 0.5rem;
+  height: 2.25rem;
+  width: 2.25rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -847,11 +847,18 @@ input::-ms-clear {
 }
 
 .volver-btn-sm-text {
-  transform: translateX(0.25rem);
+  transform: translateX(0.4rem);
   margin: 0;
   position: relative;
   z-index: 5;
   white-space: nowrap;
+}
+
+/* Wrapper for fullscreen overlay pages */
+.fullscreen-overlay-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
 /* ============================================

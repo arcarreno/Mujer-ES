@@ -156,7 +156,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             onUpdate={() => {}}
           />
         ) : showReports ? (
-          <div>
+          <div className="fullscreen-overlay-page">
             <button
               onClick={() => setShowReports(false)}
               className="volver-btn-sm"
@@ -173,7 +173,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             <AdminReports />
           </div>
         ) : showMapas ? (
-          <div>
+          <div className="fullscreen-overlay-page">
             <button
               onClick={() => setShowMapas(false)}
               className="volver-btn-sm"
