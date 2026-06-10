@@ -847,11 +847,11 @@ input::-ms-clear {
 
 /* Light variant for dark backgrounds (chats) */
 .volver-btn-sm-light .volver-btn-sm-bg {
-  background: rgba(255, 255, 255, 0.15);
+  background: #ffffff;
 }
 
 .volver-btn-sm-light .volver-btn-sm-bg svg path {
-  fill: #ffffff;
+  fill: #000000;
 }
 
 .volver-btn-sm-text {
