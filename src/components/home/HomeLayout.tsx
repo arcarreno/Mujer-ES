@@ -35,7 +35,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
 
   const handleBackFromChat = useCallback(() => {
     setChatFullscreen(false)
-    setActiveTab('cursos')
+    setActiveTab('mapa')
   }, [])
 
   // When in chat fullscreen, hide header and nav

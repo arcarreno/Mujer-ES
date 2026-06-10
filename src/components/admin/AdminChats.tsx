@@ -12,7 +12,11 @@ import {
 } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
 
-export default function AdminChats() {
+interface AdminChatsProps {
+  onBack?: () => void
+}
+
+export default function AdminChats({ onBack }: AdminChatsProps) {
   const [conversation, setConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -125,21 +129,37 @@ export default function AdminChats() {
 
   if (loading) {
     return (
-      <div className="admin-chats">
-        <div className="admin-dashboard-header">
-          <h2 className="cursos-title">Chat general</h2>
-          <p className="cursos-subtitle">Canal abierto para todas las usuarias</p>
+      <div className="chat-fullscreen">
+        <div className="chat-fullscreen-header">
+          {onBack && (
+            <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              <span>Atrás</span>
+            </button>
+          )}
+          <h2 className="chat-fullscreen-title">Chat general</h2>
         </div>
-        <div className="manage-loading">Cargando chat...</div>
+        <div className="chat-empty">
+          <div className="manage-loading">Cargando chat...</div>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="admin-chats">
-      <div className="admin-dashboard-header">
-        <h2 className="cursos-title">Chat general</h2>
-        <p className="cursos-subtitle">Canal abierto para todas las usuarias</p>
+    <div className="chat-fullscreen">
+      <div className="chat-fullscreen-header">
+        {onBack && (
+          <button className="chat-back-btn" onClick={onBack} aria-label="Volver">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+            <span>Atrás</span>
+          </button>
+        )}
+        <h2 className="chat-fullscreen-title">Chat general</h2>
       </div>
 
       <div className="chat-container">

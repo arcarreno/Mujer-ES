@@ -4,6 +4,7 @@ interface AdminDashboardProps {
   onGoToUsers: () => void
   onGoToChats: () => void
   onGoToReports: () => void
+  onGoToMapas: () => void
 }
 
 interface AdminCard {
@@ -16,7 +17,7 @@ interface AdminCard {
   onClick: () => void
 }
 
-export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, onGoToChats, onGoToReports }: AdminDashboardProps) {
+export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, onGoToChats, onGoToReports, onGoToMapas }: AdminDashboardProps) {
   const cards: AdminCard[] = [
     {
       id: 'users',
@@ -44,6 +45,18 @@ export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, o
         </svg>
       ),
       onClick: onGoToChats,
+    },
+    {
+      id: 'mapas',
+      title: 'Mapas',
+      description: 'Ver ubicación de cursos en el mapa',
+      icon: (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+          <circle cx="12" cy="10" r="3" />
+        </svg>
+      ),
+      onClick: onGoToMapas,
     },
     {
       id: 'reports',

@@ -9,6 +9,7 @@ import CreateCoursePage from './CreateCoursePage'
 import CreateUserPage from './CreateUserPage'
 import AdminChats from './AdminChats'
 import AdminReports from './AdminReports'
+import MapPage from '../home/MapPage'
 import ProfilePage from '../home/ProfilePage'
 import UserDetailPage from './UserDetailPage'
 import { signOut } from '../../lib/queries'
@@ -30,6 +31,8 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [selectedUser, setSelectedUser] = useState<UserRow | null>(null)
   const [currentUserId, setCurrentUserId] = useState('')
   const [showReports, setShowReports] = useState(false)
+  const [chatFullscreen, setChatFullscreen] = useState(false)
+  const [showMapas, setShowMapas] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -64,9 +67,23 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
     setSelectedUser(null)
   }, [])
 
+  const handleTabChange = useCallback((tab: AdminTabKey) => {
+    setActiveTab(tab)
+    if (tab === 'chats') {
+      setChatFullscreen(true)
+    } else {
+      setChatFullscreen(false)
+    }
+  }, [])
+
+  const handleBackFromChat = useCallback(() => {
+    setChatFullscreen(false)
+    setActiveTab('dashboard')
+  }, [])
+
   // When viewing user detail, hide header and nav
-  const showHeader = !selectedUser
-  const showNav = !selectedUser
+  const showHeader = !selectedUser && !chatFullscreen && !showReports && !showMapas
+  const showNav = !selectedUser && !chatFullscreen && !showReports && !showMapas
 
   return (
     <div className="home-layout admin-layout">
@@ -135,6 +152,19 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             </button>
             <AdminReports />
           </div>
+        ) : showMapas ? (
+          <div>
+            <button
+              onClick={() => setShowMapas(false)}
+              className="create-course-back"
+              type="button"
+            >
+              ← Atrás
+            </button>
+            <MapPage />
+          </div>
+        ) : chatFullscreen ? (
+          <AdminChats onBack={handleBackFromChat} />
         ) : (
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
@@ -149,9 +179,14 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                   userCount={userCount}
                   blockedCount={blockedCount}
                   onGoToUsers={() => setActiveTab('users')}
-                  onGoToChats={() => setActiveTab('chats')}
+                  onGoToChats={() => {
+                    setChatFullscreen(true)
+                  }}
                   onGoToReports={() => {
                     setShowReports(true)
+                  }}
+                  onGoToMapas={() => {
+                    setShowMapas(true)
                   }}
                 />
               </motion.div>
@@ -182,17 +217,6 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} />
               </motion.div>
             )}
-            {activeTab === 'chats' && (
-              <motion.div
-                key="chats"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20 }}
-                transition={{ duration: 0.3 }}
-              >
-                <AdminChats />
-              </motion.div>
-            )}
             {activeTab === 'perfil' && (
               <motion.div
                 key="perfil"
@@ -216,7 +240,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             exit={{ opacity: 0, y: 60 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           >
-            <AdminBottomNav active={activeTab} onChange={setActiveTab} />
+            <AdminBottomNav active={activeTab} onChange={handleTabChange} />
           </motion.div>
         )}
       </AnimatePresence>
