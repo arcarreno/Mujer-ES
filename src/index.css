@@ -845,6 +845,15 @@ input::-ms-clear {
   width: 18rem;
 }
 
+/* Light variant for dark backgrounds (chats) */
+.volver-btn-sm-light .volver-btn-sm-bg {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.volver-btn-sm-light .volver-btn-sm-bg svg path {
+  fill: #ffffff;
+}
+
 .volver-btn-sm-text {
   display: none;
 }

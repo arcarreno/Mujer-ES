@@ -130,7 +130,7 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
     return (
       <div className="chat-fullscreen" ref={chatContainerRef}>
         <div className="chat-fullscreen-header">
-          <button className="volver-btn-sm" onClick={onBack} aria-label="Volver">
+          <button className="volver-btn-sm volver-btn-sm-light" onClick={onBack} aria-label="Volver">
             <div className="volver-btn-sm-bg">
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
                 <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
@@ -151,7 +151,7 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
   return (
     <div className="chat-fullscreen" ref={chatContainerRef}>
       <div className="chat-fullscreen-header">
-        <button className="volver-btn-sm" onClick={onBack} aria-label="Volver">
+        <button className="volver-btn-sm volver-btn-sm-light" onClick={onBack} aria-label="Volver">
           <div className="volver-btn-sm-bg">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
               <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
