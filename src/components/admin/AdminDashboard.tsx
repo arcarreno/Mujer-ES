@@ -1,7 +1,6 @@
 interface AdminDashboardProps {
   userCount: number
   blockedCount: number
-  enrollmentCount: number
   onGoToUsers: () => void
   onGoToChats: () => void
   onGoToReports: () => void
@@ -17,7 +16,7 @@ interface AdminCard {
   onClick: () => void
 }
 
-export default function AdminDashboard({ userCount, blockedCount, enrollmentCount, onGoToUsers, onGoToChats, onGoToReports }: AdminDashboardProps) {
+export default function AdminDashboard({ userCount, blockedCount, onGoToUsers, onGoToChats, onGoToReports }: AdminDashboardProps) {
   const cards: AdminCard[] = [
     {
       id: 'users',
@@ -50,7 +49,6 @@ export default function AdminDashboard({ userCount, blockedCount, enrollmentCoun
       id: 'reports',
       title: 'Reportes',
       description: 'Estadísticas y métricas de la plataforma',
-      count: enrollmentCount,
       icon: (
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
           <line x1="18" x2="18" y1="20" y2="10" />

@@ -143,7 +143,7 @@ export default function AdminReports() {
 
   if (!stats) return null
 
-  const totalRegistered = stats.totalUsers + stats.totalAdmins
+  const totalRegistered = stats.totalUsers
   const formRate = totalRegistered > 0 ? Math.round((stats.formCompleted / totalRegistered) * 100) : 0
   const maxRecentUsers = Math.max(...stats.recentUsers.map((r) => r.count), 1)
   const maxEdu = Math.max(...stats.educationBreakdown.map((e) => e.count), 1)

@@ -148,7 +148,6 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 <AdminDashboard
                   userCount={userCount}
                   blockedCount={blockedCount}
-                  enrollmentCount={0}
                   onGoToUsers={() => setActiveTab('users')}
                   onGoToChats={() => setActiveTab('chats')}
                   onGoToReports={() => {
