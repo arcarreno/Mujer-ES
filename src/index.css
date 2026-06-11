@@ -580,8 +580,8 @@ html, body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--alabaster);
-  border-left: 1px solid #f0f0f0;
+  background: #1a1c2e;
+  border-left: none;
   overflow: hidden;
 }
 
@@ -603,7 +603,7 @@ html, body {
   font-family: 'Playfair Display', Georgia, serif;
   font-size: 1.3rem;
   font-weight: 400;
-  color: #1a1a1a;
+  color: #ffffff;
   text-align: center;
   letter-spacing: 0.02em;
   line-height: 1.4;
