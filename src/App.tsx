@@ -177,7 +177,7 @@ function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
-              className="absolute inset-0 z-20"
+              className="absolute inset-0 flex items-center justify-center z-20"
             >
               <Login onBack={() => setPhase('landing')} />
             </motion.div>

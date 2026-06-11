@@ -133,9 +133,9 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
 
       {modal !== null && modalImage && modalPhrase && createPortal(
         <>
-          <div className="modal-overlay" onClick={handleCloseModal} />
+          <div className="carousel-modal-overlay" onClick={handleCloseModal} />
           <div
-            className="modal-card is-animating"
+            className="carousel-modal-card is-animating"
             role="dialog"
             aria-modal="true"
             aria-label={modalPhrase.title}

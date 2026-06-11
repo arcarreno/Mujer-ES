@@ -5,8 +5,6 @@ import { signInWithIdentifier } from '../lib/queries'
 import Register from './Register'
 import RecoveryFlow from './recovery/RecoveryFlow'
 import SubmitButton from './ui/SubmitButton'
-import LottiePlayer from './LottiePlayer'
-import womanAnimation from '../assets/lottie/woman.json'
 
 interface LoginProps {
   onBack?: () => void
@@ -20,6 +18,8 @@ export default function Login({ onBack }: LoginProps) {
   const [showForgot, setShowForgot] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<{identifier?: string; password?: string}>({})
+
+  const expandedVisual = showForgot
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,9 +54,37 @@ export default function Login({ onBack }: LoginProps) {
   }
 
   return (
-    <div className="login-fullpage">
+    <motion.div
+      className="login-fullpage"
+      animate={{
+        gridTemplateColumns: expandedVisual ? '0fr 1fr' : '1fr 1fr',
+      }}
+      transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
+    >
+      {/* SVG clip-path for wavy left edge — subtle oscillation */}
+      <svg width="0" height="0" style={{ position: 'absolute' }}>
+        <defs>
+          <clipPath id="wave-clip" clipPathUnits="objectBoundingBox">
+            <path d="
+              M0,0
+              C0.06,0.04 0.1,0.1 0.1,0.17
+              C0.1,0.25 0.03,0.32 0.03,0.42
+              C0.03,0.52 0.1,0.58 0.1,0.67
+              C0.1,0.76 0.03,0.83 0.03,0.9
+              C0.03,0.95 0,1 0,1
+              L1,1 L1,0 Z
+            " />
+          </clipPath>
+        </defs>
+      </svg>
+
       {/* Left side — Form */}
-      <div className="login-form-side">
+      <motion.div
+        className="login-form-side"
+        animate={{ opacity: expandedVisual ? 0 : 1 }}
+        transition={{ duration: expandedVisual ? 0.3 : 0.5, ease: 'easeInOut' }}
+        style={{ overflow: expandedVisual ? 'hidden' : 'auto' }}
+      >
         <div className="login-form-wrapper">
           {onBack && (
             <button onClick={onBack} className="volver-btn-sm" type="button">
@@ -168,16 +196,15 @@ export default function Login({ onBack }: LoginProps) {
             )}
           </AnimatePresence>
         </div>
-      </div>
+      </motion.div>
 
       {/* Right side — Visual */}
       <div className="login-visual-side">
         <div className="login-visual-content">
-          <LottiePlayer
-            animationData={womanAnimation}
-            className="login-visual-lottie"
-            loop
-            autoplay
+          <iframe
+            src="https://my.spline.design/roomgirlworkingcopy-nBHQyrouGG0A486OpeB5Hz9A/"
+            className="login-visual-spline"
+            title="Spline 3D"
           />
           <p className="login-visual-text">Cada mujer merece ser escuchada</p>
         </div>
@@ -191,6 +218,6 @@ export default function Login({ onBack }: LoginProps) {
           />
         )}
       </AnimatePresence>
-    </div>
+    </motion.div>
   )
 }

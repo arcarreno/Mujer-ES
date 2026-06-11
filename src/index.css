@@ -237,7 +237,7 @@ html, body {
    ============================================ */
 
 @media only screen and (max-width: 480px) {
-  .modal-card {
+  .carousel-modal-card {
     width: 85vw;
     height: auto;
     min-height: 20rem;
@@ -396,7 +396,7 @@ html, body {
    MODAL — Overlay + Drag + Flip simultáneo
    ============================================ */
 
-.modal-overlay {
+.carousel-modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -412,7 +412,7 @@ html, body {
   to { opacity: 1; }
 }
 
-.modal-card {
+.carousel-modal-card {
   position: fixed;
   z-index: 110;
   width: 18rem;
@@ -420,7 +420,7 @@ html, body {
   perspective: 1000px;
 }
 
-.modal-card.is-animating {
+.carousel-modal-card.is-animating {
   /* Drag: desde posición actual hasta centro */
   animation: dragToCenter 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
@@ -452,7 +452,7 @@ html, body {
   to { transform: rotateY(180deg); }
 }
 
-.modal-card .card-front {
+.carousel-modal-card .card-front {
   display: block;
   width: 100%;
   height: 100%;
@@ -468,7 +468,7 @@ html, body {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
 
-.modal-card .card-back {
+.carousel-modal-card .card-back {
   position: absolute;
   top: 0;
   left: 0;
@@ -551,7 +551,7 @@ html, body {
 }
 
 /* ============================================
-   LOGIN — Full Page Split Layout
+   LOGIN — Modal Split Layout
    ============================================ */
 
 .login-fullpage {
@@ -559,8 +559,13 @@ html, body {
   z-index: 120;
   display: grid;
   grid-template-columns: 1fr 1fr;
-  min-height: 100dvh;
-  width: 100%;
+  width: 56rem;
+  max-width: 95vw;
+  height: 36rem;
+  max-height: 90dvh;
+  border-radius: 1.25rem;
+  overflow: visible;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.25), 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .login-form-side {
@@ -568,12 +573,14 @@ html, body {
   align-items: center;
   justify-content: center;
   background: var(--alabaster);
-  padding: 2rem;
+  padding: 2.5rem;
+  overflow-y: auto;
+  border-radius: 1.25rem 0 0 1.25rem;
 }
 
 .login-form-wrapper {
   width: 100%;
-  max-width: 24rem;
+  max-width: 22rem;
 }
 
 .login-visual-side {
@@ -581,39 +588,72 @@ html, body {
   align-items: center;
   justify-content: center;
   background: #1a1c2e;
-  border-left: none;
   overflow: hidden;
+  position: relative;
+  min-height: 0;
+  clip-path: url(#wave-clip);
+  border-radius: 0 1.25rem 1.25rem 0;
 }
 
 .login-visual-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2rem;
-  padding: 2rem;
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  position: relative;
 }
 
-.login-visual-lottie {
+.login-visual-content::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3.5rem;
+  background: #1a1c2e;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.login-visual-spline {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
-  max-width: 22rem;
-  aspect-ratio: 1;
+  height: 100%;
+  border: none;
+  display: block;
 }
 
 .login-visual-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 1rem 1.5rem;
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 1.3rem;
-  font-weight: 400;
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-transform: uppercase;
   color: #ffffff;
   text-align: center;
-  letter-spacing: 0.02em;
-  line-height: 1.4;
-  max-width: 20rem;
-  margin: 0;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  z-index: 10;
+  background: linear-gradient(to bottom, rgba(26,28,46,0.8) 0%, transparent 100%);
 }
 
 @media only screen and (max-width: 768px) {
   .login-fullpage {
     grid-template-columns: 1fr;
+    width: 100%;
+    max-width: 100vw;
+    height: 100dvh;
+    max-height: 100dvh;
+    border-radius: 0;
   }
 
   .login-visual-side {
