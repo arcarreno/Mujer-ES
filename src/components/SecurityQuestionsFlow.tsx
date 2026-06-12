@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { motion, AnimatePresence } from 'motion/react'
+import { motion } from 'motion/react'
 import { normalizeAnswer } from '../lib/normalize'
 import SubmitButton from './ui/SubmitButton'
 import CancelButton from './ui/CancelButton'
@@ -25,9 +25,6 @@ export interface SecurityAnswers {
   a3: string
 }
 
-type QuestionIndex = 0 | 1 | 2
-type SQStep = 'notice' | { kind: 'question'; index: QuestionIndex }
-
 interface SecurityQuestionsFlowProps {
   onComplete: (data: SecurityAnswers) => void
   onCancel: () => void
@@ -39,7 +36,8 @@ export default function SecurityQuestionsFlow({
   onComplete,
   onCancel,
 }: SecurityQuestionsFlowProps) {
-  const [step, setStep] = useState<SQStep>('notice')
+  // stepNum: 0=notice, 1=Q1, 2=Q2, 3=Q3
+  const [stepNum, setStepNum] = useState(0)
   const [understand, setUnderstand] = useState(false)
   const [modes, setModes] = useState<AnswerMode[]>(['na', 'na', 'na'])
   const [answers, setAnswers] = useState<[string, string, string]>(['', '', ''])
@@ -58,25 +56,24 @@ export default function SecurityQuestionsFlow({
 
   // Auto-focus the input when user picks "Otra respuesta"
   useEffect(() => {
-    if (step !== 'notice' && modes[step.index] === 'other') {
+    if (stepNum > 0 && modes[stepNum - 1] === 'other') {
       const t = setTimeout(() => {
         inputRef.current?.focus()
       }, 50)
       return () => clearTimeout(t)
     }
-  }, [step, modes])
+  }, [stepNum, modes])
 
   const handleContinue = () => {
     setError(null)
 
-    if (step === 'notice') {
+    if (stepNum === 0) {
       if (!understand) return
-      setStep({ kind: 'question', index: 0 })
+      setStepNum(1)
       return
     }
 
-    // Here, step is guaranteed to be the question variant
-    const idx = step.index
+    const idx = stepNum - 1 // 0-based question index
     const mode = modes[idx]
 
     if (mode === 'other') {
@@ -87,8 +84,8 @@ export default function SecurityQuestionsFlow({
       }
     }
 
-    if (idx < 2) {
-      setStep({ kind: 'question', index: (idx + 1) as QuestionIndex })
+    if (stepNum < 3) {
+      setStepNum(stepNum + 1)
     } else {
       // Last question, complete
       const result: SecurityAnswers = {
@@ -105,15 +102,10 @@ export default function SecurityQuestionsFlow({
 
   const handleBack = () => {
     setError(null)
-    if (step === 'notice') return
-    if (step.index === 0) {
-      setStep('notice')
-    } else {
-      setStep({ kind: 'question', index: (step.index - 1) as QuestionIndex })
-    }
+    if (stepNum > 0) setStepNum(stepNum - 1)
   }
 
-  const setMode = (idx: QuestionIndex, value: AnswerMode) => {
+  const setMode = (idx: number, value: AnswerMode) => {
     setModes((prev) => {
       const next: AnswerMode[] = [...prev]
       next[idx] = value
@@ -122,7 +114,7 @@ export default function SecurityQuestionsFlow({
     setError(null)
   }
 
-  const setAnswer = (idx: QuestionIndex, value: string) => {
+  const setAnswer = (idx: number, value: string) => {
     const normalized = normalizeAnswer(value)
     setAnswers((prev) => {
       const next: [string, string, string] = [...prev]
@@ -132,167 +124,242 @@ export default function SecurityQuestionsFlow({
     setError(null)
   }
 
-  // The question step is the only place we need an index
-  const questionStep = step !== 'notice' ? step : null
-  const isLast = questionStep !== null && questionStep.index === 2
-  const continueLabel = isLast ? 'Finalizar' : 'Siguiente'
+  const isLast = stepNum === 3
+  const continueLabel = stepNum === 0 ? 'Continuar' : isLast ? 'Finalizar' : 'Siguiente'
   const continueDisabled =
-    step === 'notice'
+    stepNum === 0
       ? !understand
-      : modes[step.index] === 'other' &&
-        answers[step.index].trim().length < 2
+      : modes[stepNum - 1] === 'other' &&
+        answers[stepNum - 1].trim().length < 2
+
+  // Build the 4 cards
+  const cards = [
+    // Card 0: Notice
+    {
+      key: 'notice',
+      content: (
+        <>
+          <div className="privacy-modal-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+          </div>
+          <h3 className="privacy-modal-title">Antes de continuar</h3>
+          <p className="privacy-modal-text">
+            La siguiente información se utilizará únicamente para
+            recuperar tu cuenta en caso de que olvides tu contraseña.
+          </p>
+          <p className="privacy-modal-text">
+            Tus respuestas se guardan de forma segura y confidencial.
+            No las compartas con nadie.
+          </p>
+          <p className="privacy-modal-text-small">
+            Las respuestas se escriben en minúsculas, sin acentos ni
+            símbolos como - . , @.
+          </p>
+          <label className="sq-checkbox">
+            <input
+              type="checkbox"
+              checked={understand}
+              onChange={(e) => setUnderstand(e.target.checked)}
+            />
+            <span>Entendí</span>
+          </label>
+        </>
+      ),
+    },
+    // Card 1: Question 1
+    {
+      key: 'q1',
+      content: (
+        <>
+          <div className="privacy-modal-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <h3 className="privacy-modal-title">Pregunta 1 de 3</h3>
+          <p className="privacy-modal-text">{SECURITY_QUESTIONS[0]}</p>
+          <p className="privacy-modal-text-small">
+            Si no aplica, elegí &quot;N/A&quot; en el menú.
+          </p>
+          <div className="login-field">
+            <select
+              value={modes[0]}
+              onChange={(e) => setMode(0, e.target.value as AnswerMode)}
+              className="form-input form-select"
+            >
+              <option value="na">N/A</option>
+              <option value="other">Otra respuesta</option>
+            </select>
+          </div>
+          {modes[0] === 'other' && (
+            <div className="login-field">
+              <input
+                ref={stepNum === 1 && modes[0] === 'other' ? inputRef : undefined}
+                type="text"
+                value={answers[0]}
+                onChange={(e) => setAnswer(0, e.target.value)}
+                placeholder="Tu respuesta"
+                className="form-input"
+                autoComplete="off"
+                maxLength={60}
+              />
+            </div>
+          )}
+        </>
+      ),
+    },
+    // Card 2: Question 2
+    {
+      key: 'q2',
+      content: (
+        <>
+          <div className="privacy-modal-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <h3 className="privacy-modal-title">Pregunta 2 de 3</h3>
+          <p className="privacy-modal-text">{SECURITY_QUESTIONS[1]}</p>
+          <p className="privacy-modal-text-small">
+            Si no aplica, elegí &quot;N/A&quot; en el menú.
+          </p>
+          <div className="login-field">
+            <select
+              value={modes[1]}
+              onChange={(e) => setMode(1, e.target.value as AnswerMode)}
+              className="form-input form-select"
+            >
+              <option value="na">N/A</option>
+              <option value="other">Otra respuesta</option>
+            </select>
+          </div>
+          {modes[1] === 'other' && (
+            <div className="login-field">
+              <input
+                ref={stepNum === 2 && modes[1] === 'other' ? inputRef : undefined}
+                type="text"
+                value={answers[1]}
+                onChange={(e) => setAnswer(1, e.target.value)}
+                placeholder="Tu respuesta"
+                className="form-input"
+                autoComplete="off"
+                maxLength={60}
+              />
+            </div>
+          )}
+        </>
+      ),
+    },
+    // Card 3: Question 3
+    {
+      key: 'q3',
+      content: (
+        <>
+          <div className="privacy-modal-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <h3 className="privacy-modal-title">Pregunta 3 de 3</h3>
+          <p className="privacy-modal-text">{SECURITY_QUESTIONS[2]}</p>
+          <p className="privacy-modal-text-small">
+            Si no aplica, elegí &quot;N/A&quot; en el menú.
+          </p>
+          <div className="login-field">
+            <select
+              value={modes[2]}
+              onChange={(e) => setMode(2, e.target.value as AnswerMode)}
+              className="form-input form-select"
+            >
+              <option value="na">N/A</option>
+              <option value="other">Otra respuesta</option>
+            </select>
+          </div>
+          {modes[2] === 'other' && (
+            <div className="login-field">
+              <input
+                ref={stepNum === 3 && modes[2] === 'other' ? inputRef : undefined}
+                type="text"
+                value={answers[2]}
+                onChange={(e) => setAnswer(2, e.target.value)}
+                placeholder="Tu respuesta"
+                className="form-input"
+                autoComplete="off"
+                maxLength={60}
+              />
+            </div>
+          )}
+        </>
+      ),
+    },
+  ]
 
   return createPortal(
-    <AnimatePresence mode="wait">
-      {step === 'notice' ? (
-        <motion.div
-          key="notice"
-          className="privacy-backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-        >
-          <motion.div
-            className="privacy-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Preguntas de seguridad"
-            initial={{ opacity: 0, scale: 0.85, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.85, y: 16 }}
-            transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-          >
-            <div className="privacy-modal-icon">
-              <svg
-                width="36"
-                height="36"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
-            </div>
-            <h3 className="privacy-modal-title">Antes de continuar</h3>
-            <p className="privacy-modal-text">
-              La siguiente información se utilizará únicamente para
-              recuperar tu cuenta en caso de que olvides tu contraseña.
-            </p>
-            <p className="privacy-modal-text">
-              Tus respuestas se guardan de forma segura y confidencial.
-              No las compartas con nadie.
-            </p>
-            <p className="privacy-modal-text-small">
-              Las respuestas se escriben en minúsculas, sin acentos ni
-              símbolos como - . , @.
-            </p>
+    <motion.div
+      className="sq-backdrop"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.25 }}
+      onClick={onCancel}
+    >
+      <div className="sq-card-stack" onClick={(e) => e.stopPropagation()}>
+        {cards.map((card, i) => {
+          const position = i - stepNum // 0=active, negative=behind, positive=future
+          const isActive = position === 0
+          const absPos = Math.abs(position)
 
-            <label className="sq-checkbox">
-              <input
-                type="checkbox"
-                checked={understand}
-                onChange={(e) => setUnderstand(e.target.checked)}
-              />
-              <span>Entendí</span>
-            </label>
-
-            <SubmitButton
-              onClick={handleContinue}
-              disabled={continueDisabled}
+          return (
+            <motion.div
+              key={card.key}
+              className={`sq-card ${isActive ? 'sq-card-active' : ''}`}
+              animate={{
+                opacity: position > 0 ? 0 : isActive ? 1 : absPos === 1 ? 0.5 : absPos === 2 ? 0.3 : 0.15,
+                scale: isActive ? 1 : absPos === 1 ? 0.96 : absPos === 2 ? 0.93 : 0.9,
+                y: isActive ? 0 : position * 12,
+                zIndex: isActive ? 10 : 10 - absPos,
+              }}
+              transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+              style={{ pointerEvents: isActive ? 'auto' : 'none' }}
             >
-              Continuar
-            </SubmitButton>
-            <CancelButton onClick={onCancel}>Cancelar</CancelButton>
-          </motion.div>
-        </motion.div>
-      ) : (
-        <motion.div
-          key={`q${step.index}`}
-          className="privacy-backdrop"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.25 }}
-          onClick={handleBack}
-        >
-          <motion.div
-            className="privacy-modal"
-            initial={{ opacity: 0, scale: 0.85, y: 16 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.85, y: 16 }}
-            transition={{ duration: 0.4, ease: [0.34, 1.56, 0.64, 1] }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="privacy-modal-icon">
-              <svg
-                width="36"
-                height="36"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
-            <h3 className="privacy-modal-title">Pregunta de seguridad</h3>
-            <p className="privacy-modal-text">
-              {SECURITY_QUESTIONS[step.index]}
-            </p>
-            <p className="privacy-modal-text-small">
-              Si no aplica, elegí &quot;N/A&quot; en el menú.
-            </p>
+              {card.content}
 
-            <div className="login-field">
-              <select
-                value={modes[step.index]}
-                onChange={(e) =>
-                  setMode(step.index, e.target.value as AnswerMode)
-                }
-                className="form-input form-select"
-              >
-                <option value="na">N/A</option>
-                <option value="other">Otra respuesta</option>
-              </select>
-            </div>
+              {isActive && (
+                <>
+                  {error && <p className="sq-error">{error}</p>}
+                  <SubmitButton
+                    onClick={handleContinue}
+                    disabled={continueDisabled}
+                  >
+                    {continueLabel}
+                  </SubmitButton>
+                  {stepNum > 0 && <CancelButton onClick={handleBack} />}
+                </>
+              )}
+            </motion.div>
+          )
+        })}
+      </div>
 
-            {modes[step.index] === 'other' && (
-              <div className="login-field">
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={answers[step.index]}
-                  onChange={(e) => setAnswer(step.index, e.target.value)}
-                  placeholder="Tu respuesta"
-                  className="form-input"
-                  autoComplete="off"
-                  maxLength={60}
-                />
-              </div>
-            )}
-
-            {error && <p className="sq-error">{error}</p>}
-
-            <SubmitButton
-              onClick={handleContinue}
-              disabled={continueDisabled}
-            >
-              {continueLabel}
-            </SubmitButton>
-            <CancelButton onClick={handleBack} />
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>,
+      {/* Progress dots */}
+      <div className="sq-dots">
+        {[0, 1, 2, 3].map((i) => (
+          <div
+            key={i}
+            className={`sq-dot ${i <= stepNum ? 'sq-dot-active' : ''}`}
+          />
+        ))}
+      </div>
+    </motion.div>,
     document.body
   )
 }

@@ -4016,6 +4016,76 @@ input[type="date"].form-input {
 }
 
 /* ============================================
+   SECURITY QUESTIONS — Overlapping cards
+   ============================================ */
+
+.sq-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1rem;
+}
+
+.sq-card-stack {
+  position: relative;
+  width: 100%;
+  max-width: 28rem;
+  /* Fixed height to prevent layout shift during transitions */
+  min-height: 26rem;
+}
+
+.sq-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: var(--alabaster);
+  border-radius: 1rem;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2), 0 8px 20px rgba(0, 0, 0, 0.1);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.85rem;
+  /* Allow content to determine height */
+  height: auto;
+}
+
+.sq-card-active {
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25), 0 10px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Progress dots */
+.sq-dots {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  position: relative;
+  z-index: 20;
+}
+
+.sq-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.sq-dot-active {
+  background: #ffffff;
+  transform: scale(1.2);
+}
+
+/* ============================================
    RECOVERY — Security questions form
    ============================================ */
 
