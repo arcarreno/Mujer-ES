@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import { signInWithIdentifier } from '../lib/queries'
@@ -18,8 +18,16 @@ export default function Login({ onBack }: LoginProps) {
   const [showForgot, setShowForgot] = useState(false)
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<{identifier?: string; password?: string}>({})
+  const [isMobile, setIsMobile] = useState(false)
 
-  const expandedVisual = showForgot
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 768)
+    check()
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  const expandedVisual = !isMobile && showForgot
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

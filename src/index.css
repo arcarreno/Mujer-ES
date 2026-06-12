@@ -163,47 +163,15 @@ html, body {
   --carousel-control-color-rgb: 0, 0, 0;
   --carousel-animation-duration: 25s;
 
-  --_diameter: var(--carousel-diameter);
+  --_diameter: clamp(12.5rem, 90vw, 50rem);
   --_radius: calc(var(--_diameter) / 2);
-  --_item-width: var(--carousel-item-width);
-  --_item-height: var(--carousel-item-height);
+  --_item-width: clamp(2.875rem, 20vw, 11.5rem);
+  --_item-height: clamp(4.375rem, 30vw, 17.5rem);
 
   perspective: var(--carousel-3d-perspective);
   perspective-origin: var(--carousel-3d-perspective-origin);
   width: var(--_diameter);
   height: var(--_diameter);
-}
-
-@media only screen and (max-width: 48rem) {
-  .carousel {
-    --_diameter: calc(var(--carousel-diameter) * 0.75);
-    --_item-width: calc(var(--carousel-item-width) * 0.75);
-    --_item-height: calc(var(--carousel-item-height) * 0.75);
-  }
-}
-
-@media only screen and (max-width: 32rem) {
-  .carousel {
-    --_diameter: calc(var(--carousel-diameter) * 0.6);
-    --_item-width: calc(var(--carousel-item-width) * 0.6);
-    --_item-height: calc(var(--carousel-item-height) * 0.6);
-  }
-}
-
-@media only screen and (max-width: 26rem) {
-  .carousel {
-    --_diameter: calc(var(--carousel-diameter) * 0.5);
-    --_item-width: calc(var(--carousel-item-width) * 0.5);
-    --_item-height: calc(var(--carousel-item-height) * 0.5);
-  }
-}
-
-@media only screen and (max-width: 16rem) {
-  .carousel {
-    --_diameter: calc(var(--carousel-diameter) * 0.25);
-    --_item-width: calc(var(--carousel-item-width) * 0.25);
-    --_item-height: calc(var(--carousel-item-height) * 0.25);
-  }
 }
 
 /* ============================================
@@ -245,11 +213,11 @@ html, body {
   }
 
   .card-back-title {
-    font-size: 0.75rem;
+    font-size: clamp(0.7rem, 3.5vw, 1.5rem);
   }
 
   .card-back-text {
-    font-size: 0.55rem;
+    font-size: clamp(0.55rem, 2.5vw, 1.1rem);
   }
 }
 
@@ -303,9 +271,12 @@ html, body {
   height: var(--_height);
   transition: transform var(--carousel-transition-duration) var(--carousel-transition-ease),
               box-shadow var(--carousel-transition-duration) var(--carousel-transition-ease);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 1px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.08);
   position: absolute;
-  contain: layout style;
+  contain: layout;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .carousel .carousel-item:hover {
@@ -362,15 +333,16 @@ html, body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 1.25rem;
+  padding: clamp(0.5rem, 3vw, 1.25rem);
   box-sizing: border-box;
-  overflow: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .card-back-title {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
-  font-size: 0.85rem;
+  font-size: clamp(0.45rem, 2.8vw, 0.85rem);
   color: #1a1a1a;
   text-align: center;
   margin: 0 0 0.6rem;
@@ -380,12 +352,13 @@ html, body {
 .card-back-text {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 400;
-  font-size: 0.6rem;
+  font-size: clamp(0.35rem, 2vw, 0.6rem);
   color: #4a4a4a;
   text-align: center;
   margin: 0;
   line-height: 1.4;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ============================================
@@ -544,6 +517,9 @@ html, body {
   opacity: 0.6;
   position: absolute;
   contain: paint;
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
 }
 
 .carousel .carousel-item-wrapper.hovering .carousel-ground {
@@ -654,6 +630,9 @@ html, body {
     height: 100dvh;
     max-height: 100dvh;
     border-radius: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .login-visual-side {
@@ -662,6 +641,10 @@ html, body {
 
   .login-form-side {
     padding: 1.5rem 1.25rem;
+    width: 100%;
+    max-width: 24rem;
+    opacity: 1 !important;
+    overflow: auto !important;
   }
 }
 
