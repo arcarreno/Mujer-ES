@@ -369,8 +369,20 @@ export interface Course {
   longitude: number | null
   location_name: string | null
   max_enrollments: number | null
+  event_date: string | null
+  event_time: string | null
+  event_duration_minutes: number | null
+  cover_image_url: string | null
   created_at: string
   updated_at: string
+}
+
+export interface CourseImage {
+  id: string
+  course_id: string
+  image_url: string
+  sort_order: number
+  created_at: string
 }
 
 export async function listCourses(): Promise<Course[]> {
@@ -405,6 +417,10 @@ export async function createCourse(course: {
   longitude?: number | null
   location_name?: string | null
   max_enrollments?: number | null
+  event_date?: string | null
+  event_time?: string | null
+  event_duration_minutes?: number | null
+  cover_image_url?: string | null
 }): Promise<Course> {
   const { data: { user } } = await supabase.auth.getUser()
   const { data, error } = await supabase
@@ -419,6 +435,10 @@ export async function createCourse(course: {
       longitude: course.longitude ?? null,
       location_name: course.location_name ?? null,
       max_enrollments: course.max_enrollments ?? null,
+      event_date: course.event_date ?? null,
+      event_time: course.event_time ?? null,
+      event_duration_minutes: course.event_duration_minutes ?? null,
+      cover_image_url: course.cover_image_url ?? null,
       created_by: user?.id ?? null,
     })
     .select()
@@ -430,7 +450,7 @@ export async function createCourse(course: {
 
 export async function updateCourse(
   id: string,
-  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published' | 'max_enrollments' | 'latitude' | 'longitude' | 'location_name'>>
+  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published' | 'max_enrollments' | 'latitude' | 'longitude' | 'location_name' | 'event_date' | 'event_time' | 'event_duration_minutes' | 'cover_image_url'>>
 ): Promise<Course> {
   const { data, error } = await supabase
     .from('courses')
@@ -441,6 +461,94 @@ export async function updateCourse(
 
   if (error) throw error
   return data as Course
+}
+
+// =====================================================
+// COURSE IMAGES
+// =====================================================
+
+export async function uploadCourseImage(courseId: string, file: File): Promise<CourseImage> {
+  const ext = file.name.split('.').pop() || 'jpg'
+  const path = `${courseId}/${Date.now()}.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('course-images')
+    .upload(path, file, { upsert: false })
+  if (uploadError) throw uploadError
+
+  const { data: urlData } = supabase.storage.from('course-images').getPublicUrl(path)
+  const imageUrl = urlData.publicUrl
+
+  // Get current max sort_order
+  const { data: existing } = await supabase
+    .from('course_images')
+    .select('sort_order')
+    .eq('course_id', courseId)
+    .order('sort_order', { ascending: false })
+    .limit(1)
+
+  const nextOrder = existing && existing.length > 0 ? existing[0].sort_order + 1 : 0
+
+  const { data, error } = await supabase
+    .from('course_images')
+    .insert({
+      course_id: courseId,
+      image_url: imageUrl,
+      sort_order: nextOrder,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data as CourseImage
+}
+
+export async function getCourseImages(courseId: string): Promise<CourseImage[]> {
+  const { data, error } = await supabase
+    .from('course_images')
+    .select('*')
+    .eq('course_id', courseId)
+    .order('sort_order', { ascending: true })
+
+  if (error) throw error
+  return (data ?? []) as CourseImage[]
+}
+
+export async function deleteCourseImage(imageId: string): Promise<void> {
+  // Get the image to find the storage path
+  const { data: img } = await supabase
+    .from('course_images')
+    .select('image_url')
+    .eq('id', imageId)
+    .single()
+
+  if (img) {
+    // Extract path from URL: .../course-images/{path}
+    const urlParts = img.image_url.split('course-images/')
+    if (urlParts.length > 1) {
+      await supabase.storage.from('course-images').remove([urlParts[1]])
+    }
+  }
+
+  const { error } = await supabase
+    .from('course_images')
+    .delete()
+    .eq('id', imageId)
+
+  if (error) throw error
+}
+
+export async function uploadCoverImage(courseId: string, file: File): Promise<string> {
+  const ext = file.name.split('.').pop() || 'jpg'
+  const path = `${courseId}/cover.${ext}`
+
+  const { error: uploadError } = await supabase.storage
+    .from('course-images')
+    .upload(path, file, { upsert: true })
+  if (uploadError) throw uploadError
+
+  const { data } = supabase.storage.from('course-images').getPublicUrl(path)
+  return data.publicUrl
 }
 
 export async function deleteCourse(id: string): Promise<void> {

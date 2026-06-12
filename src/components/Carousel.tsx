@@ -1,18 +1,19 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import BlurText from './BlurText'
 
 const phrases = [
-  { title: "No es amor, es control", text: "Cuando algo duele, no es amor. El amor debería ser un lugar seguro, donde cada uno pueda ser libre y feliz. Si no lo es, entonces no es amor." },
-  { title: "El silencio también es violencia", text: "A veces pensamos que, si no decimos nada, no estamos contribuyendo al problema, pero el silencio también ayuda a que la violencia siga existiendo. ¡Las palabras son el primer paso para luchar contra la violencia de género!" },
-  { title: "Ninguna mujer está sola, somos muchas luchando por la justicia", text: "Este mensaje es un recordatorio de que no tienes que enfrentar la violencia sola. Somos muchas las que estamos luchando para acabar con ella. ¡Juntas somos más fuertes! 💜" },
-  { title: "La igualdad es el primer paso para erradicar la violencia", text: "Si realmente queremos que la violencia de género desaparezca, necesitamos empezar por construir una sociedad en la que todos tengamos las mismas oportunidades y derechos." },
-  { title: "Cuando una mujer denuncia, una sociedad responde", text: "La denuncia es vital, pero la respuesta también lo es. Todos y todas tenemos que poner nuestro granito de arena para erradicar la violencia." },
-  { title: "Si no somos feministas, entonces ¿qué somos?", text: "«Si no somos feministas, entonces ¿qué somos?» — Emma Watson. Nos recuerda que la lucha por la igualdad es de todos y todas. No se trata de un género o un grupo, se trata de ser humanos. Y ser feminista es ser parte del cambio." },
-  { title: "El poder no está en las manos de quienes dan órdenes", text: "«El poder no está en las manos de quienes dan órdenes, sino en las de quienes cuidan, educan y transforman el mundo» — Malala Yousafzai. Nos habla del verdadero poder: el que reside en las mujeres, las cuidadoras. Es un poder silencioso, pero fundamental." },
-  { title: "Una mujer que lucha por su libertad defiende el futuro de todas", text: "«Una mujer que lucha por su libertad es una mujer que defiende el futuro de todas» — Audre Lorde. La lucha de una mujer no es solo personal, es colectiva. Cada paso hacia la igualdad beneficia a toda la sociedad." },
-  { title: "No hay nada más peligroso que una mujer que se ha levantado", text: "«No hay nada más peligroso que una mujer que se ha levantado» — Maya Angelou. El coraje de una mujer que decide alzar la voz puede cambiar el rumbo de su vida y el de muchas otras. No subestimes la fuerza de una mujer decidida." },
-  { title: "La violencia nunca es un acto de amor", text: "«La violencia nunca es un acto de amor, es una manifestación de control y poder» — Bell Hooks. Si el amor duele o humilla, no es amor. Es manipulación. La verdadera esencia del amor es el respeto y la libertad." },
-  { title: "Juntas somos invencibles", text: "Cada mujer que alza su voz abre camino para las que vienen detrás. No estamos solas, nunca lo estuvimos. La sororidad es nuestra fuerza más grande." },
+  { title: "No es amor, es control", text: "Cuando algo duele, no es amor. El amor debería ser un lugar seguro, donde cada uno pueda ser libre y feliz. Si no lo es, entonces no es amor.", name: "María García" },
+  { title: "El silencio también es violencia", text: "A veces pensamos que, si no decimos nada, no estamos contribuyendo al problema, pero el silencio también ayuda a que la violencia siga existiendo. ¡Las palabras son el primer paso para luchar contra la violencia de género!", name: "Ana López" },
+  { title: "Ninguna mujer está sola, somos muchas luchando por la justicia", text: "Este mensaje es un recordatorio de que no tienes que enfrentar la violencia sola. Somos muchas las que estamos luchando para acabar con ella. ¡Juntas somos más fuertes! 💜", name: "Hector Serna" },
+  { title: "La igualdad es el primer paso para erradicar la violencia", text: "Si realmente queremos que la violencia de género desaparezca, necesitamos empezar por construir una sociedad en la que todos tengamos las mismas oportunidades y derechos.", name: "Sofía Hernández" },
+  { title: "Cuando una mujer denuncia, una sociedad responde", text: "La denuncia es vital, pero la respuesta también lo es. Todos y todas tenemos que poner nuestro granito de arena para erradicar la violencia.", name: "Camila Rodríguez" },
+  { title: "Si no somos feministas, entonces ¿qué somos?", text: "«Si no somos feministas, entonces ¿qué somos?» — Emma Watson. Nos recuerda que la lucha por la igualdad es de todos y todas. No se trata de un género o un grupo, se trata de ser humanos. Y ser feminista es ser parte del cambio.", name: "Valentina Torres" },
+  { title: "El poder no está en las manos de quienes dan órdenes", text: "«El poder no está en las manos de quienes dan órdenes, sino en las de quienes cuidan, educan y transforman el mundo» — Malala Yousafzai. Nos habla del verdadero poder: el que reside en las mujeres, las cuidadoras. Es un poder silencioso, pero fundamental.", name: "Isabella Moreno" },
+  { title: "Una mujer que lucha por su libertad defiende el futuro de todas", text: "«Una mujer que lucha por su libertad es una mujer que defiende el futuro de todas» — Audre Lorde. La lucha de una mujer no es solo personal, es colectiva. Cada paso hacia la igualdad beneficia a toda la sociedad.", name: "Mariana Castillo" },
+  { title: "No hay nada más peligroso que una mujer que se ha levantado", text: "«No hay nada más peligroso que una mujer que se ha levantado» — Maya Angelou. El coraje de una mujer que decide alzar la voz puede cambiar el rumbo de su vida y el de muchas otras. No subestimes la fuerza de una mujer decidida.", name: "Luciana Vargas" },
+  { title: "La violencia nunca es un acto de amor", text: "«La violencia nunca es un acto de amor, es una manifestación de control y poder» — Bell Hooks. Si el amor duele o humilla, no es amor. Es manipulación. La verdadera esencia del amor es el respeto y la libertad.", name: "Daniela Ruiz" },
+  { title: "Juntas somos invencibles", text: "Cada mujer que alza su voz abre camino para las que vienen detrás. No estamos solas, nunca lo estuvimos. La sororidad es nuestra fuerza más grande.", name: "Paula Navarro" },
 ]
 
 interface CarouselImage {
@@ -36,6 +37,7 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
   const [isPaused, setIsPaused] = useState(false)
   const [isHovering, setIsHovering] = useState(false)
   const [modal, setModal] = useState<ModalState | null>(null)
+  const [isFlipped, setIsFlipped] = useState(false)
   const cardRefs = useRef<(HTMLLIElement | null)[]>([])
 
   const handleMouseEnter = useCallback(() => {
@@ -55,6 +57,7 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
   const handleCardClick = useCallback((index: number) => {
     if (modal?.index === index) {
       setModal(null)
+      setIsFlipped(false)
       setIsHovering(false)
       setIsPaused(false)
       return
@@ -69,13 +72,20 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
 
     setIsHovering(true)
     setIsPaused(true)
+    setIsFlipped(false)
     setModal({ index, startX: cardCenterX, startY: cardCenterY })
   }, [modal])
 
   const handleCloseModal = useCallback(() => {
     setModal(null)
+    setIsFlipped(false)
     setIsHovering(false)
     setIsPaused(false)
+  }, [])
+
+  const toggleFlip = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsFlipped(prev => !prev)
   }, [])
 
   // Escape key to close modal
@@ -87,6 +97,13 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
   }, [modal, handleCloseModal])
+
+  // Flip card halfway through drag animation (0.3s into 0.6s travel)
+  useEffect(() => {
+    if (!modal) return
+    const timer = setTimeout(() => setIsFlipped(true), 300)
+    return () => clearTimeout(timer)
+  }, [modal])
 
   const modalImage = modal !== null ? images[modal.index] : null
   const modalPhrase = modal !== null ? phrases[modal.index] : null
@@ -145,7 +162,10 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="modal-card-inner">
+            <div
+              className={`modal-card-inner${isFlipped ? ' flipped' : ''}`}
+              onClick={toggleFlip}
+            >
               <div
                 className="card-front"
                 style={{ backgroundImage: `url('${modalImage.src}')` }}
@@ -156,6 +176,18 @@ export default function Carousel({ images, animationDuration = 25 }: CarouselPro
               </div>
             </div>
           </div>
+          {!isFlipped && (
+            <div className="carousel-modal-name">
+              <BlurText
+                text={modalPhrase.name}
+                animateBy="words"
+                direction="top"
+                delay={100}
+                stepDuration={0.4}
+                key={`name-${modal.index}`}
+              />
+            </div>
+          )}
         </>,
         document.body
       )}

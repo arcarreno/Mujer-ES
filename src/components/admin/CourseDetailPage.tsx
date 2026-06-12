@@ -109,6 +109,7 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
           <h2 className="course-detail-title">{course.title}</h2>
           {course.subtitle && <p className="course-detail-subtitle">{course.subtitle}</p>}
         </div>
+
         <div className="course-detail-stats">
           <span className="course-detail-stat">{enrollments.length} inscripto{enrollments.length !== 1 ? 's' : ''}</span>
           <span className="course-detail-stat-sep">·</span>

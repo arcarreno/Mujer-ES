@@ -129,6 +129,7 @@ CREATE POLICY "user sends own messages" ON public.messages
 
 -- Users can mark messages as read in their conversations
 DROP POLICY IF EXISTS "Users can update read in general" ON public.messages;
+DROP POLICY IF EXISTS "users can update read in own convs" ON public.messages;
 CREATE POLICY "users can update read in own convs" ON public.messages
   FOR UPDATE TO authenticated
   USING (
@@ -144,4 +145,12 @@ CREATE POLICY "users can update read in own convs" ON public.messages
   );
 
 -- 6. Enable Realtime on reports
-ALTER PUBLICATION supabase_realtime ADD TABLE public.reports;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables WHERE pubname = 'supabase_realtime' AND tablename = 'reports'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.reports;
+  END IF;
+END
+$$;

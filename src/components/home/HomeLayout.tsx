@@ -78,7 +78,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <CursosPage />
+              <CursosPage onNavigateToMap={() => setActiveTab('mapa')} />
             </motion.div>
           )}
           {activeTab === 'mis-cursos' && (
@@ -89,7 +89,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <MisCursosPage />
+              <MisCursosPage onNavigateToMap={() => setActiveTab('mapa')} />
             </motion.div>
           )}
           {activeTab === 'mapa' && (
@@ -99,6 +99,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
             >
               <MapPage />
             </motion.div>

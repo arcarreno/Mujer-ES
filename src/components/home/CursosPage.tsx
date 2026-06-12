@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, type Course } from '../../lib/queries'
+import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course, type CourseImage } from '../../lib/queries'
 import EnrollmentResult from '../ui/EnrollmentResult'
+import ImageCarousel from '../ui/ImageCarousel'
 
 type View = 'list' | 'detail'
 
@@ -12,7 +13,11 @@ interface EnrollmentInfo {
   courseName: string
 }
 
-export default function CursosPage() {
+interface CursosPageProps {
+  onNavigateToMap?: () => void
+}
+
+export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('list')
@@ -28,6 +33,7 @@ export default function CursosPage() {
   const [qrPanelDataUrl, setQrPanelDataUrl] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
   const [search, setSearch] = useState('')
+  const [galleryImages, setGalleryImages] = useState<string[]>([])
 
   useEffect(() => {
     listPublishedCourses()
@@ -43,15 +49,18 @@ export default function CursosPage() {
     setShowQrPanel(false)
     setQrPanelDataUrl(null)
     setMyQrPayload(null)
+    setGalleryImages([])
     try {
-      const [isEnrolled, full, enrollments] = await Promise.all([
+      const [isEnrolled, full, enrollments, images] = await Promise.all([
         isEnrolledInCourse(course.id),
         isCourseFull(course.id),
         getCourseEnrollments(course.id),
+        getCourseImages(course.id).catch(() => []),
       ])
       setEnrolled(isEnrolled)
       setCourseFull(full)
       setEnrollmentCount(enrollments.length)
+      setGalleryImages(images.map(img => img.image_url))
       if (isEnrolled) {
         const myEnrollment = await getMyEnrollmentForCourse(course.id)
         if (myEnrollment?.qr_code) setMyQrPayload(myEnrollment.qr_code)
@@ -159,6 +168,54 @@ export default function CursosPage() {
             {selected.description && <p className="curso-detail-desc">{selected.description}</p>}
           </div>
 
+          {(selected.event_date || selected.event_time || selected.event_duration_minutes) && (
+            <div className="curso-detail-event-info">
+              {selected.event_date && (
+                <div className="curso-detail-event-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                  </svg>
+                  <span>{new Date(selected.event_date + 'T00:00:00').toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+                </div>
+              )}
+              {selected.event_time && (
+                <div className="curso-detail-event-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <span>{selected.event_time.slice(0, 5)} hrs</span>
+                </div>
+              )}
+              {selected.event_duration_minutes && (
+                <div className="curso-detail-event-item">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" />
+                    <path d="M12 6v6l4 2" />
+                  </svg>
+                  <span>{selected.event_duration_minutes} min</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {selected.modality === 'presencial' && selected.latitude && selected.longitude && (
+            <button
+              className="curso-detail-location-btn"
+              onClick={() => onNavigateToMap?.()}
+              type="button"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                <circle cx="12" cy="10" r="3" />
+              </svg>
+              Ubicación
+            </button>
+          )}
+
           <div className="curso-detail-footer">
             {selected.max_enrollments && (
               <div className={`curso-detail-vacancies ${courseFull ? 'curso-detail-vacancies-full' : ''}`}>
@@ -240,6 +297,17 @@ export default function CursosPage() {
               </button>
             )}
           </div>
+
+          {(selected.cover_image_url || galleryImages.length > 0) && (
+            <div className="curso-detail-images">
+              <ImageCarousel
+                images={selected.cover_image_url
+                  ? (galleryImages.length > 0 ? [selected.cover_image_url, ...galleryImages] : [selected.cover_image_url])
+                  : galleryImages
+                }
+              />
+            </div>
+          )}
         </div>
 
         {showQrPanel && (
@@ -331,20 +399,25 @@ export default function CursosPage() {
               role="button"
               tabIndex={0}
             >
-              <div className="curso-card-thumb" aria-hidden>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="5 3 19 12 5 21 5 3" />
-                </svg>
-              </div>
-              <div className="curso-card-body">
-                <h3 className="curso-card-title">{curso.title}</h3>
-                <p className="curso-card-desc">{curso.description}</p>
-                <div className="curso-card-meta">
-                  <span className="curso-meta-pill">{curso.modality === 'virtual' ? 'Virtual' : 'Presencial'}</span>
-                  {curso.location_name && <span className="curso-meta-pill curso-meta-pill-location">{curso.location_name}</span>}
+              <div className={`curso-card-image ${!curso.cover_image_url ? 'curso-card-image--fallback' : ''}`}>
+                {curso.cover_image_url ? (
+                  <img src={curso.cover_image_url} alt="" className="curso-card-cover" loading="lazy" />
+                ) : (
+                  <svg className="curso-card-image-fallback-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                )}
+                <div className="curso-card-overlay" />
+                <div className="curso-card-image-content">
+                  <h3 className="curso-card-title">{curso.title}</h3>
+                  {curso.description && <p className="curso-card-desc">{curso.description}</p>}
+                  <div className="curso-card-meta">
+                    <span className="curso-meta-pill">{curso.modality === 'virtual' ? 'Virtual' : 'Presencial'}</span>
+                    {curso.location_name && <span className="curso-meta-pill">{curso.location_name}</span>}
+                  </div>
                 </div>
               </div>
-              <svg className="curso-card-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg className="curso-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="9 18 15 12 9 6" />
               </svg>
             </article>

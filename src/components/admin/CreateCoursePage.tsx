@@ -3,7 +3,7 @@ import { MapContainer, Marker, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { sileo } from 'sileo'
-import { createCourse, type Course } from '../../lib/queries'
+import { createCourse, uploadCoverImage, uploadCourseImage, type Course } from '../../lib/queries'
 import SubmitButton from '../ui/SubmitButton'
 import { MapControls, MapTileLayer, PUEBLA_CENTER, PUEBLA_ZOOM, type LayerType } from '../ui/MapControls'
 
@@ -48,6 +48,13 @@ export default function CreateCoursePage({ onCreated, onBack }: CreateCoursePage
   const [latitude, setLatitude] = useState<number | null>(null)
   const [longitude, setLongitude] = useState<number | null>(null)
   const [locationName, setLocationName] = useState('')
+  const [eventDate, setEventDate] = useState('')
+  const [eventTime, setEventTime] = useState('')
+  const [eventDuration, setEventDuration] = useState('')
+  const [coverImage, setCoverImage] = useState<File | null>(null)
+  const [coverPreview, setCoverPreview] = useState<string | null>(null)
+  const [galleryImages, setGalleryImages] = useState<File[]>([])
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [mapCenter, setMapCenter] = useState<[number, number]>(PUEBLA_CENTER)
   const [layerType, setLayerType] = useState<LayerType>('map')
@@ -65,6 +72,33 @@ export default function CreateCoursePage({ onCreated, onBack }: CreateCoursePage
   const handleMapClick = (lat: number, lng: number) => {
     setLatitude(lat)
     setLongitude(lng)
+  }
+
+  const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      sileo.error({ title: 'Imagen muy grande', description: 'Máximo 5 MB' })
+      return
+    }
+    setCoverImage(file)
+    setCoverPreview(URL.createObjectURL(file))
+  }
+
+  const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    const valid = files.filter((f) => f.size <= 5 * 1024 * 1024)
+    if (valid.length < files.length) {
+      sileo.error({ title: 'Algunas imágenes descartadas', description: 'Máximo 5 MB por imagen' })
+    }
+    setGalleryImages((prev) => [...prev, ...valid].slice(0, 10))
+    const newPreviews = valid.map((f) => URL.createObjectURL(f))
+    setGalleryPreviews((prev) => [...prev, ...newPreviews].slice(0, 10))
+  }
+
+  const removeGalleryImage = (index: number) => {
+    setGalleryImages((prev) => prev.filter((_, i) => i !== index))
+    setGalleryPreviews((prev) => prev.filter((_, i) => i !== index))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,7 +123,24 @@ export default function CreateCoursePage({ onCreated, onBack }: CreateCoursePage
         latitude,
         longitude,
         location_name: locationName.trim() || null,
+        event_date: eventDate || null,
+        event_time: eventTime || null,
+        event_duration_minutes: eventDuration ? parseInt(eventDuration) : null,
       })
+
+      // Upload cover image
+      if (coverImage) {
+        const coverUrl = await uploadCoverImage(course.id, coverImage)
+        const { updateCourse: update } = await import('../../lib/queries')
+        await update(course.id, { cover_image_url: coverUrl })
+        course.cover_image_url = coverUrl
+      }
+
+      // Upload gallery images
+      for (const file of galleryImages) {
+        await uploadCourseImage(course.id, file)
+      }
+
       sileo.success({ title: 'Curso creado', description: `"${course.title}" fue creado exitosamente` })
       onCreated(course)
     } catch {
@@ -162,6 +213,112 @@ export default function CreateCoursePage({ onCreated, onBack }: CreateCoursePage
             onChange={(e) => setMaxEnrollments(e.target.value)}
             placeholder="Ej: 30 (dejar vacío = ilimitado)"
           />
+        </div>
+
+        {/* Event scheduling */}
+        <div className="create-course-section-title">Datos del evento</div>
+
+        <div className="create-course-row">
+          <div className="login-field create-course-col">
+            <label htmlFor="course-date">Fecha</label>
+            <input
+              id="course-date"
+              type="date"
+              value={eventDate}
+              onChange={(e) => setEventDate(e.target.value)}
+            />
+          </div>
+          <div className="login-field create-course-col">
+            <label htmlFor="course-time">Hora de inicio</label>
+            <input
+              id="course-time"
+              type="time"
+              value={eventTime}
+              onChange={(e) => setEventTime(e.target.value)}
+            />
+          </div>
+          <div className="login-field create-course-col">
+            <label htmlFor="course-duration">Duración (min)</label>
+            <input
+              id="course-duration"
+              type="number"
+              min="1"
+              max="600"
+              value={eventDuration}
+              onChange={(e) => setEventDuration(e.target.value)}
+              placeholder="Ej: 90"
+            />
+          </div>
+        </div>
+
+        {/* Images */}
+        <div className="create-course-section-title">Imágenes del curso</div>
+
+        <div className="login-field">
+          <label>Portada del curso</label>
+          <div className="create-course-cover">
+            {coverPreview ? (
+              <div className="create-course-cover-preview">
+                <img src={coverPreview} alt="Portada" />
+                <button
+                  type="button"
+                  className="create-course-cover-remove"
+                  onClick={() => { setCoverImage(null); setCoverPreview(null) }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <label className="create-course-cover-upload">
+                <input type="file" accept="image/*" onChange={handleCoverChange} hidden />
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span>Subir portada</span>
+                <span className="create-course-cover-hint">JPG, PNG • Máx. 5 MB</span>
+              </label>
+            )}
+          </div>
+        </div>
+
+        <div className="login-field">
+          <label>Galería de imágenes</label>
+          <div className="create-course-gallery">
+            {galleryPreviews.map((preview, i) => (
+              <div key={i} className="create-course-gallery-item">
+                <img src={preview} alt={`Galería ${i + 1}`} />
+                <button
+                  type="button"
+                  className="create-course-gallery-remove"
+                  onClick={() => removeGalleryImage(i)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+            {galleryImages.length < 10 && (
+              <label className="create-course-gallery-add">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleGalleryChange}
+                  hidden
+                />
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="1.5">
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>{galleryImages.length}/10</span>
+              </label>
+            )}
+          </div>
+          <span className="create-course-gallery-hint">Imágenes adicionales que se mostrarán en el detalle del curso</span>
         </div>
 
         <div className="login-field">

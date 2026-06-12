@@ -1,11 +1,25 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, Marker, Popup } from 'react-leaflet'
+import { MapContainer, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { sileo } from 'sileo'
-import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, type Course } from '../../lib/queries'
+import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course } from '../../lib/queries'
 import { MapControls, MapTileLayer, PUEBLA_CENTER, PUEBLA_ZOOM, type LayerType } from '../ui/MapControls'
 import EnrollmentResult from '../ui/EnrollmentResult'
+import MapillaryViewer from '../ui/MapillaryViewer'
+import MapillaryCoverage from '../ui/MapillaryCoverage'
+import ImageCarousel from '../ui/ImageCarousel'
+
+// Helper component to fly the map (must be inside MapContainer)
+function MapFlyTo({ target }: { target: { center: [number, number]; zoom: number } | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (target) {
+      map.flyTo(target.center, target.zoom, { duration: 1 })
+    }
+  }, [target, map])
+  return null
+}
 
 function courseIcon(color: string) {
   return L.divIcon({
@@ -39,6 +53,11 @@ export default function MapPage() {
   const [showQrPanel, setShowQrPanel] = useState(false)
   const [qrPanelDataUrl, setQrPanelDataUrl] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
+  const [galleryImages, setGalleryImages] = useState<string[]>([])
+  const [streetView, setStreetView] = useState<{ lat: number; lng: number } | null>(null)
+  const [mapillaryMode, setMapillaryMode] = useState(false)
+  const [showMapillaryModal, setShowMapillaryModal] = useState(false)
+  const [flyTarget, setFlyTarget] = useState<{ center: [number, number]; zoom: number } | null>(null)
 
   useEffect(() => {
     listPublishedCourses()
@@ -53,15 +72,18 @@ export default function MapPage() {
     setShowQrPanel(false)
     setQrPanelDataUrl(null)
     setMyQrPayload(null)
+    setGalleryImages([])
     try {
-      const [isEnrolled, full, enrollments] = await Promise.all([
+      const [isEnrolled, full, enrollments, images] = await Promise.all([
         isEnrolledInCourse(course.id),
         isCourseFull(course.id),
         getCourseEnrollments(course.id),
+        getCourseImages(course.id).catch(() => []),
       ])
       setEnrolled(isEnrolled)
       setCourseFull(full)
       setEnrollmentCount(enrollments.length)
+      setGalleryImages(images.map(img => img.image_url))
       if (isEnrolled) {
         const myEnrollment = await getMyEnrollmentForCourse(course.id)
         if (myEnrollment?.qr_code) setMyQrPayload(myEnrollment.qr_code)
@@ -241,6 +263,17 @@ export default function MapPage() {
               </button>
             )}
           </div>
+
+          {(selected.cover_image_url || galleryImages.length > 0) && (
+            <div className="curso-detail-images">
+              <ImageCarousel
+                images={selected.cover_image_url
+                  ? (galleryImages.length > 0 ? [selected.cover_image_url, ...galleryImages] : [selected.cover_image_url])
+                  : galleryImages
+                }
+              />
+            </div>
+          )}
         </div>
 
         {showQrPanel && (
@@ -310,7 +343,7 @@ export default function MapPage() {
           <p className="cursos-subtitle">{courses.length} curso{courses.length !== 1 ? 's' : ''} presencial{courses.length !== 1 ? 'es' : ''}</p>
         </div>
       )}
-      <div className="map-page-container">
+      <div className={`map-page-container ${mapillaryMode ? 'mapillary-cursor' : ''}`}>
         <MapContainer
           key={`${layerType}-${isFullscreen}`}
           center={PUEBLA_CENTER}
@@ -318,6 +351,14 @@ export default function MapPage() {
           style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0 }}
         >
           <MapTileLayer layerType={layerType} />
+          <MapFlyTo target={flyTarget} />
+          <MapillaryCoverage
+            active={mapillaryMode}
+            onImageClick={(imageId) => {
+              // For now, just log the image ID. In a future enhancement, open the viewer.
+              console.log('Mapillary image clicked:', imageId)
+            }}
+          />
           {courses.map((course) => (
             <Marker
               key={course.id}
@@ -350,7 +391,61 @@ export default function MapPage() {
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => setIsFullscreen((f) => !f)}
         />
+        <button
+          className={`map-control-btn mapillary-btn ${mapillaryMode ? 'mapillary-btn-active' : ''}`}
+          onClick={() => setShowMapillaryModal(true)}
+          type="button"
+          title="Vista de calle"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </button>
       </div>
+      {streetView && (
+        <MapillaryViewer
+          lat={streetView.lat}
+          lng={streetView.lng}
+          onClose={() => setStreetView(null)}
+        />
+      )}
+      {showMapillaryModal && (
+        <div className="mapillary-modal-overlay" onClick={() => setShowMapillaryModal(false)}>
+          <div className="mapillary-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="mapillary-modal-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#581C87" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </div>
+            <h3 className="mapillary-modal-title">Vista de calle</h3>
+            <p className="mapillary-modal-text">
+              Activa el modo para ver la cobertura de Mapillary en el mapa. Los puntos verdes muestran ubicaciones con imágenes de la calle.
+            </p>
+            <p className="mapillary-modal-warning">
+              Este modo consume recursos del dispositivo. Se recomienda en computadoras o dispositivos modernos.
+            </p>
+            <button
+              className="mapillary-modal-btn"
+              onClick={() => {
+                setShowMapillaryModal(false)
+                const activating = !mapillaryMode
+                setMapillaryMode(activating)
+                if (activating) {
+                  // Zoom out to a reasonable level for overview
+                  setFlyTarget({ center: PUEBLA_CENTER, zoom: 12 })
+                } else {
+                  setStreetView(null)
+                }
+              }}
+              type="button"
+            >
+              {mapillaryMode ? 'Salir del modo' : 'Activar'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
