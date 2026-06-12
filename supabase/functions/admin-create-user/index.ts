@@ -40,12 +40,30 @@ serve(async (req) => {
     }
 
     const { email, password, full_name, username, phone, is_admin } = await req.json()
-    if (!email || !password || !full_name || !username) {
-      return new Response('Faltan campos requeridos: email, password, full_name, username', {
+    if (!password || !full_name || !username) {
+      return new Response(JSON.stringify({ error: 'Faltan campos requeridos: password, full_name, username' }), {
         status: 400,
-        headers: corsHeaders,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    const cleanUsername = username.trim().toLowerCase()
+
+    // Check username uniqueness across both profiles and admins
+    const { data: usernameTaken } = await callerClient
+      .rpc('username_exists', { p_username: cleanUsername })
+
+    if (usernameTaken) {
+      return new Response(
+        JSON.stringify({ error: 'Ese nombre de usuario ya está en uso' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Generate placeholder email if not provided
+    const finalEmail = email && email.trim()
+      ? email.trim()
+      : `${cleanUsername}-${Math.random().toString(36).slice(2, 8)}@noemail.mujeres.app`
 
     const role = is_admin ? 'admin' : 'user'
 
@@ -55,20 +73,28 @@ serve(async (req) => {
     )
 
     const { data: newUser, error } = await adminClient.auth.admin.createUser({
-      email,
+      email: finalEmail,
       password,
       email_confirm: true,
       user_metadata: {
-        full_name,
-        username,
-        phone: phone || null,
+        full_name: full_name.trim(),
+        username: cleanUsername,
+        phone: phone?.trim() || null,
         role,
+        password,
       },
     })
 
     if (error) {
+      // Map common Supabase auth errors to friendly messages
+      let friendlyMsg = error.message
+      if (error.message.includes('already registered')) {
+        friendlyMsg = 'Ya existe una cuenta con ese correo electrónico'
+      } else if (error.message.includes('unique constraint') || error.message.includes('duplicate key')) {
+        friendlyMsg = 'Ese nombre de usuario o correo ya está en uso'
+      }
       return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({ error: friendlyMsg }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }

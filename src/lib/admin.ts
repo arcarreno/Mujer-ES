@@ -124,7 +124,7 @@ export async function adminDeleteUser(userId: string): Promise<void> {
 }
 
 export interface CreateUserPayload {
-  email: string
+  email?: string
   password: string
   full_name: string
   username: string

@@ -67,13 +67,13 @@ export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProp
         {isAdmin ? 'Crear administrador' : 'Crear usuario'}
       </h2>
       <p className="otp-subtitle">
-        Ingresá la contraseña que se usará para iniciar sesión
+        Ingresá los datos del usuario. El correo es opcional.
       </p>
 
       <form onSubmit={handleSubmit} className="login-form">
         <div className="login-field">
-          <label htmlFor="cu-email">Correo</label>
-          <input id="cu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@correo.com" required />
+          <label htmlFor="cu-email">Correo <span style={{fontSize: '0.75em', opacity: 0.6}}>(opcional)</span></label>
+                <input id="cu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@correo.com (opcional)" />
         </div>
         <div className="login-field">
           <label htmlFor="cu-name">Nombre completo</label>
