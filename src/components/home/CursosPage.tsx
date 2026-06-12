@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { sileo } from 'sileo'
-import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course, type CourseImage } from '../../lib/queries'
+import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course } from '../../lib/queries'
 import EnrollmentResult from '../ui/EnrollmentResult'
 import ImageCarousel from '../ui/ImageCarousel'
 
