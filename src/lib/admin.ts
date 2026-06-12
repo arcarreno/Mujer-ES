@@ -139,7 +139,19 @@ export async function adminCreateUser(
     body: payload,
   })
 
-  if (error) throw error
+  if (error) {
+    // FunctionsHttpError wraps the response — try to extract the real message
+    const errWithCtx = error as Error & { context?: { response?: Response } }
+    if (errWithCtx.context?.response) {
+      try {
+        const body = await errWithCtx.context.response.clone().json()
+        if (body?.error) throw new Error(body.error)
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message !== error.message) throw parseErr
+      }
+    }
+    throw error
+  }
   if (data && 'error' in data) throw new Error(data.error as string)
   return {
     type: payload.is_admin ? 'admin' : 'user',
