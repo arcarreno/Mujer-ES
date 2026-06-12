@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import BlurText from './BlurText'
 
 const phrases = [
-  { title: "No es amor, es control", text: "Cuando algo duele, no es amor. El amor debería ser un lugar seguro, donde cada uno pueda ser libre y feliz. Si no lo es, entonces no es amor.", name: "María García" },
+  { title: "No es amor, es control", text: "Cuando algo duele, no es amor. El amor debería ser un lugar seguro, donde cada uno pueda ser libre y feliz. Si no lo es, entonces no es amor.", name: "Veronica Zacarías" },
   { title: "El silencio también es violencia", text: "A veces pensamos que, si no decimos nada, no estamos contribuyendo al problema, pero el silencio también ayuda a que la violencia siga existiendo. ¡Las palabras son el primer paso para luchar contra la violencia de género!", name: "Ana López" },
   { title: "Ninguna mujer está sola, somos muchas luchando por la justicia", text: "Este mensaje es un recordatorio de que no tienes que enfrentar la violencia sola. Somos muchas las que estamos luchando para acabar con ella. ¡Juntas somos más fuertes! 💜", name: "Hector Serna" },
   { title: "La igualdad es el primer paso para erradicar la violencia", text: "Si realmente queremos que la violencia de género desaparezca, necesitamos empezar por construir una sociedad en la que todos tengamos las mismas oportunidades y derechos.", name: "Sofía Hernández" },

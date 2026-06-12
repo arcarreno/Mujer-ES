@@ -27,16 +27,26 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     )
 
-    const { data: { user: caller } } = await callerClient.auth.getUser()
-    if (!caller) {
-      return new Response('Unauthorized', { status: 401, headers: corsHeaders })
+    const { data: { user: caller }, error: getUserErr } = await callerClient.auth.getUser()
+    if (getUserErr || !caller) {
+      return new Response(
+        JSON.stringify({ error: 'No se pudo verificar la sesión: ' + (getUserErr?.message || 'usuario no encontrado') }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
-    const { data: isAdmin } = await callerClient
-      .rpc('is_admin')
-
+    const { data: isAdmin, error: adminCheckErr } = await callerClient.rpc('is_admin')
+    if (adminCheckErr) {
+      return new Response(
+        JSON.stringify({ error: 'Error al verificar permisos: ' + adminCheckErr.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
     if (!isAdmin) {
-      return new Response('Forbidden - admin only', { status: 403, headers: corsHeaders })
+      return new Response(
+        JSON.stringify({ error: 'Solo los administradores pueden crear usuarios' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
     }
 
     const { email, password, full_name, username, phone, is_admin } = await req.json()
@@ -50,8 +60,13 @@ serve(async (req) => {
     const cleanUsername = username.trim().toLowerCase()
 
     // Check username uniqueness across both profiles and admins
-    const { data: usernameTaken } = await callerClient
+    const { data: usernameTaken, error: usernameCheckErr } = await callerClient
       .rpc('username_exists', { p_username: cleanUsername })
+
+    if (usernameCheckErr) {
+      // If the RPC function doesn't exist or fails, log it but don't block
+      console.error('username_exists RPC error:', usernameCheckErr.message)
+    }
 
     if (usernameTaken) {
       return new Response(
@@ -67,9 +82,19 @@ serve(async (req) => {
 
     const role = is_admin ? 'admin' : 'user'
 
+    // Verify service role key is available
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')
+    if (!serviceRoleKey) {
+      console.error('SUPABASE_SERVICE_ROLE_KEY is not set in edge function env')
+      return new Response(
+        JSON.stringify({ error: 'Error de configuración del servidor' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!
+      serviceRoleKey
     )
 
     const { data: newUser, error } = await adminClient.auth.admin.createUser({
@@ -86,6 +111,7 @@ serve(async (req) => {
     })
 
     if (error) {
+      console.error('createUser error:', error.message, error.status)
       // Map common Supabase auth errors to friendly messages
       let friendlyMsg = error.message
       if (error.message.includes('already registered')) {
@@ -104,8 +130,9 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (e) {
+    console.error('Unhandled error:', e)
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : 'Unknown error' }),
+      JSON.stringify({ error: e instanceof Error ? e.message : 'Error desconocido del servidor' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
