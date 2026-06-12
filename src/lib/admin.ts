@@ -135,24 +135,29 @@ export interface CreateUserPayload {
 export async function adminCreateUser(
   payload: CreateUserPayload
 ): Promise<{ type: UserType }> {
-  const { data, error } = await supabase.functions.invoke('admin-create-user', {
-    body: payload,
-  })
+  // Use fetch directly to get the full error response body
+  const { data: { session } } = await supabase.auth.getSession()
+  const token = session?.access_token
 
-  if (error) {
-    // FunctionsHttpError wraps the response — try to extract the real message
-    const errWithCtx = error as Error & { context?: { response?: Response } }
-    if (errWithCtx.context?.response) {
-      try {
-        const body = await errWithCtx.context.response.clone().json()
-        if (body?.error) throw new Error(body.error)
-      } catch (parseErr) {
-        if (parseErr instanceof Error && parseErr.message !== error.message) throw parseErr
-      }
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
     }
-    throw error
+  )
+
+  const body = await res.json()
+
+  if (!res.ok) {
+    throw new Error(body?.error || `Error ${res.status}`)
   }
-  if (data && 'error' in data) throw new Error(data.error as string)
+
   return {
     type: payload.is_admin ? 'admin' : 'user',
   }
