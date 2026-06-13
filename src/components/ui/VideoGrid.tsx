@@ -18,7 +18,7 @@ export default function VideoGrid({
   participants,
   userId,
   isScreenSharing,
-  isAdmin,
+  isAdmin: _isAdmin,
 }: VideoGridProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const screenVideoRef = useRef<HTMLVideoElement>(null)

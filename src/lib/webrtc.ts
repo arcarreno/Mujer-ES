@@ -523,7 +523,7 @@ export class VideoCallManager {
         this.presenceState = this.signaling.getPresenceState()
         this.onPresenceUpdate?.(this.presenceState)
       },
-      onPresenceJoin: (key, presence) => {
+      onPresenceJoin: (key, _presence) => {
         // Admin: when a new user joins, send them an offer
         if (this.isAdmin && key !== this.myUserId) {
           // Small delay to let their presence settle
