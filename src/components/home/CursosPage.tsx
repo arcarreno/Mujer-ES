@@ -32,6 +32,9 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
   const [showQrPanel, setShowQrPanel] = useState(false)
   const [qrPanelDataUrl, setQrPanelDataUrl] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
+  const [myAccessCode, setMyAccessCode] = useState<string | null>(null)
+  const [showCodePanel, setShowCodePanel] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
   const [search, setSearch] = useState('')
   const [galleryImages, setGalleryImages] = useState<string[]>([])
 
@@ -49,6 +52,9 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
     setShowQrPanel(false)
     setQrPanelDataUrl(null)
     setMyQrPayload(null)
+    setMyAccessCode(null)
+    setShowCodePanel(false)
+    setCodeCopied(false)
     setGalleryImages([])
     try {
       const [isEnrolled, full, enrollments, images] = await Promise.all([
@@ -64,6 +70,7 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
       if (isEnrolled) {
         const myEnrollment = await getMyEnrollmentForCourse(course.id)
         if (myEnrollment?.qr_code) setMyQrPayload(myEnrollment.qr_code)
+        if (myEnrollment?.access_code) setMyAccessCode(myEnrollment.access_code)
       }
     } catch {
       setEnrolled(false)
@@ -117,6 +124,7 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
       return
     }
     setShowQrPanel(true)
+    setShowCodePanel(false)
     if (qrPanelDataUrl) return
     if (!myQrPayload) return
     setQrLoading(true)
@@ -127,6 +135,22 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
       sileo.error({ title: 'Error', description: 'No se pudo generar el código QR' })
     } finally {
       setQrLoading(false)
+    }
+  }
+
+  const handleShowCode = () => {
+    setShowCodePanel(prev => !prev)
+    setShowQrPanel(false)
+  }
+
+  const handleCopyCode = async () => {
+    if (!myAccessCode) return
+    try {
+      await navigator.clipboard.writeText(myAccessCode)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo copiar el código' })
     }
   }
 
@@ -295,6 +319,30 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
                 </svg>
                 Código QR
               </button>
+            )}
+
+            {enrolled && selected.modality === 'virtual' && myAccessCode && (
+              <>
+                <button
+                  className={`curso-detail-qr-btn ${showCodePanel ? 'curso-detail-qr-btn-active' : ''}`}
+                  onClick={handleShowCode}
+                  type="button"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  Mi código
+                </button>
+                {showCodePanel && (
+                  <div className="curso-inline-code">
+                    <div className="curso-inline-code-value" onClick={handleCopyCode} role="button" tabIndex={0}>
+                      {myAccessCode}
+                    </div>
+                    <p className="curso-inline-code-hint">{codeCopied ? '¡Copiado!' : 'Tocá para copiar'}</p>
+                  </div>
+                )}
+              </>
             )}
           </div>
 

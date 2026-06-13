@@ -5696,29 +5696,39 @@ input[type="date"].form-input {
   color: #dc2626;
 }
 
-/* Access code panel — virtual courses */
-.curso-code-panel-code {
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #581C87;
+/* Inline access code — virtual courses (below button) */
+.curso-inline-code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 1rem;
   background: #f5f0fa;
-  border: 2px dashed #d8b4fe;
+  border: 1px solid #e9d5ff;
   border-radius: 0.75rem;
-  padding: 0.75rem 2rem;
-  letter-spacing: 0.5rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  text-align: center;
+  width: 100%;
 }
 
-.curso-code-panel-code:hover {
+.curso-inline-code-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #581C87;
+  letter-spacing: 0.4rem;
+  cursor: pointer;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: background 0.2s ease;
+}
+
+.curso-inline-code-value:hover {
   background: #ede9fe;
 }
 
-.curso-code-panel-sub {
+.curso-inline-code-hint {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: #9ca3af;
   margin: 0;
 }
