@@ -17,6 +17,7 @@ interface HomeLayoutProps {
 export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('cursos')
   const [chatFullscreen, setChatFullscreen] = useState(false)
+  const [videoCallFullscreen, setVideoCallFullscreen] = useState(false)
 
   const handleLogout = async () => {
     await signOut()
@@ -33,9 +34,13 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
     setChatFullscreen(fullscreen)
   }, [])
 
-  // When in chat fullscreen, hide header and nav
-  const showHeader = !chatFullscreen
-  const showNav = !chatFullscreen
+  const handleVideoCallFullscreenChange = useCallback((fullscreen: boolean) => {
+    setVideoCallFullscreen(fullscreen)
+  }, [])
+
+  // When in chat or video call fullscreen, hide header and nav
+  const showHeader = !chatFullscreen && !videoCallFullscreen
+  const showNav = !chatFullscreen && !videoCallFullscreen
 
   return (
     <div className="home-layout">
@@ -78,7 +83,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <CursosPage onNavigateToMap={() => setActiveTab('mapa')} />
+              <CursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
             </motion.div>
           )}
           {activeTab === 'mis-cursos' && (
@@ -89,7 +94,7 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <MisCursosPage onNavigateToMap={() => setActiveTab('mapa')} />
+              <MisCursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
             </motion.div>
           )}
           {activeTab === 'mapa' && (

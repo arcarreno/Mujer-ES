@@ -36,6 +36,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   const [currentUserId, setCurrentUserId] = useState('')
   const [showReports, setShowReports] = useState(false)
   const [chatFullscreen, setChatFullscreen] = useState(false)
+  const [videoCallFullscreen, setVideoCallFullscreen] = useState(false)
   const [showMapas, setShowMapas] = useState(false)
   const [adminDMChat, setAdminDMChat] = useState<string | null>(null)
 
@@ -81,6 +82,10 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
     setChatFullscreen(fullscreen)
   }, [])
 
+  const handleVideoCallFullscreenChange = useCallback((fullscreen: boolean) => {
+    setVideoCallFullscreen(fullscreen)
+  }, [])
+
   const handleSendMessage = useCallback(async (userId: string) => {
     try {
       const conv = await createDMConversation(userId)
@@ -91,8 +96,8 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
   }, [])
 
   // When viewing user detail, hide header and nav
-  const showHeader = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat && !selectedCourse && !showCreateCourse
-  const showNav = !selectedUser && !chatFullscreen && !showReports && !showMapas && !adminDMChat && !selectedCourse && !showCreateCourse
+  const showHeader = !selectedUser && !chatFullscreen && !videoCallFullscreen && !showReports && !showMapas && !adminDMChat && !selectedCourse && !showCreateCourse
+  const showNav = !selectedUser && !chatFullscreen && !videoCallFullscreen && !showReports && !showMapas && !adminDMChat && !selectedCourse && !showCreateCourse
 
   return (
     <div className="home-layout admin-layout">
@@ -130,6 +135,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
           <CourseDetailPage
             course={selectedCourse}
             onBack={() => setSelectedCourse(null)}
+            onVideoCallFullscreenChange={handleVideoCallFullscreenChange}
           />
         ) : showCreateCourse ? (
           <CreateCoursePage

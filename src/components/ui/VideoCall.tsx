@@ -16,9 +16,10 @@ interface VideoCallProps {
   courseId: string
   isAdmin: boolean
   onClose: () => void
+  onFullscreenChange?: (fullscreen: boolean) => void
 }
 
-export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps) {
+export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChange }: VideoCallProps) {
   const [userId, setUserId] = useState<string>('')
   const [username, setUsername] = useState<string>('')
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -33,7 +34,9 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
   const [showChat, setShowChat] = useState(false)
   const [sessionEnded, setSessionEnded] = useState(false)
   const [kicked, setKicked] = useState(false)
+  const [ready, setReady] = useState(false)
   const managerRef = useRef<VideoCallManager | null>(null)
+  const streamInitializedRef = useRef(false)
 
   // Initialize
   useEffect(() => {
@@ -50,6 +53,9 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
         .eq('id', user.id)
         .single()
 
+      let uname = ''
+      let aUrl: string | null = null
+
       if (!profile) {
         const { data: admin } = await supabase
           .from('admins')
@@ -57,19 +63,22 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
           .eq('id', user.id)
           .single()
         if (admin) {
-          setUsername(admin.username)
-          setAvatarUrl(admin.avatar_url)
+          uname = admin.username
+          aUrl = admin.avatar_url
         }
       } else {
-        setUsername(profile.username)
-        setAvatarUrl(profile.avatar_url)
+        uname = profile.username
+        aUrl = profile.avatar_url
       }
+
+      setUsername(uname)
+      setAvatarUrl(aUrl)
 
       // Create manager
       const manager = new VideoCallManager(courseId, user.id, isAdmin)
       managerRef.current = manager
 
-      // Set up event handlers
+      // Set up remote stream handler
       manager.peers.setOnRemoteStream((peerUserId, stream) => {
         setRemoteStreams((prev) => {
           const next = new Map(prev)
@@ -78,6 +87,16 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
         })
       })
 
+      // Set up peer removed handler
+      manager.peers.setOnPeerRemoved((peerUserId) => {
+        setRemoteStreams((prev) => {
+          const next = new Map(prev)
+          next.delete(peerUserId)
+          return next
+        })
+      })
+
+      // Set up presence update handler
       manager.setOnPresenceUpdate((state) => {
         const list: ParticipantState[] = []
         for (const [, presences] of Object.entries(state)) {
@@ -88,10 +107,26 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
         setParticipants(list.sort((a, b) => a.joinedAt - b.joinedAt))
       })
 
+      // Admin: when a new user joins, send them an offer
+      if (isAdmin) {
+        manager.setOnUserJoined(async (newUserId) => {
+          try {
+            await manager.peers.createOffer(newUserId)
+          } catch (e) {
+            console.error('Failed to create offer:', e)
+          }
+        })
+      }
+
       // Override internal handlers
       ;(manager as any).handleMuteAll = () => {
         setMicActive(false)
-        manager.toggleMic(false)
+        // Disable local audio track
+        const stream = manager.peers.getLocalStreamRef()
+        if (stream) {
+          stream.getAudioTracks().forEach((t) => { t.enabled = false })
+        }
+        manager.peers.replaceTrack('audio', null)
         sileo.info({ title: 'Silenciado', description: 'El administrador silenció tu micrófono' })
       }
 
@@ -109,29 +144,58 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
         setTimeout(() => onClose(), 2000)
       }
 
-      // Join
+      // Join signaling channel
       await manager.join()
 
-      // Track presence
-      const state: ParticipantState = {
-        userId: user.id,
-        username: profile?.username || 'Admin',
-        avatarUrl: profile?.avatar_url || null,
-        micActive: false,
-        videoActive: false,
-        isSpeaking: false,
-        screenSharing: false,
-        joinedAt: Date.now(),
+      // Get local stream early (so tracks are available for peer connections)
+      if (!streamInitializedRef.current) {
+        streamInitializedRef.current = true
+        try {
+          const stream = await manager.peers.ensureLocalStream()
+          setLocalStream(stream)
+          // Start with audio and video enabled
+          setMicActive(true)
+          setVideoActive(true)
+          // Track presence with active states
+          await manager.signaling.trackPresence({
+            userId: user.id,
+            username: uname,
+            avatarUrl: aUrl,
+            micActive: true,
+            videoActive: true,
+            isSpeaking: false,
+            screenSharing: false,
+            joinedAt: Date.now(),
+          })
+        } catch (e) {
+          console.warn('Could not get local stream:', e)
+          // Still track presence even without media
+          await manager.signaling.trackPresence({
+            userId: user.id,
+            username: uname,
+            avatarUrl: aUrl,
+            micActive: false,
+            videoActive: false,
+            isSpeaking: false,
+            screenSharing: false,
+            joinedAt: Date.now(),
+          })
+        }
       }
-      await manager.signaling.trackPresence(state)
+
+      setReady(true)
     }
+
+    // Notify parent that we're in fullscreen mode
+    onFullscreenChange?.(true)
 
     init()
 
     return () => {
+      onFullscreenChange?.(false)
       managerRef.current?.leave()
     }
-  }, [courseId, isAdmin, onClose])
+  }, [courseId, isAdmin, onClose, onFullscreenChange])
 
   // Toggle mic
   const handleToggleMic = useCallback(async () => {
@@ -157,6 +221,11 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
       const stream = await manager.startMic()
       setLocalStream(stream)
       setMicActive(true)
+      // Replace track in existing connections
+      const audioTrack = stream.getAudioTracks()[0]
+      if (audioTrack) {
+        await manager.peers.replaceTrack('audio', audioTrack)
+      }
       await manager.signaling.updatePresence({
         userId,
         username,
@@ -208,6 +277,11 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
       const stream = await manager.startVideo()
       setLocalStream(stream)
       setVideoActive(true)
+      // Replace track in existing connections
+      const videoTrack = stream.getVideoTracks()[0]
+      if (videoTrack) {
+        await manager.peers.replaceTrack('video', videoTrack)
+      }
       await manager.signaling.updatePresence({
         userId,
         username,
@@ -247,11 +321,11 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
         setIsScreenSharing(true)
 
         // Stop screen when user stops sharing via browser UI
-        stream.getVideoTracks()[0].onended = () => {
+        stream.getVideoTracks()[0].onended = async () => {
           setIsScreenSharing(false)
           setScreenStream(null)
-          manager.stopScreenShare()
-          manager.signaling.updatePresence({
+          await manager.stopScreenShare()
+          await manager.signaling.updatePresence({
             userId,
             username,
             avatarUrl,
@@ -275,7 +349,7 @@ export default function VideoCall({ courseId, isAdmin, onClose }: VideoCallProps
         })
       }
     } else {
-      manager.stopScreenShare()
+      await manager.stopScreenShare()
       setIsScreenSharing(false)
       setScreenStream(null)
       await manager.signaling.updatePresence({

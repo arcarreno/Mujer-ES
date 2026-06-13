@@ -10,9 +10,10 @@ type View = 'list' | 'detail'
 interface MisCursosPageProps {
   onViewCourse?: (course: Course) => void
   onNavigateToMap?: () => void
+  onVideoCallFullscreenChange?: (fullscreen: boolean) => void
 }
 
-export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCursosPageProps) {
+export default function MisCursosPage({ onViewCourse, onNavigateToMap, onVideoCallFullscreenChange }: MisCursosPageProps) {
   const [enrollments, setEnrollments] = useState<(Enrollment & { course: Course | null })[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('list')
@@ -321,6 +322,7 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
               courseId={selected.id}
               isAdmin={false}
               onClose={() => setInSession(false)}
+              onFullscreenChange={onVideoCallFullscreenChange}
             />
           )}
         </div>

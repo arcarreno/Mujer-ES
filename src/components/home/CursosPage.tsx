@@ -16,9 +16,10 @@ interface EnrollmentInfo {
 
 interface CursosPageProps {
   onNavigateToMap?: () => void
+  onVideoCallFullscreenChange?: (fullscreen: boolean) => void
 }
 
-export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
+export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChange }: CursosPageProps) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('list')
@@ -409,6 +410,7 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
               courseId={selected.id}
               isAdmin={false}
               onClose={() => setInSession(false)}
+              onFullscreenChange={onVideoCallFullscreenChange}
             />
           )}
         </div>

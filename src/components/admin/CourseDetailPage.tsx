@@ -8,9 +8,10 @@ import VideoCall from '../ui/VideoCall'
 interface CourseDetailPageProps {
   course: Course
   onBack: () => void
+  onVideoCallFullscreenChange?: (fullscreen: boolean) => void
 }
 
-export default function CourseDetailPage({ course, onBack }: CourseDetailPageProps) {
+export default function CourseDetailPage({ course, onBack, onVideoCallFullscreenChange }: CourseDetailPageProps) {
   const [enrollments, setEnrollments] = useState<Enrollment[]>([])
   const [loading, setLoading] = useState(true)
   const [scannerOpen, setScannerOpen] = useState(false)
@@ -337,6 +338,7 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
           courseId={course.id}
           isAdmin={true}
           onClose={handleSessionClose}
+          onFullscreenChange={onVideoCallFullscreenChange}
         />
       )}
     </div>
