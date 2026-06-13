@@ -3,7 +3,7 @@ import { sileo } from 'sileo'
 import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course } from '../../lib/queries'
 import EnrollmentResult from '../ui/EnrollmentResult'
 import ImageCarousel from '../ui/ImageCarousel'
-import JitsiMeetingRoom from '../ui/JitsiMeetingRoom'
+import VideoCall from '../ui/VideoCall'
 
 type View = 'list' | 'detail'
 
@@ -39,7 +39,6 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
   const [search, setSearch] = useState('')
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const [inSession, setInSession] = useState(false)
-  const [sessionPassword, setSessionPassword] = useState<string | null>(null)
 
   useEffect(() => {
     listPublishedCourses()
@@ -59,7 +58,6 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
     setShowCodePanel(false)
     setCodeCopied(false)
     setGalleryImages([])
-    setSessionPassword(course.session_password)
     try {
       const [isEnrolled, full, enrollments, images] = await Promise.all([
         isEnrolledInCourse(course.id),
@@ -407,10 +405,9 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
           )}
 
           {inSession && selected.modality === 'virtual' && (
-            <JitsiMeetingRoom
+            <VideoCall
               courseId={selected.id}
-              accessCode={sessionPassword || myAccessCode || '0000'}
-              displayName="Participante"
+              isAdmin={false}
               onClose={() => setInSession(false)}
             />
           )}

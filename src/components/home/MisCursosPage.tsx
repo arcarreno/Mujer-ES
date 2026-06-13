@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { sileo } from 'sileo'
 import { getMyEnrollments, generateQrDataUrlFromPayload, unenrollFromCourse, getCourseImages, type Enrollment, type Course } from '../../lib/queries'
 import ImageCarousel from '../ui/ImageCarousel'
-import JitsiMeetingRoom from '../ui/JitsiMeetingRoom'
+import VideoCall from '../ui/VideoCall'
 
 type View = 'list' | 'detail'
 
@@ -317,10 +317,9 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
           )}
 
           {inSession && selected.modality === 'virtual' && (
-            <JitsiMeetingRoom
+            <VideoCall
               courseId={selected.id}
-              accessCode={selected.session_password || selectedEnrollment.access_code || '0000'}
-              displayName="Participante"
+              isAdmin={false}
               onClose={() => setInSession(false)}
             />
           )}

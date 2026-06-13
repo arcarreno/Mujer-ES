@@ -3,7 +3,7 @@ import { sileo } from 'sileo'
 import { getCourseEnrollments, markBulkAttendance, startVirtualSession, endVirtualSession, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
 import Skeleton from '../ui/Skeleton'
-import JitsiMeetingRoom from '../ui/JitsiMeetingRoom'
+import VideoCall from '../ui/VideoCall'
 
 interface CourseDetailPageProps {
   course: Course
@@ -17,7 +17,6 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
   const [manualMode, setManualMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [sessionActive, setSessionActive] = useState(course.session_active)
-  const [sessionPassword, setSessionPassword] = useState(course.session_password)
   const [inSession, setInSession] = useState(false)
   const [startingSession, setStartingSession] = useState(false)
 
@@ -86,7 +85,6 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
     try {
       const password = await startVirtualSession(course.id)
       setSessionActive(true)
-      setSessionPassword(password)
       setInSession(true)
       sileo.success({ title: 'Sesión iniciada', description: `Los inscriptos pueden unirse ahora. Código: ${password}` })
     } catch {
@@ -335,13 +333,10 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
       )}
 
       {inSession && (
-        <JitsiMeetingRoom
+        <VideoCall
           courseId={course.id}
-          accessCode={sessionPassword || '0000'}
-          displayName="Administrador"
           isAdmin={true}
           onClose={handleSessionClose}
-          onParticipantJoined={load}
         />
       )}
     </div>
