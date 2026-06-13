@@ -124,7 +124,7 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
   // Detail view
   if (view === 'detail' && selected && selectedEnrollment) {
     return (
-      <div className={`curso-detail-layout ${showQrPanel ? 'curso-detail-layout-with-result' : ''}`}>
+      <div className="curso-detail-layout">
         <div className="curso-detail">
           <div className="curso-detail-header">
             <button className="volver-btn-sm" onClick={goBack} type="button">

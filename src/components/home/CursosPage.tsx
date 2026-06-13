@@ -156,7 +156,7 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
 
   if (view === 'detail' && selected) {
     return (
-      <div className={`curso-detail-layout ${showQrPanel ? 'curso-detail-layout-with-result' : ''}`}>
+      <div className="curso-detail-layout">
         <div className="curso-detail">
           <div className="curso-detail-header">
             <button
@@ -367,6 +367,16 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
             )}
           </div>
 
+          {enrollmentResult && (
+            <EnrollmentResult
+              modality={enrollmentResult.modality}
+              qrCodeDataUrl={enrollmentResult.qrCodeDataUrl}
+              accessCode={enrollmentResult.accessCode}
+              courseName={enrollmentResult.courseName}
+              onClose={() => setEnrollmentResult(null)}
+            />
+          )}
+
           {(selected.cover_image_url || galleryImages.length > 0) && (
             <div className="curso-detail-images">
               <ImageCarousel
@@ -378,16 +388,6 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
             </div>
           )}
         </div>
-
-        {enrollmentResult && (
-          <EnrollmentResult
-            modality={enrollmentResult.modality}
-            qrCodeDataUrl={enrollmentResult.qrCodeDataUrl}
-            accessCode={enrollmentResult.accessCode}
-            courseName={enrollmentResult.courseName}
-            onClose={() => setEnrollmentResult(null)}
-          />
-        )}
       </div>
     )
   }
