@@ -37,18 +37,19 @@ export default function VideoGrid({
     }
   }, [screenStream])
 
+  // Get active remote speakers (excluding self)
   const activeSpeakers = participants.filter(
-    (p) => (p.micActive || p.videoActive) && p.userId !== userId
+    (p) => p.userId !== userId && (p.micActive || p.videoActive)
   )
 
   const myParticipant = participants.find((p) => p.userId === userId)
 
   return (
     <div className={`video-grid ${isScreenSharing ? 'video-grid--screenshare' : ''}`}>
-      {/* Screen share (admin only, shows when sharing) */}
+      {/* Screen share — primary fullscreen view */}
       {isScreenSharing && screenStream && (
         <div className="video-grid-screenshare">
-          <video ref={screenVideoRef} autoPlay playsInline className="video-tile-stream" />
+          <video ref={screenVideoRef} autoPlay playsInline className="video-tile-stream video-tile-stream--screenshare" />
           <div className="video-grid-screenshare-label">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
@@ -57,21 +58,14 @@ export default function VideoGrid({
             </svg>
             Pantalla compartida
           </div>
-          {/* Admin mini camera in corner */}
-          {isAdmin && localStream && myParticipant?.videoActive && (
-            <div className="video-grid-screenshare-mini">
-              <video ref={localVideoRef} autoPlay playsInline muted className="video-tile-stream" />
-              <span className="video-tile-name">{myParticipant?.username || 'Tú'}</span>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Main grid */}
-      <div className="video-grid-main">
-        {/* Local video (if not screen sharing, or if admin and screen sharing) */}
-        {!isScreenSharing && localStream && myParticipant?.videoActive && (
-          <div className="video-tile video-tile--local">
+      {/* Thumbnails row — local camera + remote participants */}
+      <div className="video-grid-thumbs">
+        {/* Local video thumbnail */}
+        {localStream && myParticipant?.videoActive && (
+          <div className="video-tile video-tile--thumb video-tile--local">
             <video ref={localVideoRef} autoPlay playsInline muted className="video-tile-stream" />
             <div className="video-tile-overlay">
               <span className="video-tile-name">{myParticipant?.username || 'Tú'}</span>
@@ -89,10 +83,25 @@ export default function VideoGrid({
           </div>
         )}
 
-        {/* Remote videos */}
+        {/* Local avatar when camera is off */}
+        {(!localStream || !myParticipant?.videoActive) && myParticipant && (
+          <div className="video-tile video-tile--thumb video-tile--local">
+            <div className="video-tile-avatar">
+              {myParticipant.avatarUrl ? (
+                <img src={myParticipant.avatarUrl} alt="" />
+              ) : (
+                <span>{myParticipant.username?.charAt(0).toUpperCase() || '?'}</span>
+              )}
+            </div>
+            <div className="video-tile-overlay">
+              <span className="video-tile-name">{myParticipant.username || 'Tú'}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Remote participant thumbnails */}
         {activeSpeakers.map((p) => {
           const stream = remoteStreams.get(p.userId)
-          if (!stream) return null
           return (
             <RemoteVideoTile
               key={p.userId}
@@ -101,20 +110,20 @@ export default function VideoGrid({
             />
           )
         })}
-
-        {/* Empty state */}
-        {activeSpeakers.length === 0 && (!localStream || !myParticipant?.videoActive) && (
-          <div className="video-grid-empty">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-              <circle cx="9" cy="7" r="4" />
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-              <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-            </svg>
-            <p>Esperando participantes con cámara activa...</p>
-          </div>
-        )}
       </div>
+
+      {/* Empty state — only when no screen share and nobody has video */}
+      {!isScreenSharing && activeSpeakers.length === 0 && (!localStream || !myParticipant?.videoActive) && (
+        <div className="video-grid-empty">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+          </svg>
+          <p>Esperando participantes con cámara activa...</p>
+        </div>
+      )}
     </div>
   )
 }
@@ -124,19 +133,28 @@ function RemoteVideoTile({
   stream,
 }: {
   participant: ParticipantState
-  stream: MediaStream
+  stream: MediaStream | undefined
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     if (videoRef.current) {
-      videoRef.current.srcObject = stream
+      videoRef.current.srcObject = stream || null
     }
   }, [stream])
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.srcObject = null
+      }
+    }
+  }, [])
+
   return (
-    <div className={`video-tile ${participant.isSpeaking ? 'video-tile--speaking' : ''}`}>
-      {participant.videoActive ? (
+    <div className={`video-tile video-tile--thumb ${participant.isSpeaking ? 'video-tile--speaking' : ''}`}>
+      {participant.videoActive && stream ? (
         <video ref={videoRef} autoPlay playsInline className="video-tile-stream" />
       ) : (
         <div className="video-tile-avatar">

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { sileo } from 'sileo'
 import { supabase } from '../../lib/supabase'
 import {
@@ -34,7 +35,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const [showChat, setShowChat] = useState(false)
   const [sessionEnded, setSessionEnded] = useState(false)
   const [kicked, setKicked] = useState(false)
-  const [ready, setReady] = useState(false)
   const managerRef = useRef<VideoCallManager | null>(null)
   const streamInitializedRef = useRef(false)
 
@@ -96,12 +96,17 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         })
       })
 
-      // Set up presence update handler
+      // Set up presence update handler — deduplicate by userId
       manager.setOnPresenceUpdate((state) => {
+        const seen = new Set<string>()
         const list: ParticipantState[] = []
         for (const [, presences] of Object.entries(state)) {
           for (const p of presences) {
-            list.push(p as ParticipantState)
+            const ps = p as ParticipantState
+            if (!seen.has(ps.userId)) {
+              seen.add(ps.userId)
+              list.push(ps)
+            }
           }
         }
         setParticipants(list.sort((a, b) => a.joinedAt - b.joinedAt))
@@ -121,7 +126,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       // Override internal handlers
       ;(manager as any).handleMuteAll = () => {
         setMicActive(false)
-        // Disable local audio track
         const stream = manager.peers.getLocalStreamRef()
         if (stream) {
           stream.getAudioTracks().forEach((t) => { t.enabled = false })
@@ -153,10 +157,8 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         try {
           const stream = await manager.peers.ensureLocalStream()
           setLocalStream(stream)
-          // Start with audio and video enabled
           setMicActive(true)
           setVideoActive(true)
-          // Track presence with active states
           await manager.signaling.trackPresence({
             userId: user.id,
             username: uname,
@@ -169,7 +171,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           })
         } catch (e) {
           console.warn('Could not get local stream:', e)
-          // Still track presence even without media
           await manager.signaling.trackPresence({
             userId: user.id,
             username: uname,
@@ -182,8 +183,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           })
         }
       }
-
-      setReady(true)
     }
 
     // Notify parent that we're in fullscreen mode
@@ -203,7 +202,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     if (!manager) return
 
     if (!micActive) {
-      // Check limit
       const presenceState = manager.signaling.getPresenceState()
       const activeMics = Object.values(presenceState)
         .flat()
@@ -212,43 +210,30 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       if (activeMics >= MAX_MIC_USERS) {
         sileo.error({
           title: 'Límite alcanzado',
-          description: `Máximo ${MAX_MIC_USERS} micrófonos activos. Esperá a que alguien silencie el suyo.`,
+          description: `Máximo ${MAX_MIC_USERS} micrófonos activos.`,
         })
         return
       }
 
-      // Enable mic
       const stream = await manager.startMic()
       setLocalStream(stream)
       setMicActive(true)
-      // Replace track in existing connections
       const audioTrack = stream.getAudioTracks()[0]
       if (audioTrack) {
         await manager.peers.replaceTrack('audio', audioTrack)
       }
       await manager.signaling.updatePresence({
-        userId,
-        username,
-        avatarUrl,
-        micActive: true,
-        videoActive,
-        isSpeaking: false,
-        screenSharing: isScreenSharing,
-        joinedAt: Date.now(),
+        userId, username, avatarUrl,
+        micActive: true, videoActive, isSpeaking: false,
+        screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
     } else {
-      // Disable mic
       await manager.toggleMic(false)
       setMicActive(false)
       await manager.signaling.updatePresence({
-        userId,
-        username,
-        avatarUrl,
-        micActive: false,
-        videoActive,
-        isSpeaking: false,
-        screenSharing: isScreenSharing,
-        joinedAt: Date.now(),
+        userId, username, avatarUrl,
+        micActive: false, videoActive, isSpeaking: false,
+        screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
     }
   }, [micActive, videoActive, isScreenSharing, userId, username, avatarUrl])
@@ -259,7 +244,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     if (!manager) return
 
     if (!videoActive) {
-      // Check limit
       const presenceState = manager.signaling.getPresenceState()
       const activeVideos = Object.values(presenceState)
         .flat()
@@ -268,43 +252,30 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       if (activeVideos >= MAX_VIDEO_USERS) {
         sileo.error({
           title: 'Límite alcanzado',
-          description: `Máximo ${MAX_VIDEO_USERS} cámaras activas. Esperá a que alguien apague la suya.`,
+          description: `Máximo ${MAX_VIDEO_USERS} cámaras activas.`,
         })
         return
       }
 
-      // Enable video
       const stream = await manager.startVideo()
       setLocalStream(stream)
       setVideoActive(true)
-      // Replace track in existing connections
       const videoTrack = stream.getVideoTracks()[0]
       if (videoTrack) {
         await manager.peers.replaceTrack('video', videoTrack)
       }
       await manager.signaling.updatePresence({
-        userId,
-        username,
-        avatarUrl,
-        micActive,
-        videoActive: true,
-        isSpeaking: false,
-        screenSharing: isScreenSharing,
-        joinedAt: Date.now(),
+        userId, username, avatarUrl,
+        micActive, videoActive: true, isSpeaking: false,
+        screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
     } else {
-      // Disable video
       await manager.toggleVideo(false)
       setVideoActive(false)
       await manager.signaling.updatePresence({
-        userId,
-        username,
-        avatarUrl,
-        micActive,
-        videoActive: false,
-        isSpeaking: false,
-        screenSharing: isScreenSharing,
-        joinedAt: Date.now(),
+        userId, username, avatarUrl,
+        micActive, videoActive: false, isSpeaking: false,
+        screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
     }
   }, [videoActive, micActive, isScreenSharing, userId, username, avatarUrl])
@@ -319,33 +290,20 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       if (stream) {
         setScreenStream(stream)
         setIsScreenSharing(true)
-
-        // Stop screen when user stops sharing via browser UI
         stream.getVideoTracks()[0].onended = async () => {
           setIsScreenSharing(false)
           setScreenStream(null)
           await manager.stopScreenShare()
           await manager.signaling.updatePresence({
-            userId,
-            username,
-            avatarUrl,
-            micActive,
-            videoActive,
-            isSpeaking: false,
-            screenSharing: false,
-            joinedAt: Date.now(),
+            userId, username, avatarUrl,
+            micActive, videoActive, isSpeaking: false,
+            screenSharing: false, joinedAt: Date.now(),
           })
         }
-
         await manager.signaling.updatePresence({
-          userId,
-          username,
-          avatarUrl,
-          micActive,
-          videoActive,
-          isSpeaking: false,
-          screenSharing: true,
-          joinedAt: Date.now(),
+          userId, username, avatarUrl,
+          micActive, videoActive, isSpeaking: false,
+          screenSharing: true, joinedAt: Date.now(),
         })
       }
     } else {
@@ -353,19 +311,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       setIsScreenSharing(false)
       setScreenStream(null)
       await manager.signaling.updatePresence({
-        userId,
-        username,
-        avatarUrl,
-        micActive,
-        videoActive,
-        isSpeaking: false,
-        screenSharing: false,
-        joinedAt: Date.now(),
+        userId, username, avatarUrl,
+        micActive, videoActive, isSpeaking: false,
+        screenSharing: false, joinedAt: Date.now(),
       })
     }
   }, [isScreenSharing, isAdmin, userId, username, avatarUrl, micActive, videoActive])
 
-  // Mute all (admin)
   const handleMuteAll = useCallback(async () => {
     const manager = managerRef.current
     if (!manager || !isAdmin) return
@@ -373,14 +325,12 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     sileo.success({ title: 'Todos silenciados', description: 'Se silenció a todos los participantes' })
   }, [isAdmin])
 
-  // Kick user (admin)
   const handleKickUser = useCallback(async (targetUserId: string) => {
     const manager = managerRef.current
     if (!manager || !isAdmin) return
     await manager.kickUser(targetUserId)
   }, [isAdmin])
 
-  // End session (admin)
   const handleEndSession = useCallback(async () => {
     const manager = managerRef.current
     if (!manager || !isAdmin) return
@@ -389,7 +339,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     onClose()
   }, [isAdmin, onClose])
 
-  // Leave call
   const handleLeave = useCallback(async () => {
     const manager = managerRef.current
     if (!manager) return
@@ -397,22 +346,17 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     onClose()
   }, [onClose])
 
-  if (sessionEnded || kicked) {
-    return (
-      <div className="video-call-overlay">
-        <div className="video-call-ended">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
-            <line x1="23" y1="1" x2="1" y2="23" />
-          </svg>
-          <h2>{kicked ? 'Fuiste expulsado' : 'Sesión finalizada'}</h2>
-          <p>{kicked ? 'El administrador te expulsó de la sesión' : 'El administrador finalizó la sesión'}</p>
-        </div>
-      </div>
-    )
-  }
+  // Deduplicate participants for display
+  const uniqueParticipants = (() => {
+    const seen = new Set<string>()
+    return participants.filter((p) => {
+      if (seen.has(p.userId)) return false
+      seen.add(p.userId)
+      return true
+    })
+  })()
 
-  return (
+  const content = (
     <div className="video-call-overlay">
       {/* Header */}
       <div className="video-call-header">
@@ -423,7 +367,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           </div>
           <CallTimer />
           <span className="video-call-participant-count">
-            {participants.length} participante{participants.length !== 1 ? 's' : ''}
+            {uniqueParticipants.length} participante{uniqueParticipants.length !== 1 ? 's' : ''}
           </span>
         </div>
         <button className="video-call-close" onClick={handleLeave} type="button">
@@ -437,24 +381,22 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
 
       {/* Main content */}
       <div className="video-call-body">
-        {/* Video grid */}
         <div className="video-call-main">
           <VideoGrid
             localStream={localStream}
             screenStream={screenStream}
             remoteStreams={remoteStreams}
-            participants={participants}
+            participants={uniqueParticipants}
             userId={userId}
             isScreenSharing={isScreenSharing}
             isAdmin={isAdmin}
           />
         </div>
 
-        {/* Side panels */}
         {showParticipants && (
           <div className="video-call-panel">
             <ParticipantList
-              participants={participants}
+              participants={uniqueParticipants}
               currentUserId={userId}
               isAdmin={isAdmin}
               onKick={handleKickUser}
@@ -495,9 +437,28 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         onMuteAll={handleMuteAll}
         onEndSession={handleEndSession}
         onLeave={handleLeave}
-        micCount={participants.filter((p) => p.micActive).length}
-        videoCount={participants.filter((p) => p.videoActive).length}
+        micCount={uniqueParticipants.filter((p) => p.micActive).length}
+        videoCount={uniqueParticipants.filter((p) => p.videoActive).length}
       />
     </div>
   )
+
+  // Use Portal to render at document body level, bypassing motion.div transform context
+  if (sessionEnded || kicked) {
+    return createPortal(
+      <div className="video-call-overlay">
+        <div className="video-call-ended">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+            <line x1="23" y1="1" x2="1" y2="23" />
+          </svg>
+          <h2>{kicked ? 'Fuiste expulsado' : 'Sesión finalizada'}</h2>
+          <p>{kicked ? 'El administrador te expulsó de la sesión' : 'El administrador finalizó la sesión'}</p>
+        </div>
+      </div>,
+      document.body
+    )
+  }
+
+  return createPortal(content, document.body)
 }
