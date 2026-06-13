@@ -21,6 +21,8 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
   const [showQrPanel, setShowQrPanel] = useState(false)
   const [qrPanelDataUrl, setQrPanelDataUrl] = useState<string | null>(null)
   const [qrLoading, setQrLoading] = useState(false)
+  const [showCodePanel, setShowCodePanel] = useState(false)
+  const [codeCopied, setCodeCopied] = useState(false)
   const [galleryImages, setGalleryImages] = useState<string[]>([])
 
   useEffect(() => {
@@ -56,6 +58,8 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
     setSelectedEnrollment(null)
     setShowQrPanel(false)
     setQrPanelDataUrl(null)
+    setShowCodePanel(false)
+    setCodeCopied(false)
   }
 
   const handleUnenroll = async () => {
@@ -80,6 +84,7 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
       return
     }
     setShowQrPanel(true)
+    setShowCodePanel(false)
     if (qrPanelDataUrl) return
     if (!selectedEnrollment?.qr_code) return
     setQrLoading(true)
@@ -90,6 +95,26 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
       sileo.error({ title: 'Error', description: 'No se pudo generar el código QR' })
     } finally {
       setQrLoading(false)
+    }
+  }
+
+  const handleShowCode = () => {
+    if (showCodePanel) {
+      setShowCodePanel(false)
+      return
+    }
+    setShowCodePanel(true)
+    setShowQrPanel(false)
+  }
+
+  const handleCopyCode = async () => {
+    if (!selectedEnrollment?.access_code) return
+    try {
+      await navigator.clipboard.writeText(selectedEnrollment.access_code)
+      setCodeCopied(true)
+      setTimeout(() => setCodeCopied(false), 2000)
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo copiar el código' })
     }
   }
 
@@ -220,10 +245,17 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
             )}
 
             {selected.modality === 'virtual' && selectedEnrollment.access_code && (
-              <div className="curso-detail-access-code">
-                <p className="curso-detail-access-code-label">Código de acceso</p>
-                <p className="curso-detail-access-code-value">{selectedEnrollment.access_code}</p>
-              </div>
+              <button
+                className={`curso-detail-qr-btn ${showCodePanel ? 'curso-detail-qr-btn-active' : ''}`}
+                onClick={handleShowCode}
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                Mi código
+              </button>
             )}
           </div>
 
@@ -259,6 +291,19 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
               ) : (
                 <p className="curso-qr-panel-error">No se pudo generar el código QR</p>
               )}
+            </div>
+          </div>
+        )}
+
+        {showCodePanel && selectedEnrollment.access_code && (
+          <div className="curso-qr-panel">
+            <div className="curso-qr-panel-card">
+              <h3 className="curso-qr-panel-title">Tu código de acceso</h3>
+              <p className="curso-qr-panel-hint">Usá este código de 4 dígitos para entrar a la videollamada</p>
+              <div className="curso-code-panel-code" onClick={handleCopyCode} role="button" tabIndex={0}>
+                {selectedEnrollment.access_code}
+              </div>
+              <p className="curso-code-panel-sub">{codeCopied ? '¡Copiado!' : 'Tocá para copiar'}</p>
             </div>
           </div>
         )}

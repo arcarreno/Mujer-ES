@@ -5696,6 +5696,33 @@ input[type="date"].form-input {
   color: #dc2626;
 }
 
+/* Access code panel — virtual courses */
+.curso-code-panel-code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #581C87;
+  background: #f5f0fa;
+  border: 2px dashed #d8b4fe;
+  border-radius: 0.75rem;
+  padding: 0.75rem 2rem;
+  letter-spacing: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-align: center;
+}
+
+.curso-code-panel-code:hover {
+  background: #ede9fe;
+}
+
+.curso-code-panel-sub {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
 .curso-detail-vacancies {
   display: flex;
   align-items: center;
