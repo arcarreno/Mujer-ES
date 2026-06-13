@@ -3,6 +3,7 @@ import { motion } from 'motion/react'
 import { sileo } from 'sileo'
 import { getMyEnrollments, generateQrDataUrlFromPayload, unenrollFromCourse, getCourseImages, type Enrollment, type Course } from '../../lib/queries'
 import ImageCarousel from '../ui/ImageCarousel'
+import JitsiMeetingRoom from '../ui/JitsiMeetingRoom'
 
 type View = 'list' | 'detail'
 
@@ -24,6 +25,7 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
   const [showCodePanel, setShowCodePanel] = useState(false)
   const [codeCopied, setCodeCopied] = useState(false)
   const [galleryImages, setGalleryImages] = useState<string[]>([])
+  const [inSession, setInSession] = useState(false)
 
   useEffect(() => {
     getMyEnrollments()
@@ -288,6 +290,19 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
                 )}
               </>
             )}
+
+            {selected.modality === 'virtual' && selected.session_active && (
+              <button
+                className="curso-detail-join-btn"
+                onClick={() => setInSession(true)}
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Entrar a clase
+              </button>
+            )}
           </div>
 
           {(selected.cover_image_url || galleryImages.length > 0) && (
@@ -299,6 +314,15 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap }: MisCurs
                 }
               />
             </div>
+          )}
+
+          {inSession && selected.modality === 'virtual' && (
+            <JitsiMeetingRoom
+              courseId={selected.id}
+              accessCode={selected.session_password || selectedEnrollment.access_code || '0000'}
+              displayName="Participante"
+              onClose={() => setInSession(false)}
+            />
           )}
         </div>
       </div>
@@ -390,6 +414,12 @@ function EnrollmentCard({ enrollment, onView, delay }: { enrollment: Enrollment 
             <span className="curso-meta-pill">
               {course.modality === 'presencial' ? 'Presencial' : 'Virtual'}
             </span>
+            {course.modality === 'virtual' && course.session_active && (
+              <span className="curso-meta-pill curso-meta-pill-live">
+                <span className="live-dot-sm" />
+                EN VIVO
+              </span>
+            )}
             {enrollment.attended && (
               <span className="curso-meta-pill">Presente</span>
             )}

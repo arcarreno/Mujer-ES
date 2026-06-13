@@ -3,6 +3,7 @@ import { sileo } from 'sileo'
 import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course } from '../../lib/queries'
 import EnrollmentResult from '../ui/EnrollmentResult'
 import ImageCarousel from '../ui/ImageCarousel'
+import JitsiMeetingRoom from '../ui/JitsiMeetingRoom'
 
 type View = 'list' | 'detail'
 
@@ -37,6 +38,8 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
   const [codeCopied, setCodeCopied] = useState(false)
   const [search, setSearch] = useState('')
   const [galleryImages, setGalleryImages] = useState<string[]>([])
+  const [inSession, setInSession] = useState(false)
+  const [sessionPassword, setSessionPassword] = useState<string | null>(null)
 
   useEffect(() => {
     listPublishedCourses()
@@ -56,6 +59,7 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
     setShowCodePanel(false)
     setCodeCopied(false)
     setGalleryImages([])
+    setSessionPassword(course.session_password)
     try {
       const [isEnrolled, full, enrollments, images] = await Promise.all([
         isEnrolledInCourse(course.id),
@@ -366,6 +370,19 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
                 )}
               </>
             )}
+
+            {enrolled && selected.modality === 'virtual' && selected.session_active && (
+              <button
+                className="curso-detail-join-btn"
+                onClick={() => setInSession(true)}
+                type="button"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="5 3 19 12 5 21 5 3" />
+                </svg>
+                Entrar a clase
+              </button>
+            )}
           </div>
 
           {enrollmentResult && (
@@ -387,6 +404,15 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
                 }
               />
             </div>
+          )}
+
+          {inSession && selected.modality === 'virtual' && (
+            <JitsiMeetingRoom
+              courseId={selected.id}
+              accessCode={sessionPassword || myAccessCode || '0000'}
+              displayName="Participante"
+              onClose={() => setInSession(false)}
+            />
           )}
         </div>
       </div>
@@ -459,6 +485,12 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
                   {curso.description && <p className="curso-card-desc">{curso.description}</p>}
                   <div className="curso-card-meta">
                     <span className="curso-meta-pill">{curso.modality === 'virtual' ? 'Virtual' : 'Presencial'}</span>
+                    {curso.session_active && curso.modality === 'virtual' && (
+                      <span className="curso-meta-pill curso-meta-pill-live">
+                        <span className="live-dot-sm" />
+                        EN VIVO
+                      </span>
+                    )}
                     {curso.location_name && <span className="curso-meta-pill">{curso.location_name}</span>}
                   </div>
                 </div>

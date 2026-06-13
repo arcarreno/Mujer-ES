@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { sileo } from 'sileo'
-import { getCourseEnrollments, markBulkAttendance, type Course, type Enrollment } from '../../lib/queries'
+import { getCourseEnrollments, markBulkAttendance, startVirtualSession, endVirtualSession, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
 import Skeleton from '../ui/Skeleton'
+import JitsiMeetingRoom from '../ui/JitsiMeetingRoom'
 
 interface CourseDetailPageProps {
   course: Course
@@ -15,6 +16,10 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
   const [scannerOpen, setScannerOpen] = useState(false)
   const [manualMode, setManualMode] = useState(false)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [sessionActive, setSessionActive] = useState(course.session_active)
+  const [sessionPassword, setSessionPassword] = useState(course.session_password)
+  const [inSession, setInSession] = useState(false)
+  const [startingSession, setStartingSession] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -76,6 +81,37 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
     load()
   }
 
+  const handleStartSession = async () => {
+    setStartingSession(true)
+    try {
+      const password = await startVirtualSession(course.id)
+      setSessionActive(true)
+      setSessionPassword(password)
+      setInSession(true)
+      sileo.success({ title: 'Sesión iniciada', description: `Los inscriptos pueden unirse ahora. Código: ${password}` })
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo iniciar la sesión' })
+    } finally {
+      setStartingSession(false)
+    }
+  }
+
+  const handleEndSession = async () => {
+    try {
+      await endVirtualSession(course.id)
+      setSessionActive(false)
+      setInSession(false)
+      sileo.success({ title: 'Sesión finalizada', description: 'La sesión virtual ha terminado' })
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo finalizar la sesión' })
+    }
+  }
+
+  const handleSessionClose = () => {
+    setInSession(false)
+    // Session stays active — admin can rejoin or end it
+  }
+
   if (loading) {
     return (
       <div className="course-detail-page">
@@ -125,6 +161,50 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
         </div>
 
         <div className="course-detail-actions">
+          {course.modality === 'virtual' && (
+            <>
+              {sessionActive && (
+                <div className="course-detail-live-badge">
+                  <span className="live-dot" />
+                  EN VIVO
+                </div>
+              )}
+              {!sessionActive ? (
+                <button
+                  className="course-detail-action-btn course-detail-action-start"
+                  onClick={handleStartSession}
+                  disabled={startingSession}
+                  type="button"
+                >
+                  {startingSession ? (
+                    <>
+                      <div className="curso-detail-spinner-light" />
+                      Iniciando...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      Iniciar Sesión Virtual
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  className="course-detail-action-btn course-detail-action-end"
+                  onClick={handleEndSession}
+                  type="button"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                  Finalizar Sesión
+                </button>
+              )}
+            </>
+          )}
           {course.modality === 'presencial' && (
             <button
               className="course-detail-action-btn course-detail-action-qr"
@@ -251,6 +331,17 @@ export default function CourseDetailPage({ course, onBack }: CourseDetailPagePro
         <QRScanner
           onScanResult={handleScanResult}
           onClose={() => setScannerOpen(false)}
+        />
+      )}
+
+      {inSession && (
+        <JitsiMeetingRoom
+          courseId={course.id}
+          accessCode={sessionPassword || '0000'}
+          displayName="Administrador"
+          isAdmin={true}
+          onClose={handleSessionClose}
+          onParticipantJoined={load}
         />
       )}
     </div>

@@ -373,6 +373,9 @@ export interface Course {
   event_time: string | null
   event_duration_minutes: number | null
   cover_image_url: string | null
+  session_active: boolean
+  session_started_at: string | null
+  session_password: string | null
   created_at: string
   updated_at: string
 }
@@ -450,7 +453,7 @@ export async function createCourse(course: {
 
 export async function updateCourse(
   id: string,
-  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published' | 'max_enrollments' | 'latitude' | 'longitude' | 'location_name' | 'event_date' | 'event_time' | 'event_duration_minutes' | 'cover_image_url'>>
+  updates: Partial<Pick<Course, 'title' | 'subtitle' | 'description' | 'modality' | 'published' | 'max_enrollments' | 'latitude' | 'longitude' | 'location_name' | 'event_date' | 'event_time' | 'event_duration_minutes' | 'cover_image_url' | 'session_active' | 'session_started_at'>>
 ): Promise<Course> {
   const { data, error } = await supabase
     .from('courses')
@@ -461,6 +464,24 @@ export async function updateCourse(
 
   if (error) throw error
   return data as Course
+}
+
+export async function startVirtualSession(courseId: string): Promise<string> {
+  const password = Math.floor(1000 + Math.random() * 9000).toString()
+  const { error } = await supabase
+    .from('courses')
+    .update({ session_active: true, session_started_at: new Date().toISOString(), session_password: password })
+    .eq('id', courseId)
+  if (error) throw error
+  return password
+}
+
+export async function endVirtualSession(courseId: string): Promise<void> {
+  const { error } = await supabase
+    .from('courses')
+    .update({ session_active: false, session_started_at: null })
+    .eq('id', courseId)
+  if (error) throw error
 }
 
 // =====================================================
