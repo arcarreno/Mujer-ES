@@ -94,6 +94,7 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
         courseName: selected.title,
       })
       if (result.qrPayload) setMyQrPayload(result.qrPayload)
+      if (result.accessCode) setMyAccessCode(result.accessCode)
     } catch (err: any) {
       sileo.error({ title: 'Error', description: err.message || 'No se pudo inscribir' })
     } finally {
