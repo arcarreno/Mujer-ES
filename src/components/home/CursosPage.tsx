@@ -306,19 +306,40 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
             )}
 
             {enrolled && selected.modality === 'presencial' && myQrPayload && (
-              <button
-                className={`curso-detail-qr-btn ${showQrPanel ? 'curso-detail-qr-btn-active' : ''}`}
-                onClick={handleShowQr}
-                type="button"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                  <rect x="14" y="14" width="3" height="3" />
-                </svg>
-                Código QR
-              </button>
+              <>
+                <button
+                  className={`curso-detail-qr-btn ${showQrPanel ? 'curso-detail-qr-btn-active' : ''}`}
+                  onClick={handleShowQr}
+                  type="button"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <rect x="14" y="14" width="3" height="3" />
+                  </svg>
+                  Código QR
+                </button>
+                {showQrPanel && (
+                  <div className="curso-inline-qr">
+                    {qrLoading ? (
+                      <div className="curso-qr-panel-loading">
+                        <div className="curso-detail-spinner" />
+                        <p>Generando código...</p>
+                      </div>
+                    ) : qrPanelDataUrl ? (
+                      <>
+                        <div className="curso-inline-qr-img">
+                          <img src={qrPanelDataUrl} alt="Código QR de asistencia" width="200" height="200" />
+                        </div>
+                        <p className="curso-inline-qr-hint">Código QR personal e intransferible</p>
+                      </>
+                    ) : (
+                      <p className="curso-qr-panel-error">No se pudo generar el código QR</p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
 
             {enrolled && selected.modality === 'virtual' && myAccessCode && (
@@ -357,30 +378,6 @@ export default function CursosPage({ onNavigateToMap }: CursosPageProps) {
             </div>
           )}
         </div>
-
-        {showQrPanel && (
-          <div className="curso-qr-panel">
-            <div className="curso-qr-panel-card">
-              <h3 className="curso-qr-panel-title">Tu código QR</h3>
-              <p className="curso-qr-panel-hint">Mostrá este código al organizador para registrar tu asistencia</p>
-              {qrLoading ? (
-                <div className="curso-qr-panel-loading">
-                  <div className="curso-detail-spinner" />
-                  <p>Generando código...</p>
-                </div>
-              ) : qrPanelDataUrl ? (
-                <>
-                  <div className="curso-qr-panel-img">
-                    <img src={qrPanelDataUrl} alt="Código QR de asistencia" width="280" height="280" />
-                  </div>
-                  <p className="curso-qr-panel-sub">Código QR personal e intransferible</p>
-                </>
-              ) : (
-                <p className="curso-qr-panel-error">No se pudo generar el código QR</p>
-              )}
-            </div>
-          </div>
-        )}
 
         {enrollmentResult && (
           <EnrollmentResult
