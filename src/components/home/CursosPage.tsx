@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { sileo } from 'sileo'
+import { supabase } from '../../lib/supabase'
 import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInCourse, isCourseFull, getCourseEnrollments, getMyEnrollmentForCourse, generateQrDataUrlFromPayload, getCourseImages, type Course } from '../../lib/queries'
 import EnrollmentResult from '../ui/EnrollmentResult'
 import ImageCarousel from '../ui/ImageCarousel'
@@ -41,11 +42,38 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const [inSession, setInSession] = useState(false)
 
+  const loadCourses = useCallback(async () => {
+    try {
+      const data = await listPublishedCourses()
+      setCourses(data)
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudieron cargar los cursos' })
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    listPublishedCourses()
-      .then(setCourses)
-      .catch(() => sileo.error({ title: 'Error', description: 'No se pudieron cargar los cursos' }))
-      .finally(() => setLoading(false))
+    loadCourses()
+  }, [loadCourses])
+
+  // Subscribe to realtime changes on courses table for session_active updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('courses-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courses' }, (payload) => {
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const updated = payload.new as Course
+          setCourses(prev => prev.map(c => c.id === updated.id ? { ...c, session_active: updated.session_active } : c))
+          // Also update selected course if viewing detail
+          setSelected(prev => prev?.id === updated.id ? { ...prev, session_active: updated.session_active } : prev)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const openDetail = async (course: Course) => {

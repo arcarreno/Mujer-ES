@@ -430,7 +430,7 @@ export class PeerManager {
     for (const [, peer] of this.peers) {
       const sender = peer.connection
         .getSenders()
-        .find((s) => s.track?.kind === kind)
+        .find((s) => s.track?.kind === kind || (!s.track && s.track === null))
       if (sender) {
         // Sender exists — replace track
         await sender.replaceTrack(track)
@@ -478,7 +478,15 @@ export class PeerManager {
       const audioTrack = this.localStream.getAudioTracks()[0]
       if (audioTrack) {
         audioTrack.enabled = active
-        await this.replaceTrack('audio', active ? audioTrack : null)
+        // Always replace with the track, just enable/disable it
+        for (const [, peer] of this.peers) {
+          const sender = peer.connection.getSenders().find(s => s.track?.kind === 'audio' || (!s.track && s.track === null))
+          if (sender) {
+            await sender.replaceTrack(active ? audioTrack : null)
+          } else if (active) {
+            peer.connection.addTrack(audioTrack, this.localStream)
+          }
+        }
       }
     }
   }
@@ -489,7 +497,15 @@ export class PeerManager {
       const videoTrack = this.localStream.getVideoTracks()[0]
       if (videoTrack) {
         videoTrack.enabled = active
-        await this.replaceTrack('video', active ? videoTrack : null)
+        // Always replace with the track, just enable/disable it
+        for (const [, peer] of this.peers) {
+          const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video' || (!s.track && s.track === null))
+          if (sender) {
+            await sender.replaceTrack(active ? videoTrack : null)
+          } else if (active) {
+            peer.connection.addTrack(videoTrack, this.localStream)
+          }
+        }
       }
     }
   }

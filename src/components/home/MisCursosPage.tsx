@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'motion/react'
 import { sileo } from 'sileo'
+import { supabase } from '../../lib/supabase'
 import { getMyEnrollments, generateQrDataUrlFromPayload, unenrollFromCourse, getCourseImages, type Enrollment, type Course } from '../../lib/queries'
 import ImageCarousel from '../ui/ImageCarousel'
 import VideoCall from '../ui/VideoCall'
@@ -28,11 +29,39 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap, onVideoCa
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const [inSession, setInSession] = useState(false)
 
+  const loadEnrollments = useCallback(async () => {
+    try {
+      const data = await getMyEnrollments()
+      setEnrollments(data)
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudieron cargar tus cursos' })
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   useEffect(() => {
-    getMyEnrollments()
-      .then(setEnrollments)
-      .catch(() => sileo.error({ title: 'Error', description: 'No se pudieron cargar tus cursos' }))
-      .finally(() => setLoading(false))
+    loadEnrollments()
+  }, [loadEnrollments])
+
+  // Subscribe to realtime changes on courses table for session_active updates
+  useEffect(() => {
+    const channel = supabase
+      .channel('courses-realtime-mis')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'courses' }, (payload) => {
+        if (payload.eventType === 'UPDATE' && payload.new) {
+          const updated = payload.new as Course
+          setEnrollments(prev => prev.map(e =>
+            e.course?.id === updated.id ? { ...e, course: { ...e.course!, session_active: updated.session_active } } : e
+          ))
+          setSelected(prev => prev?.id === updated.id ? { ...prev, session_active: updated.session_active } : prev)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [])
 
   const openDetail = async (enrollment: Enrollment & { course: Course | null }) => {

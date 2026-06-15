@@ -148,6 +148,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           setKicked(true)
           sileo.error({ title: 'Expulsado', description: 'Fuiste expulsado de la sesión' })
           setTimeout(() => {
+            manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
             manager.peers.cleanup()
             manager.signaling.leave()
             onClose()
@@ -159,6 +160,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         setSessionEnded(true)
         sileo.info({ title: 'Sesión finalizada', description: 'El administrador finalizó la sesión' })
         setTimeout(() => {
+          manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
           manager.peers.cleanup()
           manager.signaling.leave()
           onClose()
@@ -363,6 +365,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     if (!manager || !isAdmin) return
     if (!confirm('¿Finalizar la sesión para todos?')) return
     await manager.endSession()
+    // Stop all tracks explicitly before cleanup
+    manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
+    manager.peers.getScreenStreamRef()?.getTracks().forEach(t => t.stop())
     manager.peers.cleanup()
     await manager.signaling.leave()
     onClose()
@@ -371,6 +376,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const handleLeave = useCallback(async () => {
     const manager = managerRef.current
     if (!manager) return
+    // Stop all tracks explicitly before cleanup
+    manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
+    manager.peers.getScreenStreamRef()?.getTracks().forEach(t => t.stop())
     manager.peers.cleanup()
     await manager.signaling.leave()
     onClose()
