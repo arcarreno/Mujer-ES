@@ -164,13 +164,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         }, 2000)
       })
 
+      // Register chat message handler before join
+      manager.onChatMessage((msg) => {
+        setChatMessages(prev => [...prev, msg])
+      })
+
       // Join signaling channel
       await manager.join()
-
-      // Set up chat message listener
-      manager.signaling.channel?.on('broadcast', { event: 'chat-message' }, ({ payload }) => {
-        setChatMessages(prev => [...prev, payload as any])
-      })
 
       // Get local stream early (so tracks are available for peer connections)
       if (!streamInitializedRef.current) {

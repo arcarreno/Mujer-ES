@@ -109,6 +109,7 @@ export class SignalingManager {
     onEndSession: () => void
     onScreenShareStarted: (fromUserId: string) => void
     onScreenShareStopped: (fromUserId: string) => void
+    onChatMessage?: (msg: { userId: string; username: string; text: string; time: number }) => void
     onPresenceSync: () => void
     onPresenceJoin: (key: string, presence: any) => void
     onPresenceLeave: (key: string, presence: any) => void
@@ -133,6 +134,7 @@ export class SignalingManager {
       },
     })
 
+    // Add ALL handlers BEFORE subscribe (Supabase requirement)
     this.channel
       .on('broadcast', { event: 'signal' }, ({ payload }) => {
         const event = payload as SignalEvent
@@ -158,6 +160,9 @@ export class SignalingManager {
         } else if (event.type === 'screen-share-stopped' && 'fromUserId' in event) {
           this.handlers.onScreenShareStopped(event.fromUserId)
         }
+      })
+      .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
+        this.handlers.onChatMessage?.(payload as { userId: string; username: string; text: string; time: number })
       })
       .on('presence', { event: 'sync' }, () => {
         this.handlers.onPresenceSync()
@@ -201,6 +206,10 @@ export class SignalingManager {
       await supabase.removeChannel(this.channel)
       this.channel = null
     }
+  }
+
+  onChatMessage(callback: (msg: { userId: string; username: string; text: string; time: number }) => void): void {
+    this.handlers.onChatMessage = callback
   }
 }
 
@@ -699,6 +708,10 @@ export class VideoCallManager {
 
   onEndSession(callback: () => void): void {
     this._handleEndSession = callback
+  }
+
+  onChatMessage(callback: (msg: { userId: string; username: string; text: string; time: number }) => void): void {
+    this.signaling.onChatMessage(callback)
   }
 
   async toggleMic(active: boolean): Promise<void> {
