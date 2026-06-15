@@ -36,10 +36,13 @@ export default function VideoGrid({
     if (screenMainRef.current && screenStream) {
       screenMainRef.current.srcObject = screenStream
     }
+  }, [screenStream])
+
+  useEffect(() => {
     if (screenThumbRef.current && screenStream) {
       screenThumbRef.current.srcObject = screenStream
     }
-  }, [screenStream])
+  }, [screenStream, isScreenSharing])
 
   // Get active remote speakers (excluding self)
   const activeSpeakers = participants.filter(

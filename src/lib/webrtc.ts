@@ -349,9 +349,9 @@ export class PeerManager {
       this.onRemoteStream?.(remoteUserId, stream)
     }
 
-    // Handle connection state
+    // Handle connection state — only remove on 'failed', not on temporary 'disconnected'
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+      if (pc.connectionState === 'failed') {
         this.removePeer(remoteUserId)
       }
     }
@@ -428,14 +428,26 @@ export class PeerManager {
   // Replace track in all peer connections (for toggling mic/video)
   async replaceTrack(kind: 'audio' | 'video', track: MediaStreamTrack | null): Promise<void> {
     for (const [, peer] of this.peers) {
-      const sender = peer.connection
-        .getSenders()
-        .find((s) => s.track?.kind === kind || (!s.track && s.track === null))
+      // Find sender by transceiver mid or by track kind
+      const senders = peer.connection.getSenders()
+      const sender = senders.find((s) => {
+        if (s.track?.kind === kind) return true
+        // For null tracks, match by transceiver mid (audio/video)
+        if (!s.track) {
+          const transceivers = peer.connection.getTransceivers()
+          const idx = senders.indexOf(s)
+          const tc = transceivers[idx]
+          if (tc && tc.mid) {
+            return (kind === 'audio' && (tc.mid === '0' || tc.mid.includes('audio'))) ||
+                   (kind === 'video' && (tc.mid === '1' || tc.mid.includes('video')))
+          }
+          return false
+        }
+        return false
+      })
       if (sender) {
-        // Sender exists — replace track
         await sender.replaceTrack(track)
       } else if (track) {
-        // No sender yet — add track to peer connection
         peer.connection.addTrack(track, this.localStream!)
       }
     }
@@ -478,15 +490,7 @@ export class PeerManager {
       const audioTrack = this.localStream.getAudioTracks()[0]
       if (audioTrack) {
         audioTrack.enabled = active
-        // Always replace with the track, just enable/disable it
-        for (const [, peer] of this.peers) {
-          const sender = peer.connection.getSenders().find(s => s.track?.kind === 'audio' || (!s.track && s.track === null))
-          if (sender) {
-            await sender.replaceTrack(active ? audioTrack : null)
-          } else if (active) {
-            peer.connection.addTrack(audioTrack, this.localStream)
-          }
-        }
+        await this.replaceTrack('audio', active ? audioTrack : null)
       }
     }
   }
@@ -497,15 +501,7 @@ export class PeerManager {
       const videoTrack = this.localStream.getVideoTracks()[0]
       if (videoTrack) {
         videoTrack.enabled = active
-        // Always replace with the track, just enable/disable it
-        for (const [, peer] of this.peers) {
-          const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video' || (!s.track && s.track === null))
-          if (sender) {
-            await sender.replaceTrack(active ? videoTrack : null)
-          } else if (active) {
-            peer.connection.addTrack(videoTrack, this.localStream)
-          }
-        }
+        await this.replaceTrack('video', active ? videoTrack : null)
       }
     }
   }

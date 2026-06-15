@@ -39,6 +39,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const [kicked, setKicked] = useState(false)
   const managerRef = useRef<VideoCallManager | null>(null)
   const streamInitializedRef = useRef(false)
+  const userIdRef = useRef('')
 
   // Initialize
   useEffect(() => {
@@ -47,6 +48,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       if (!user) return
 
       setUserId(user.id)
+      userIdRef.current = user.id
 
       // Get username and avatar
       const { data: profile } = await supabase
@@ -112,9 +114,10 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           }
         }
         // Always include local participant with current state
+        const myId = userIdRef.current
         setParticipants(prev => {
-          const local = prev.find(p => p.userId === userId)
-          if (local && !seen.has(userId)) {
+          const local = prev.find(p => p.userId === myId)
+          if (local && !seen.has(myId)) {
             list.push(local)
           }
           return list.sort((a, b) => a.joinedAt - b.joinedAt)
@@ -133,13 +136,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       }
 
       // Override internal handlers
-      ;(manager as any).handleMuteAll = () => {
+      ;(manager as any).handleMuteAll = async () => {
+        await manager.toggleMic(false)
         setMicActive(false)
-        const stream = manager.peers.getLocalStreamRef()
-        if (stream) {
-          stream.getAudioTracks().forEach((t) => { t.enabled = false })
-        }
-        manager.peers.replaceTrack('audio', null)
         sileo.info({ title: 'Silenciado', description: 'El administrador silenció tu micrófono' })
       }
 
@@ -181,14 +180,17 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         try {
           const stream = await manager.peers.ensureLocalStream()
           setLocalStream(stream)
-          setMicActive(true)
-          setVideoActive(true)
+          // Only set active if the stream actually has the tracks
+          const hasAudio = stream.getAudioTracks().length > 0
+          const hasVideo = stream.getVideoTracks().length > 0
+          setMicActive(hasAudio)
+          setVideoActive(hasVideo)
           const presenceData: ParticipantState = {
             userId: user.id,
             username: uname,
             avatarUrl: aUrl,
-            micActive: true,
-            videoActive: true,
+            micActive: hasAudio,
+            videoActive: hasVideo,
             isSpeaking: false,
             screenSharing: false,
             joinedAt: Date.now(),
@@ -246,11 +248,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
 
       const stream = await manager.startMic()
       setLocalStream(stream)
-      setMicActive(true)
+      // Re-enable the audio track in case it was disabled
       const audioTrack = stream.getAudioTracks()[0]
       if (audioTrack) {
-        await manager.peers.replaceTrack('audio', audioTrack)
+        audioTrack.enabled = true
       }
+      setMicActive(true)
+      await manager.peers.toggleMic(true)
       await manager.signaling.updatePresence({
         userId, username, avatarUrl,
         micActive: true, videoActive, isSpeaking: false,
@@ -288,11 +292,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
 
       const stream = await manager.startVideo()
       setLocalStream(stream)
-      setVideoActive(true)
+      // Re-enable the video track in case it was disabled
       const videoTrack = stream.getVideoTracks()[0]
       if (videoTrack) {
-        await manager.peers.replaceTrack('video', videoTrack)
+        videoTrack.enabled = true
       }
+      setVideoActive(true)
+      await manager.peers.toggleVideo(true)
       await manager.signaling.updatePresence({
         userId, username, avatarUrl,
         micActive, videoActive: true, isSpeaking: false,
