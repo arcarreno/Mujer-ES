@@ -1,24 +1,27 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense, lazy } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import AdminBottomNav, { type AdminTabKey } from './AdminBottomNav'
-import AdminDashboard from './AdminDashboard'
-import ManageUsers from './ManageUsers'
-import AdminCursos from './AdminCursos'
-import CourseDetailPage from './CourseDetailPage'
-import CreateCoursePage from './CreateCoursePage'
-import CreateUserPage from './CreateUserPage'
-import AdminChats from './AdminChats'
-import AdminReports from './AdminReports'
-import MapPage from '../home/MapPage'
-import ProfilePage from '../home/ProfilePage'
-import ChatView from '../home/ChatView'
+import LoadingFallback from '../ui/LoadingFallback'
 import { createDMConversation } from '../../lib/queries'
-import UserDetailPage from './UserDetailPage'
 import { signOut } from '../../lib/queries'
 import { listUsers, type UserRow } from '../../lib/admin'
 import { supabase } from '../../lib/supabase'
 import type { Course } from '../../lib/queries'
+
+// Lazy load admin tab pages
+const AdminDashboard = lazy(() => import('./AdminDashboard'))
+const ManageUsers = lazy(() => import('./ManageUsers'))
+const AdminCursos = lazy(() => import('./AdminCursos'))
+const CourseDetailPage = lazy(() => import('./CourseDetailPage'))
+const CreateCoursePage = lazy(() => import('./CreateCoursePage'))
+const CreateUserPage = lazy(() => import('./CreateUserPage'))
+const AdminChats = lazy(() => import('./AdminChats'))
+const AdminReports = lazy(() => import('./AdminReports'))
+const MapPage = lazy(() => import('../home/MapPage'))
+const ProfilePage = lazy(() => import('../home/ProfilePage'))
+const ChatView = lazy(() => import('../home/ChatView'))
+const UserDetailPage = lazy(() => import('./UserDetailPage'))
 
 interface AdminLayoutProps {
   username: string
@@ -132,35 +135,43 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
 
       <main className="home-main" style={selectedUser ? { paddingBottom: 0 } : undefined}>
         {selectedCourse ? (
-          <CourseDetailPage
-            course={selectedCourse}
-            onBack={() => setSelectedCourse(null)}
-            onVideoCallFullscreenChange={handleVideoCallFullscreenChange}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <CourseDetailPage
+              course={selectedCourse}
+              onBack={() => setSelectedCourse(null)}
+              onVideoCallFullscreenChange={handleVideoCallFullscreenChange}
+            />
+          </Suspense>
         ) : showCreateCourse ? (
-          <CreateCoursePage
-            onCreated={(course: Course) => {
-              setShowCreateCourse(false)
-              setActiveTab('cursos')
-              sileo.success({ title: 'Curso creado', description: `"${course.title}" fue creado exitosamente` })
-            }}
-            onBack={() => setShowCreateCourse(false)}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <CreateCoursePage
+              onCreated={(course: Course) => {
+                setShowCreateCourse(false)
+                setActiveTab('cursos')
+                sileo.success({ title: 'Curso creado', description: `"${course.title}" fue creado exitosamente` })
+              }}
+              onBack={() => setShowCreateCourse(false)}
+            />
+          </Suspense>
         ) : showCreateUser ? (
-          <CreateUserPage
-            onCreated={() => {
-              setShowCreateUser(false)
-              setActiveTab('users')
-            }}
-            onBack={() => setShowCreateUser(false)}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <CreateUserPage
+              onCreated={() => {
+                setShowCreateUser(false)
+                setActiveTab('users')
+              }}
+              onBack={() => setShowCreateUser(false)}
+            />
+          </Suspense>
         ) : selectedUser ? (
-          <UserDetailPage
-            user={selectedUser}
-            currentUserId={currentUserId}
-            onBack={handleCloseUser}
-            onUpdate={() => {}}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <UserDetailPage
+              user={selectedUser}
+              currentUserId={currentUserId}
+              onBack={handleCloseUser}
+              onUpdate={() => {}}
+            />
+          </Suspense>
         ) : showReports ? (
           <div className="fullscreen-overlay-page">
             <button
@@ -176,7 +187,9 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
               </div>
               <p className="volver-btn-sm-text">Volver</p>
             </button>
-            <AdminReports />
+            <Suspense fallback={<LoadingFallback />}>
+              <AdminReports />
+            </Suspense>
           </div>
         ) : showMapas ? (
           <div className="fullscreen-overlay-page">
@@ -193,13 +206,17 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
               </div>
               <p className="volver-btn-sm-text">Volver</p>
             </button>
-            <MapPage />
+            <Suspense fallback={<LoadingFallback />}>
+              <MapPage />
+            </Suspense>
           </div>
         ) : adminDMChat ? (
-          <ChatView
-            conversationId={adminDMChat}
-            onBack={() => setAdminDMChat(null)}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <ChatView
+              conversationId={adminDMChat}
+              onBack={() => setAdminDMChat(null)}
+            />
+          </Suspense>
         ) : (
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
@@ -210,20 +227,22 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.3 }}
               >
-                <AdminDashboard
-                  userCount={userCount}
-                  blockedCount={blockedCount}
-                  onGoToUsers={() => setActiveTab('users')}
-                  onGoToChats={() => {
-                    setChatFullscreen(true)
-                  }}
-                  onGoToReports={() => {
-                    setShowReports(true)
-                  }}
-                  onGoToMapas={() => {
-                    setShowMapas(true)
-                  }}
-                />
+                <Suspense fallback={<LoadingFallback />}>
+                  <AdminDashboard
+                    userCount={userCount}
+                    blockedCount={blockedCount}
+                    onGoToUsers={() => setActiveTab('users')}
+                    onGoToChats={() => {
+                      setChatFullscreen(true)
+                    }}
+                    onGoToReports={() => {
+                      setShowReports(true)
+                    }}
+                    onGoToMapas={() => {
+                      setShowMapas(true)
+                    }}
+                  />
+                </Suspense>
               </motion.div>
             )}
             {activeTab === 'users' && (
@@ -234,12 +253,14 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
               >
-                <ManageUsers
-                  onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }}
-                  onCreateUser={() => setShowCreateUser(true)}
-                  onSelectUser={handleSelectUser}
-                  onSendMessage={handleSendMessage}
-                />
+                <Suspense fallback={<LoadingFallback />}>
+                  <ManageUsers
+                    onCountsChange={(u, b) => { setUserCount(u); setBlockedCount(b) }}
+                    onCreateUser={() => setShowCreateUser(true)}
+                    onSelectUser={handleSelectUser}
+                    onSendMessage={handleSendMessage}
+                  />
+                </Suspense>
               </motion.div>
             )}
             {activeTab === 'cursos' && (
@@ -250,7 +271,9 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
               >
-                <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} onSelectCourse={setSelectedCourse} />
+                <Suspense fallback={<LoadingFallback />}>
+                  <AdminCursos onCreateCourse={() => setShowCreateCourse(true)} onSelectCourse={setSelectedCourse} />
+                </Suspense>
               </motion.div>
             )}
             {activeTab === 'chats' && (
@@ -261,7 +284,9 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
               >
-                <AdminChats onChatStateChange={handleChatFullscreenChange} />
+                <Suspense fallback={<LoadingFallback />}>
+                  <AdminChats onChatStateChange={handleChatFullscreenChange} />
+                </Suspense>
               </motion.div>
             )}
             {activeTab === 'perfil' && (
@@ -272,7 +297,9 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
                 exit={{ opacity: 0, x: 20 }}
                 transition={{ duration: 0.3 }}
               >
-                <ProfilePage />
+                <Suspense fallback={<LoadingFallback />}>
+                  <ProfilePage />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>

@@ -1,13 +1,16 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, Suspense, lazy } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import BottomNav, { type TabKey } from './BottomNav'
-import CursosPage from './CursosPage'
-import MisCursosPage from './MisCursosPage'
-import MapPage from './MapPage'
-import ChatsPage from './ChatsPage'
-import ProfilePage from './ProfilePage'
+import LoadingFallback from '../ui/LoadingFallback'
 import { signOut } from '../../lib/queries'
+
+// Lazy load tab pages
+const CursosPage = lazy(() => import('./CursosPage'))
+const MisCursosPage = lazy(() => import('./MisCursosPage'))
+const MapPage = lazy(() => import('./MapPage'))
+const ChatsPage = lazy(() => import('./ChatsPage'))
+const ProfilePage = lazy(() => import('./ProfilePage'))
 
 interface HomeLayoutProps {
   username: string
@@ -83,7 +86,9 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <CursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+              <Suspense fallback={<LoadingFallback />}>
+                <CursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+              </Suspense>
             </motion.div>
           )}
           {activeTab === 'mis-cursos' && (
@@ -94,7 +99,9 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <MisCursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+              <Suspense fallback={<LoadingFallback />}>
+                <MisCursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+              </Suspense>
             </motion.div>
           )}
           {activeTab === 'mapa' && (
@@ -106,7 +113,9 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               transition={{ duration: 0.3 }}
               style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
             >
-              <MapPage />
+              <Suspense fallback={<LoadingFallback />}>
+                <MapPage />
+              </Suspense>
             </motion.div>
           )}
           {activeTab === 'chats' && (
@@ -117,7 +126,9 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <ChatsPage onChatStateChange={handleChatFullscreenChange} />
+              <Suspense fallback={<LoadingFallback />}>
+                <ChatsPage onChatStateChange={handleChatFullscreenChange} />
+              </Suspense>
             </motion.div>
           )}
           {activeTab === 'perfil' && (
@@ -128,7 +139,9 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
               exit={{ opacity: 0, x: 20 }}
               transition={{ duration: 0.3 }}
             >
-              <ProfilePage />
+              <Suspense fallback={<LoadingFallback />}>
+                <ProfilePage />
+              </Suspense>
             </motion.div>
           )}
         </AnimatePresence>

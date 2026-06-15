@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense, lazy } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import { signInWithIdentifier } from '../lib/queries'
-import Register from './Register'
-import RecoveryFlow from './recovery/RecoveryFlow'
+import LoadingFallback from './ui/LoadingFallback'
 import SubmitButton from './ui/SubmitButton'
+
+// Lazy load heavy child components
+const Register = lazy(() => import('./Register'))
+const RecoveryFlow = lazy(() => import('./recovery/RecoveryFlow'))
 
 interface LoginProps {
   onBack?: () => void
@@ -57,7 +60,7 @@ export default function Login({ onBack }: LoginProps) {
 
     sileo.success({
       title: '¡Bienvenida de vuelta!',
-      description: 'Iniciando sesión...',
+      description: 'Ya estas adentro de tu cuenta 💜',
     })
   }
 
@@ -199,7 +202,9 @@ export default function Login({ onBack }: LoginProps) {
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
               >
-                <Register onBack={() => setShowRegister(false)} />
+                <Suspense fallback={<LoadingFallback />}>
+                  <Register onBack={() => setShowRegister(false)} />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>
@@ -214,16 +219,18 @@ export default function Login({ onBack }: LoginProps) {
             className="login-visual-spline"
             title="Spline 3D"
           />
-          <p className="login-visual-text">Cada mujer merece ser escuchada</p>
+          <p className="login-visual-text">TU LUZ SIGUE AHI</p>
         </div>
       </div>
 
       <AnimatePresence>
         {showForgot && (
-          <RecoveryFlow
-            key="recovery-flow"
-            onClose={() => setShowForgot(false)}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <RecoveryFlow
+              key="recovery-flow"
+              onClose={() => setShowForgot(false)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
     </motion.div>

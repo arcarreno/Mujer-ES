@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense, lazy } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { Toaster, sileo } from 'sileo'
 import { supabase } from './lib/supabase'
@@ -12,12 +12,16 @@ import useNetworkStatus from './hooks/useNetworkStatus'
 import Carousel from './components/Carousel'
 import BlurText from './components/BlurText'
 import Login from './components/Login'
-import WelcomeForm from './components/form/WelcomeForm'
-import HomeLayout from './components/home/HomeLayout'
-import AdminLayout from './components/admin/AdminLayout'
+import LoadingFallback from './components/ui/LoadingFallback'
+import ErrorBoundary from './components/ui/ErrorBoundary'
+
+// Lazy load heavy layouts (admin, home)
+const WelcomeForm = lazy(() => import('./components/form/WelcomeForm'))
+const HomeLayout = lazy(() => import('./components/home/HomeLayout'))
+const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
 
 const images = Array.from({ length: 11 }, (_, i) => ({
-  src: `/images/image ${i + 1}.jpeg`,
+  src: `/images/image ${i + 1}.webp`,
   alt: `Image ${i + 1}`,
   href: '#',
 }))
@@ -184,12 +188,16 @@ function App() {
           )}
 
           {phase === 'welcome-form' && user && sessionData.profile && (
-            <WelcomeForm
-              key={`welcome-form-${formCheckKey}`}
-              userId={user.id}
-              username={sessionData.profile.username}
-              onComplete={handleFormComplete}
-            />
+            <ErrorBoundary>
+              <Suspense fallback={<LoadingFallback />}>
+                <WelcomeForm
+                  key={`welcome-form-${formCheckKey}`}
+                  userId={user.id}
+                  username={sessionData.profile.username}
+                  onComplete={handleFormComplete}
+                />
+              </Suspense>
+            </ErrorBoundary>
           )}
 
           {phase === 'home' && user && sessionData.profile && (
@@ -201,11 +209,15 @@ function App() {
               transition={{ duration: 0.4 }}
               className="absolute inset-0 z-20"
             >
-              {sessionData.isAdmin ? (
-                <AdminLayout username={sessionData.profile.username} onLogout={handleLogout} />
-              ) : (
-                <HomeLayout username={sessionData.profile.username} onLogout={handleLogout} />
-              )}
+              <ErrorBoundary>
+                <Suspense fallback={<LoadingFallback />}>
+                  {sessionData.isAdmin ? (
+                    <AdminLayout username={sessionData.profile.username} onLogout={handleLogout} />
+                  ) : (
+                    <HomeLayout username={sessionData.profile.username} onLogout={handleLogout} />
+                  )}
+                </Suspense>
+              </ErrorBoundary>
             </motion.div>
           )}
         </AnimatePresence>
