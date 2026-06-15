@@ -4,7 +4,6 @@ import { sileo } from 'sileo'
 import { getMyEnrollments, generateQrDataUrlFromPayload, unenrollFromCourse, getCourseImages, type Enrollment, type Course } from '../../lib/queries'
 import ImageCarousel from '../ui/ImageCarousel'
 import VideoCall from '../ui/VideoCall'
-import AccessCodeModal from '../ui/AccessCodeModal'
 
 type View = 'list' | 'detail'
 
@@ -28,7 +27,6 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap, onVideoCa
   const [codeCopied, setCodeCopied] = useState(false)
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const [inSession, setInSession] = useState(false)
-  const [showAccessModal, setShowAccessModal] = useState(false)
 
   useEffect(() => {
     getMyEnrollments()
@@ -297,7 +295,7 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap, onVideoCa
             {selected.modality === 'virtual' && selected.session_active && (
               <button
                 className="curso-detail-join-btn"
-                onClick={() => setShowAccessModal(true)}
+                onClick={() => setInSession(true)}
                 type="button"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -327,17 +325,6 @@ export default function MisCursosPage({ onViewCourse, onNavigateToMap, onVideoCa
               onFullscreenChange={onVideoCallFullscreenChange}
             />
           )}
-
-          <AccessCodeModal
-            isOpen={showAccessModal}
-            onClose={() => setShowAccessModal(false)}
-            onAccessGranted={() => {
-              setShowAccessModal(false)
-              setInSession(true)
-            }}
-            courseTitle={selected.title}
-            expectedCode={selected.session_password}
-          />
         </div>
       </div>
     )
