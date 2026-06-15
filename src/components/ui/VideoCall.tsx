@@ -33,6 +33,8 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const [isScreenSharing, setIsScreenSharing] = useState(false)
   const [showParticipants, setShowParticipants] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [chatMessage, setChatMessage] = useState('')
+  const [chatMessages, setChatMessages] = useState<{ userId: string; username: string; text: string; time: number }[]>([])
   const [sessionEnded, setSessionEnded] = useState(false)
   const [kicked, setKicked] = useState(false)
   const managerRef = useRef<VideoCallManager | null>(null)
@@ -165,6 +167,11 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
 
       // Join signaling channel
       await manager.join()
+
+      // Set up chat message listener
+      manager.signaling.channel?.on('broadcast', { event: 'chat-message' }, ({ payload }) => {
+        setChatMessages(prev => [...prev, payload as any])
+      })
 
       // Get local stream early (so tracks are available for peer connections)
       if (!streamInitializedRef.current) {
@@ -369,6 +376,24 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     onClose()
   }, [onClose])
 
+  const handleSendChat = useCallback(async () => {
+    const manager = managerRef.current
+    if (!manager || !chatMessage.trim()) return
+    const msg = {
+      userId,
+      username,
+      text: chatMessage.trim(),
+      time: Date.now(),
+    }
+    await manager.signaling.channel?.send({
+      type: 'broadcast',
+      event: 'chat-message',
+      payload: msg,
+    })
+    setChatMessages(prev => [...prev, msg])
+    setChatMessage('')
+  }, [chatMessage, userId, username])
+
   // Deduplicate participants for display
   const uniqueParticipants = (() => {
     const seen = new Set<string>()
@@ -440,10 +465,31 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
               </button>
             </div>
             <div className="video-call-chat-messages">
-              <p className="video-call-chat-empty">El chat del curso está disponible en la pestaña de Chats</p>
+              {chatMessages.length === 0 ? (
+                <p className="video-call-chat-empty">No hay mensajes aún</p>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  <div key={i} className={`video-call-chat-msg ${msg.userId === userId ? 'own' : ''}`}>
+                    <span className="video-call-chat-msg-name">{msg.username}</span>
+                    <p className="video-call-chat-msg-text">{msg.text}</p>
+                  </div>
+                ))
+              )}
             </div>
             <div className="video-call-chat-input">
-              <input type="text" placeholder="Escribí un mensaje..." disabled />
+              <input
+                type="text"
+                placeholder="Escribí un mensaje..."
+                value={chatMessage}
+                onChange={(e) => setChatMessage(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSendChat() }}
+              />
+              <button className="video-call-chat-send" onClick={handleSendChat} type="button">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
             </div>
           </div>
         )}

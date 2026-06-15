@@ -7744,10 +7744,12 @@ input[type="date"].form-input {
 .video-call-chat-input {
   padding: 12px 16px;
   border-top: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  gap: 8px;
 }
 
 .video-call-chat-input input {
-  width: 100%;
+  flex: 1;
   background: rgba(255,255,255,0.1);
   border: 1px solid rgba(255,255,255,0.2);
   border-radius: 8px;
@@ -7763,6 +7765,53 @@ input[type="date"].form-input {
 
 .video-call-chat-input input:focus {
   border-color: rgba(255,255,255,0.4);
+}
+
+.video-call-chat-send {
+  background: #059669;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.video-call-chat-send:hover {
+  background: #047857;
+}
+
+.video-call-chat-msg {
+  margin-bottom: 12px;
+}
+
+.video-call-chat-msg-name {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #9ca3af;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.video-call-chat-msg-text {
+  font-size: 0.85rem;
+  color: #fff;
+  margin: 0;
+  background: rgba(255,255,255,0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.video-call-chat-msg.own .video-call-chat-msg-name {
+  color: #059669;
+}
+
+.video-call-chat-msg.own .video-call-chat-msg-text {
+  background: #059669;
 }
 
 .video-call-ended {

@@ -94,7 +94,7 @@ const RTC_CONFIG: RTCConfiguration = {
 // =====================================================
 
 export class SignalingManager {
-  private channel: RealtimeChannel | null = null
+  channel: RealtimeChannel | null = null
   private courseId: string
   private handlers: {
     onOffer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
@@ -239,7 +239,25 @@ export class PeerManager {
   async getLocalStream(constraints: MediaStreamConstraints = { audio: true, video: true }): Promise<MediaStream> {
     if (!this.localStream) {
       this.localStream = await navigator.mediaDevices.getUserMedia(constraints)
+      return this.localStream
     }
+
+    // Add missing tracks to existing stream
+    if (constraints.video && !this.localStream.getVideoTracks().length) {
+      const videoStream = await navigator.mediaDevices.getUserMedia({ video: true })
+      const videoTrack = videoStream.getVideoTracks()[0]
+      if (videoTrack) {
+        this.localStream.addTrack(videoTrack)
+      }
+    }
+    if (constraints.audio && !this.localStream.getAudioTracks().length) {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const audioTrack = audioStream.getAudioTracks()[0]
+      if (audioTrack) {
+        this.localStream.addTrack(audioTrack)
+      }
+    }
+
     return this.localStream
   }
 
@@ -414,7 +432,11 @@ export class PeerManager {
         .getSenders()
         .find((s) => s.track?.kind === kind)
       if (sender) {
+        // Sender exists — replace track
         await sender.replaceTrack(track)
+      } else if (track) {
+        // No sender yet — add track to peer connection
+        peer.connection.addTrack(track, this.localStream!)
       }
     }
   }
