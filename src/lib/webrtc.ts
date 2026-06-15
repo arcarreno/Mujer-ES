@@ -25,6 +25,7 @@ export interface RemotePeer {
   micActive: boolean
   videoActive: boolean
   isSpeaking: boolean
+  polite: boolean
 }
 
 export type SignalEvent =
@@ -69,7 +70,7 @@ export function canEnableVideo(presenceState: Record<string, any[]>): boolean {
 }
 
 // =====================================================
-// RTC CONFIGURATION
+// RTC CONFIGURATION (W3C §4.2)
 // =====================================================
 
 const RTC_CONFIG: RTCConfiguration = {
@@ -87,6 +88,9 @@ const RTC_CONFIG: RTCConfiguration = {
       credential: 'openrelayproject',
     },
   ],
+  iceCandidatePoolSize: 2,
+  bundlePolicy: 'balanced',
+  rtcpMuxPolicy: 'require',
 }
 
 // =====================================================
@@ -133,9 +137,8 @@ export class SignalingManager {
       .on('broadcast', { event: 'signal' }, ({ payload }) => {
         const event = payload as SignalEvent
 
-        // Filter: only process signals targeted to me (or broadcasts to all)
         if ('targetUserId' in event && event.targetUserId !== this.myUserId) {
-          return // Not for me, ignore
+          return
         }
 
         if (event.type === 'offer' && 'fromUserId' in event) {
@@ -165,11 +168,7 @@ export class SignalingManager {
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
         this.handlers.onPresenceLeave(key, leftPresences[0])
       })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          // Presence is tracked after subscription
-        }
-      })
+      .subscribe()
   }
 
   async trackPresence(state: ParticipantState): Promise<void> {
@@ -206,7 +205,7 @@ export class SignalingManager {
 }
 
 // =====================================================
-// WEBRTC PEER MANAGER (Hub-and-Spoke)
+// WEBRTC PEER MANAGER (Perfect Negotiation - W3C §10.7)
 // =====================================================
 
 export class PeerManager {
@@ -217,12 +216,14 @@ export class PeerManager {
   private myUserId: string
   private onRemoteStream: ((userId: string, stream: MediaStream) => void) | null = null
   private onPeerRemoved: ((userId: string) => void) | null = null
+  private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
 
-  constructor(
-    signaling: SignalingManager,
-    myUserId: string,
-    _isAdmin: boolean
-  ) {
+  // Perfect Negotiation state per peer
+  private makingOffer: Map<string, boolean> = new Map()
+  private ignoreOffer: Map<string, boolean> = new Map()
+  private isSettingRemoteAnswerPending: Map<string, boolean> = new Map()
+
+  constructor(signaling: SignalingManager, myUserId: string, _isAdmin: boolean) {
     this.signaling = signaling
     this.myUserId = myUserId
   }
@@ -235,43 +236,18 @@ export class PeerManager {
     this.onPeerRemoved = callback
   }
 
-  // Get or create local stream - called early so tracks are available
-  async getLocalStream(constraints: MediaStreamConstraints = { audio: true, video: true }): Promise<MediaStream> {
-    if (!this.localStream) {
-      this.localStream = await navigator.mediaDevices.getUserMedia(constraints)
-      return this.localStream
-    }
+  // =====================================================
+  // LOCAL STREAM MANAGEMENT
+  // =====================================================
 
-    // Add missing tracks to existing stream
-    if (constraints.video && !this.localStream.getVideoTracks().length) {
-      const videoStream = await navigator.mediaDevices.getUserMedia({ video: true })
-      const videoTrack = videoStream.getVideoTracks()[0]
-      if (videoTrack) {
-        this.localStream.addTrack(videoTrack)
-      }
-    }
-    if (constraints.audio && !this.localStream.getAudioTracks().length) {
-      const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const audioTrack = audioStream.getAudioTracks()[0]
-      if (audioTrack) {
-        this.localStream.addTrack(audioTrack)
-      }
-    }
-
-    return this.localStream
-  }
-
-  // Ensure we have a local stream (create with audio+video if needed)
   async ensureLocalStream(): Promise<MediaStream> {
     if (!this.localStream) {
       try {
         this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
       } catch {
-        // Fallback: try audio only
         try {
           this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
         } catch {
-          // No media at all
           this.localStream = new MediaStream()
         }
       }
@@ -316,40 +292,96 @@ export class PeerManager {
     }
   }
 
-  // Create a peer connection to a remote user
-  private createPeerConnection(remoteUserId: string): RTCPeerConnection {
+  getLocalStreamRef(): MediaStream | null {
+    return this.localStream
+  }
+
+  getScreenStreamRef(): MediaStream | null {
+    return this.screenStream
+  }
+
+  // =====================================================
+  // PEER CONNECTION (W3C §4.4 + Perfect Negotiation §10.7)
+  // =====================================================
+
+  private createPeerConnection(remoteUserId: string, polite: boolean): RTCPeerConnection {
     const pc = new RTCPeerConnection(RTC_CONFIG)
 
-    // Add local tracks (even if disabled - we'll replaceTrack later)
+    // Initialize Perfect Negotiation state for this peer
+    this.makingOffer.set(remoteUserId, false)
+    this.ignoreOffer.set(remoteUserId, false)
+    this.isSettingRemoteAnswerPending.set(remoteUserId, false)
+
+    // Add local tracks (W3C §10.1 — tracks added before offer)
     if (this.localStream) {
-      this.localStream.getTracks().forEach((track) => {
+      for (const track of this.localStream.getTracks()) {
         pc.addTrack(track, this.localStream!)
-      })
+      }
     }
 
-    // Handle ICE candidates
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
+    // If screen sharing is active, replace video track
+    if (this.screenStream) {
+      const screenTrack = this.screenStream.getVideoTracks()[0]
+      if (screenTrack) {
+        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
+        if (videoSender) {
+          videoSender.replaceTrack(screenTrack)
+        }
+      }
+    }
+
+    // ICE candidates → send via signaling
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) {
         this.signaling.sendSignal({
           type: 'ice-candidate',
           fromUserId: this.myUserId,
           targetUserId: remoteUserId,
-          candidate: event.candidate.toJSON(),
+          candidate: candidate.toJSON(),
         })
       }
     }
 
-    // Handle remote stream
-    pc.ontrack = (event) => {
-      const [stream] = event.streams
-      const existing = this.peers.get(remoteUserId)
-      if (existing) {
-        existing.stream = stream
+    // negotiationneeded → implicit offer (W3C §10.1)
+    pc.onnegotiationneeded = async () => {
+      try {
+        this.makingOffer.set(remoteUserId, true)
+        await pc.setLocalDescription()
+        await this.signaling.sendSignal({
+          type: 'offer',
+          fromUserId: this.myUserId,
+          targetUserId: remoteUserId,
+          sdp: pc.localDescription!.toJSON(),
+        })
+      } catch (e) {
+        console.error('[WebRTC] negotiationneeded error:', e)
+      } finally {
+        this.makingOffer.set(remoteUserId, false)
       }
-      this.onRemoteStream?.(remoteUserId, stream)
     }
 
-    // Handle connection state — only remove on 'failed', not on temporary 'disconnected'
+    // ontrack → receive remote stream (W3C §10.1 pattern)
+    pc.ontrack = ({ track, streams }) => {
+      track.onunmute = () => {
+        if (this.peers.get(remoteUserId)?.stream) return
+        if (streams[0]) {
+          const existing = this.peers.get(remoteUserId)
+          if (existing) {
+            existing.stream = streams[0]
+          }
+          this.onRemoteStream?.(remoteUserId, streams[0])
+        }
+      }
+    }
+
+    // ICE connection state → monitor for failure and restart (W3C §4.2.6)
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed') {
+        this.restartIce(remoteUserId, pc)
+      }
+    }
+
+    // Connection state → cleanup on permanent failure
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') {
         this.removePeer(remoteUserId)
@@ -365,90 +397,156 @@ export class PeerManager {
       micActive: false,
       videoActive: false,
       isSpeaking: false,
+      polite,
     })
 
     return pc
   }
 
-  // Admin: create offer to a new participant
+  // =====================================================
+  // SDP EXCHANGE (Perfect Negotiation - W3C §10.7)
+  // =====================================================
+
+  // Admin creates offer to new participant
   async createOffer(remoteUserId: string): Promise<void> {
-    // Remove existing peer if any
     this.removePeer(remoteUserId)
 
-    const pc = this.createPeerConnection(remoteUserId)
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-    await this.signaling.sendSignal({
-      type: 'offer',
-      fromUserId: this.myUserId,
-      targetUserId: remoteUserId,
-      sdp: pc.localDescription!.toJSON(),
-    })
+    // Admin is impolite, user is polite
+    const pc = this.createPeerConnection(remoteUserId, false)
+
+    try {
+      await pc.setLocalDescription()
+      await this.signaling.sendSignal({
+        type: 'offer',
+        fromUserId: this.myUserId,
+        targetUserId: remoteUserId,
+        sdp: pc.localDescription!.toJSON(),
+      })
+    } catch (e) {
+      console.error('[WebRTC] createOffer error:', e)
+    }
   }
 
-  // User: handle offer from admin
+  // Handle offer from remote peer (Perfect Negotiation)
   async handleOffer(fromUserId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
-    // Remove existing peer if any
-    this.removePeer(fromUserId)
+    const peer = this.peers.get(fromUserId)
+    const pc = peer?.connection
 
-    const pc = this.createPeerConnection(fromUserId)
-    await pc.setRemoteDescription(new RTCSessionDescription(sdp))
-    const answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
+    // If no peer exists, create one (user receiving offer from admin)
+    if (!pc) {
+      const newPc = this.createPeerConnection(fromUserId, true)
+      await this.handleOfferWithPc(fromUserId, sdp, newPc)
+      return
+    }
 
-    await this.signaling.sendSignal({
-      type: 'answer',
-      fromUserId: this.myUserId,
-      targetUserId: fromUserId,
-      sdp: pc.localDescription!.toJSON(),
-    })
+    await this.handleOfferWithPc(fromUserId, sdp, pc)
   }
 
-  // Admin: handle answer from participant
+  private async handleOfferWithPc(fromUserId: string, sdp: RTCSessionDescriptionInit, pc: RTCPeerConnection): Promise<void> {
+    const peer = this.peers.get(fromUserId)
+    if (!peer) return
+
+    // Perfect Negotiation: check for glare (W3C §10.7)
+    const readyForOffer =
+      !pc.localDescription ||
+      pc.signalingState === 'stable' ||
+      pc.signalingState === 'have-local-pranswer'
+
+    const offerCollision = sdp.type === 'offer' && !readyForOffer
+
+    if (!peer.polite && offerCollision) {
+      // Impolite peer: ignore the colliding offer
+      return
+    }
+
+    try {
+      this.isSettingRemoteAnswerPending.set(fromUserId, true)
+      await pc.setRemoteDescription(sdp)
+      this.isSettingRemoteAnswerPending.set(fromUserId, false)
+
+      // Flush buffered ICE candidates
+      const buffered = this.pendingIceCandidates.get(fromUserId) || []
+      this.pendingIceCandidates.delete(fromUserId)
+      for (const candidate of buffered) {
+        await pc.addIceCandidate(candidate)
+      }
+
+      // If we received an offer, send an answer
+      if (sdp.type === 'offer') {
+        await pc.setLocalDescription()
+        await this.signaling.sendSignal({
+          type: 'answer',
+          fromUserId: this.myUserId,
+          targetUserId: fromUserId,
+          sdp: pc.localDescription!.toJSON(),
+        })
+      }
+    } catch (e) {
+      console.error('[WebRTC] handleOffer error:', e)
+    }
+  }
+
+  // Handle answer from remote peer
   async handleAnswer(fromUserId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
     const peer = this.peers.get(fromUserId)
-    if (peer) {
-      await peer.connection.setRemoteDescription(new RTCSessionDescription(sdp))
+    if (!peer) return
+
+    try {
+      await peer.connection.setRemoteDescription(sdp)
+    } catch (e) {
+      console.error('[WebRTC] handleAnswer error:', e)
     }
   }
 
-  // Handle ICE candidate
+  // Handle ICE candidate (buffer until remote description is set)
   async handleIceCandidate(fromUserId: string, candidate: RTCIceCandidateInit): Promise<void> {
     const peer = this.peers.get(fromUserId)
-    if (peer) {
+    if (!peer) return
+
+    if (peer.connection.remoteDescription) {
       try {
-        await peer.connection.addIceCandidate(new RTCIceCandidate(candidate))
+        await peer.connection.addIceCandidate(candidate)
       } catch (e) {
-        // ICE candidate might arrive after connection is established
-        console.warn('Failed to add ICE candidate:', e)
+        console.warn('[WebRTC] ICE candidate error:', e)
       }
+    } else {
+      // Buffer until setRemoteDescription completes
+      if (!this.pendingIceCandidates.has(fromUserId)) {
+        this.pendingIceCandidates.set(fromUserId, [])
+      }
+      this.pendingIceCandidates.get(fromUserId)!.push(candidate)
     }
   }
 
-  // Replace track in all peer connections (for toggling mic/video)
+  // ICE restart (W3C §4.2.6)
+  private async restartIce(remoteUserId: string, pc: RTCPeerConnection): Promise<void> {
+    try {
+      const offer = await pc.createOffer({ iceRestart: true })
+      await pc.setLocalDescription(offer)
+      await this.signaling.sendSignal({
+        type: 'offer',
+        fromUserId: this.myUserId,
+        targetUserId: remoteUserId,
+        sdp: pc.localDescription!.toJSON(),
+      })
+    } catch (e) {
+      console.error('[WebRTC] ICE restart failed:', e)
+      this.removePeer(remoteUserId)
+    }
+  }
+
+  // =====================================================
+  // TRACK MANAGEMENT (W3C §5.2)
+  // =====================================================
+
+  // Replace track in all peer connections
   async replaceTrack(kind: 'audio' | 'video', track: MediaStreamTrack | null): Promise<void> {
     for (const [, peer] of this.peers) {
-      // Find sender by transceiver mid or by track kind
-      const senders = peer.connection.getSenders()
-      const sender = senders.find((s) => {
-        if (s.track?.kind === kind) return true
-        // For null tracks, match by transceiver mid (audio/video)
-        if (!s.track) {
-          const transceivers = peer.connection.getTransceivers()
-          const idx = senders.indexOf(s)
-          const tc = transceivers[idx]
-          if (tc && tc.mid) {
-            return (kind === 'audio' && (tc.mid === '0' || tc.mid.includes('audio'))) ||
-                   (kind === 'video' && (tc.mid === '1' || tc.mid.includes('video')))
-          }
-          return false
-        }
-        return false
-      })
+      const sender = peer.connection.getSenders().find(s => s.track?.kind === kind)
       if (sender) {
         await sender.replaceTrack(track)
-      } else if (track) {
-        peer.connection.addTrack(track, this.localStream!)
+      } else if (track && this.localStream) {
+        peer.connection.addTrack(track, this.localStream)
       }
     }
   }
@@ -460,9 +558,7 @@ export class PeerManager {
     if (!videoTrack) return
 
     for (const [, peer] of this.peers) {
-      const sender = peer.connection
-        .getSenders()
-        .find((s) => s.track?.kind === 'video')
+      const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
       if (sender) {
         await sender.replaceTrack(videoTrack)
       }
@@ -475,42 +571,44 @@ export class PeerManager {
     const videoTrack = this.localStream.getVideoTracks()[0] || null
 
     for (const [, peer] of this.peers) {
-      const sender = peer.connection
-        .getSenders()
-        .find((s) => s.track?.kind === 'video')
+      const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
       if (sender) {
         await sender.replaceTrack(videoTrack)
       }
     }
   }
 
-  // Toggle mic
+  // Toggle mic — just enable/disable track (W3C §5.2)
   async toggleMic(active: boolean): Promise<void> {
-    if (this.localStream) {
-      const audioTrack = this.localStream.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = active
-        await this.replaceTrack('audio', active ? audioTrack : null)
-      }
+    if (!this.localStream) return
+    const audioTrack = this.localStream.getAudioTracks()[0]
+    if (audioTrack) {
+      audioTrack.enabled = active
     }
   }
 
-  // Toggle video
+  // Toggle video — just enable/disable track (W3C §5.2)
   async toggleVideo(active: boolean): Promise<void> {
-    if (this.localStream) {
-      const videoTrack = this.localStream.getVideoTracks()[0]
-      if (videoTrack) {
-        videoTrack.enabled = active
-        await this.replaceTrack('video', active ? videoTrack : null)
-      }
+    if (!this.localStream) return
+    const videoTrack = this.localStream.getVideoTracks()[0]
+    if (videoTrack) {
+      videoTrack.enabled = active
     }
   }
+
+  // =====================================================
+  // PEER MANAGEMENT
+  // =====================================================
 
   removePeer(userId: string): void {
     const peer = this.peers.get(userId)
     if (peer) {
       peer.connection.close()
       this.peers.delete(userId)
+      this.pendingIceCandidates.delete(userId)
+      this.makingOffer.delete(userId)
+      this.ignoreOffer.delete(userId)
+      this.isSettingRemoteAnswerPending.delete(userId)
       this.onPeerRemoved?.(userId)
     }
   }
@@ -519,17 +617,13 @@ export class PeerManager {
     return this.peers
   }
 
-  getScreenStreamRef(): MediaStream | null {
-    return this.screenStream
-  }
-
-  getLocalStreamRef(): MediaStream | null {
-    return this.localStream
-  }
-
   cleanup(): void {
     this.peers.forEach((peer) => peer.connection.close())
     this.peers.clear()
+    this.pendingIceCandidates.clear()
+    this.makingOffer.clear()
+    this.ignoreOffer.clear()
+    this.isSettingRemoteAnswerPending.clear()
     this.localStream?.getTracks().forEach((t) => t.stop())
     this.screenStream?.getTracks().forEach((t) => t.stop())
     this.localStream = null
@@ -549,6 +643,9 @@ export class VideoCallManager {
   private presenceState: Record<string, any[]> = {}
   private onPresenceUpdate: ((state: Record<string, any[]>) => void) | null = null
   private onUserJoined: ((userId: string) => void) | null = null
+  private _handleMuteAll: (() => void) | null = null
+  private _handleKick: ((targetUserId: string) => void) | null = null
+  private _handleEndSession: (() => void) | null = null
 
   constructor(_courseId: string, myUserId: string, isAdmin: boolean) {
     this.myUserId = myUserId
@@ -558,9 +655,9 @@ export class VideoCallManager {
       onOffer: (fromUserId, sdp) => this.peers.handleOffer(fromUserId, sdp),
       onAnswer: (fromUserId, sdp) => this.peers.handleAnswer(fromUserId, sdp),
       onIceCandidate: (fromUserId, candidate) => this.peers.handleIceCandidate(fromUserId, candidate),
-      onMuteAll: () => this.handleMuteAll(),
-      onKick: (targetUserId) => this.handleKick(targetUserId),
-      onEndSession: () => this.handleEndSession(),
+      onMuteAll: () => this._handleMuteAll?.(),
+      onKick: (targetUserId) => this._handleKick?.(targetUserId),
+      onEndSession: () => this._handleEndSession?.(),
       onScreenShareStarted: () => {},
       onScreenShareStopped: () => {},
       onPresenceSync: () => {
@@ -568,16 +665,13 @@ export class VideoCallManager {
         this.onPresenceUpdate?.(this.presenceState)
       },
       onPresenceJoin: (key, _presence) => {
-        // Admin: when a new user joins, send them an offer
         if (this.isAdmin && key !== this.myUserId) {
-          // Small delay to let their presence settle
           setTimeout(() => {
             this.onUserJoined?.(key)
           }, 500)
         }
       },
       onPresenceLeave: (key) => {
-        // Clean up peer when user leaves
         if (key !== this.myUserId) {
           this.peers.removePeer(key)
         }
@@ -595,19 +689,16 @@ export class VideoCallManager {
     this.onUserJoined = callback
   }
 
-  async startMic(): Promise<MediaStream> {
-    const stream = await this.peers.getLocalStream({ audio: true, video: false })
-    return stream
+  onMuteAll(callback: () => void): void {
+    this._handleMuteAll = callback
   }
 
-  async startVideo(): Promise<MediaStream> {
-    const stream = await this.peers.getLocalStream({ video: true, audio: false })
-    return stream
+  onKick(callback: (targetUserId: string) => void): void {
+    this._handleKick = callback
   }
 
-  async startMicAndVideo(): Promise<MediaStream> {
-    const stream = await this.peers.getLocalStream({ audio: true, video: true })
-    return stream
+  onEndSession(callback: () => void): void {
+    this._handleEndSession = callback
   }
 
   async toggleMic(active: boolean): Promise<void> {
@@ -621,7 +712,6 @@ export class VideoCallManager {
   async startScreenShare(): Promise<MediaStream | null> {
     const stream = await this.peers.getScreenStream()
     if (stream) {
-      // Add screen stream to all peer connections
       await this.peers.addScreenStreamToPeers()
       await this.signaling.sendSignal({
         type: 'screen-share-started',
@@ -634,7 +724,6 @@ export class VideoCallManager {
   async startFullScreenShare(): Promise<MediaStream | null> {
     const stream = await this.peers.getFullScreenStream()
     if (stream) {
-      // Add screen stream to all peer connections
       await this.peers.addScreenStreamToPeers()
       await this.signaling.sendSignal({
         type: 'screen-share-started',
@@ -646,7 +735,6 @@ export class VideoCallManager {
 
   async stopScreenShare(): Promise<void> {
     this.peers.stopScreenShare()
-    // Restore camera to all peer connections
     await this.peers.restoreCameraToPeers()
     this.signaling.sendSignal({
       type: 'screen-share-stopped',
@@ -672,18 +760,6 @@ export class VideoCallManager {
     }
   }
 
-  private handleMuteAll(): void {
-    // Override in component to mute local tracks
-  }
-
-  private handleKick(_targetUserId: string): void {
-    // Override in component to disconnect if kicked
-  }
-
-  private handleEndSession(): void {
-    // Override in component to close the call
-  }
-
   getPresenceState(): Record<string, any[]> {
     return this.presenceState
   }
@@ -693,10 +769,15 @@ export class VideoCallManager {
   }
 
   getParticipantList(): ParticipantState[] {
+    const seen = new Set<string>()
     const participants: ParticipantState[] = []
     for (const [, presences] of Object.entries(this.presenceState)) {
       for (const p of presences) {
-        participants.push(p as ParticipantState)
+        const ps = p as ParticipantState
+        if (!seen.has(ps.userId)) {
+          seen.add(ps.userId)
+          participants.push(ps)
+        }
       }
     }
     return participants.sort((a, b) => a.joinedAt - b.joinedAt)

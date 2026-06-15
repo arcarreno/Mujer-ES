@@ -5,8 +5,6 @@ import { supabase } from '../../lib/supabase'
 import {
   VideoCallManager,
   type ParticipantState,
-  MAX_MIC_USERS,
-  MAX_VIDEO_USERS,
 } from '../../lib/webrtc'
 import VideoGrid from './VideoGrid'
 import CallControls from './CallControls'
@@ -135,14 +133,14 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         })
       }
 
-      // Override internal handlers
-      ;(manager as any).handleMuteAll = async () => {
+      // Register callbacks for incoming signals
+      manager.onMuteAll(async () => {
         await manager.toggleMic(false)
         setMicActive(false)
         sileo.info({ title: 'Silenciado', description: 'El administrador silenció tu micrófono' })
-      }
+      })
 
-      ;(manager as any).handleKick = (targetUserId: string) => {
+      manager.onKick((targetUserId: string) => {
         if (targetUserId === user.id) {
           setKicked(true)
           sileo.error({ title: 'Expulsado', description: 'Fuiste expulsado de la sesión' })
@@ -153,9 +151,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             onClose()
           }, 2000)
         }
-      }
+      })
 
-      ;(manager as any).handleEndSession = () => {
+      manager.onEndSession(() => {
         setSessionEnded(true)
         sileo.info({ title: 'Sesión finalizada', description: 'El administrador finalizó la sesión' })
         setTimeout(() => {
@@ -164,7 +162,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           manager.signaling.leave()
           onClose()
         }, 2000)
-      }
+      })
 
       // Join signaling channel
       await manager.join()
@@ -232,42 +230,17 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     const manager = managerRef.current
     if (!manager) return
 
-    if (!micActive) {
-      const presenceState = manager.signaling.getPresenceState()
-      const activeMics = Object.values(presenceState)
-        .flat()
-        .filter((p: any) => p.micActive && p.userId !== userId).length
-
-      if (activeMics >= MAX_MIC_USERS) {
-        sileo.error({
-          title: 'Límite alcanzado',
-          description: `Máximo ${MAX_MIC_USERS} micrófonos activos.`,
-        })
-        return
-      }
-
-      const stream = await manager.startMic()
-      setLocalStream(stream)
-      // Re-enable the audio track in case it was disabled
-      const audioTrack = stream.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = true
-      }
-      setMicActive(true)
-      await manager.peers.toggleMic(true)
+    const newState = !micActive
+    try {
+      await manager.toggleMic(newState)
+      setMicActive(newState)
       await manager.signaling.updatePresence({
         userId, username, avatarUrl,
-        micActive: true, videoActive, isSpeaking: false,
+        micActive: newState, videoActive, isSpeaking: false,
         screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
-    } else {
-      await manager.toggleMic(false)
-      setMicActive(false)
-      await manager.signaling.updatePresence({
-        userId, username, avatarUrl,
-        micActive: false, videoActive, isSpeaking: false,
-        screenSharing: isScreenSharing, joinedAt: Date.now(),
-      })
+    } catch (e) {
+      console.error('Toggle mic error:', e)
     }
   }, [micActive, videoActive, isScreenSharing, userId, username, avatarUrl])
 
@@ -276,42 +249,17 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     const manager = managerRef.current
     if (!manager) return
 
-    if (!videoActive) {
-      const presenceState = manager.signaling.getPresenceState()
-      const activeVideos = Object.values(presenceState)
-        .flat()
-        .filter((p: any) => p.videoActive && p.userId !== userId).length
-
-      if (activeVideos >= MAX_VIDEO_USERS) {
-        sileo.error({
-          title: 'Límite alcanzado',
-          description: `Máximo ${MAX_VIDEO_USERS} cámaras activas.`,
-        })
-        return
-      }
-
-      const stream = await manager.startVideo()
-      setLocalStream(stream)
-      // Re-enable the video track in case it was disabled
-      const videoTrack = stream.getVideoTracks()[0]
-      if (videoTrack) {
-        videoTrack.enabled = true
-      }
-      setVideoActive(true)
-      await manager.peers.toggleVideo(true)
+    const newState = !videoActive
+    try {
+      await manager.toggleVideo(newState)
+      setVideoActive(newState)
       await manager.signaling.updatePresence({
         userId, username, avatarUrl,
-        micActive, videoActive: true, isSpeaking: false,
+        micActive, videoActive: newState, isSpeaking: false,
         screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
-    } else {
-      await manager.toggleVideo(false)
-      setVideoActive(false)
-      await manager.signaling.updatePresence({
-        userId, username, avatarUrl,
-        micActive, videoActive: false, isSpeaking: false,
-        screenSharing: isScreenSharing, joinedAt: Date.now(),
-      })
+    } catch (e) {
+      console.error('Toggle video error:', e)
     }
   }, [videoActive, micActive, isScreenSharing, userId, username, avatarUrl])
 
