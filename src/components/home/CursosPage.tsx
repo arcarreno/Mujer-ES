@@ -4,6 +4,7 @@ import { listPublishedCourses, enrollInCourse, unenrollFromCourse, isEnrolledInC
 import EnrollmentResult from '../ui/EnrollmentResult'
 import ImageCarousel from '../ui/ImageCarousel'
 import VideoCall from '../ui/VideoCall'
+import AccessCodeModal from '../ui/AccessCodeModal'
 
 type View = 'list' | 'detail'
 
@@ -40,6 +41,7 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
   const [search, setSearch] = useState('')
   const [galleryImages, setGalleryImages] = useState<string[]>([])
   const [inSession, setInSession] = useState(false)
+  const [showAccessModal, setShowAccessModal] = useState(false)
 
   useEffect(() => {
     listPublishedCourses()
@@ -373,7 +375,7 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
             {enrolled && selected.modality === 'virtual' && selected.session_active && (
               <button
                 className="curso-detail-join-btn"
-                onClick={() => setInSession(true)}
+                onClick={() => setShowAccessModal(true)}
                 type="button"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -413,6 +415,17 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
               onFullscreenChange={onVideoCallFullscreenChange}
             />
           )}
+
+          <AccessCodeModal
+            isOpen={showAccessModal}
+            onClose={() => setShowAccessModal(false)}
+            onAccessGranted={() => {
+              setShowAccessModal(false)
+              setInSession(true)
+            }}
+            courseTitle={selected.title}
+            expectedCode={selected.session_password}
+          />
         </div>
       </div>
     )

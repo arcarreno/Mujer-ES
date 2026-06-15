@@ -21,7 +21,8 @@ export default function VideoGrid({
   isAdmin: _isAdmin,
 }: VideoGridProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
-  const screenVideoRef = useRef<HTMLVideoElement>(null)
+  const screenMainRef = useRef<HTMLVideoElement>(null)
+  const screenThumbRef = useRef<HTMLVideoElement>(null)
 
   // Set local video stream
   useEffect(() => {
@@ -30,16 +31,19 @@ export default function VideoGrid({
     }
   }, [localStream])
 
-  // Set screen share stream
+  // Set screen share stream on both main and thumb refs
   useEffect(() => {
-    if (screenVideoRef.current && screenStream) {
-      screenVideoRef.current.srcObject = screenStream
+    if (screenMainRef.current && screenStream) {
+      screenMainRef.current.srcObject = screenStream
+    }
+    if (screenThumbRef.current && screenStream) {
+      screenThumbRef.current.srcObject = screenStream
     }
   }, [screenStream])
 
   // Get active remote speakers (excluding self)
   const activeSpeakers = participants.filter(
-    (p) => p.userId !== userId && (p.micActive || p.videoActive)
+    (p) => p.userId !== userId && (p.micActive || p.videoActive || p.screenSharing)
   )
 
   const myParticipant = participants.find((p) => p.userId === userId)
@@ -49,7 +53,7 @@ export default function VideoGrid({
       {/* Screen share — primary fullscreen view */}
       {isScreenSharing && screenStream && (
         <div className="video-grid-screenshare">
-          <video ref={screenVideoRef} autoPlay playsInline className="video-tile-stream video-tile-stream--screenshare" />
+          <video ref={screenMainRef} autoPlay playsInline className="video-tile-stream video-tile-stream--screenshare" />
           <div className="video-grid-screenshare-label">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
@@ -83,8 +87,18 @@ export default function VideoGrid({
           </div>
         )}
 
+        {/* Local screen share thumbnail */}
+        {isScreenSharing && screenStream && (
+          <div className="video-tile video-tile--thumb video-tile--local">
+            <video ref={screenThumbRef} autoPlay playsInline muted className="video-tile-stream" />
+            <div className="video-tile-overlay">
+              <span className="video-tile-name">Tu pantalla</span>
+            </div>
+          </div>
+        )}
+
         {/* Local avatar when camera is off */}
-        {(!localStream || !myParticipant?.videoActive) && myParticipant && (
+        {(!localStream || !myParticipant?.videoActive) && !isScreenSharing && myParticipant && (
           <div className="video-tile video-tile--thumb video-tile--local">
             <div className="video-tile-avatar">
               {myParticipant.avatarUrl ? (

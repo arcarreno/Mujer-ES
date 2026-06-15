@@ -9,6 +9,8 @@ import {
   checkUserBlocked,
   type ConversationListItem,
 } from '../../lib/queries'
+import { usePresence } from '../../hooks/usePresence'
+import { supabase } from '../../lib/supabase'
 import ChatView from './ChatView'
 import ProfileModal from './ProfileModal'
 import ReportModal from './ReportModal'
@@ -27,6 +29,15 @@ export default function ChatsPage({ onChatStateChange }: ChatsPageProps) {
   const [profileModalUser, setProfileModalUser] = useState<string | null>(null)
   const [reportModalUser, setReportModalUser] = useState<string | null>(null)
   const [blockedInfo, setBlockedInfo] = useState<{ blocked: boolean; until: string | null }>({ blocked: false, until: null })
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setCurrentUserId(data.user?.id || null)
+    })
+  }, [])
+
+  const { isUserOnline } = usePresence(currentUserId)
 
   const loadConversations = useCallback(async () => {
     try {
@@ -171,6 +182,9 @@ export default function ChatsPage({ onChatStateChange }: ChatsPageProps) {
                         getInitials(other?.full_name)
                       )}
                     </span>
+                  )}
+                  {!isActive && other?.id && isUserOnline(other.id) && (
+                    <span className="chat-online-dot" />
                   )}
                   {hasUnread && <span className="chat-list-card-badge">{conv.unread_count}</span>}
                 </div>

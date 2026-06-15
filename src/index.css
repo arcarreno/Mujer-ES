@@ -6869,6 +6869,18 @@ input[type="date"].form-input {
   padding: 0 5px;
 }
 
+.chat-online-dot {
+  position: absolute;
+  bottom: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #22c55e;
+  border: 2px solid var(--color-bg, #fff);
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
+}
+
 .chat-list-card-info {
   flex: 1;
   min-width: 0;
@@ -6919,6 +6931,132 @@ input[type="date"].form-input {
   justify-content: center;
   z-index: 9999;
   padding: var(--space-4);
+}
+
+/* ====== Access Code Modal ====== */
+
+.access-code-modal {
+  background: var(--color-card, #fff);
+  border-radius: var(--radius-lg, 16px);
+  padding: var(--space-8);
+  max-width: 380px;
+  width: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.access-code-header {
+  text-align: center;
+}
+
+.access-code-header h3 {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: 700;
+  color: var(--color-text, #1a1c2e);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.access-code-course {
+  font-size: var(--text-sm);
+  color: var(--color-muted, #6b7280);
+  margin: 0;
+}
+
+.access-code-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.access-code-instruction {
+  font-size: var(--text-sm);
+  color: var(--color-muted, #6b7280);
+  text-align: center;
+  margin: 0;
+}
+
+.access-code-inputs {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.access-code-input {
+  width: 56px;
+  height: 64px;
+  border: 2px solid var(--color-border, #e5e7eb);
+  border-radius: var(--radius-md, 8px);
+  font-size: 1.75rem;
+  font-weight: 700;
+  text-align: center;
+  background: var(--color-bg, #f9fafb);
+  color: var(--color-text, #1a1c2e);
+  transition: border-color 0.2s, background 0.2s;
+  outline: none;
+  font-family: 'Inter', monospace;
+}
+
+.access-code-input:focus {
+  border-color: var(--color-primary, #1a1c2e);
+  background: #fff;
+}
+
+.access-code-input.filled {
+  border-color: var(--color-primary, #1a1c2e);
+  background: var(--color-primary, #1a1c2e);
+  color: #fff;
+}
+
+.access-code-input.error {
+  border-color: #ef4444;
+  background: #fef2f2;
+  animation: shake 0.3s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.access-code-error {
+  font-size: var(--text-sm);
+  color: #ef4444;
+  text-align: center;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.access-code-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-muted, #6b7280);
+  font-size: var(--text-sm);
+}
+
+.access-code-footer {
+  display: flex;
+  justify-content: center;
+}
+
+.access-code-cancel {
+  background: none;
+  border: none;
+  color: var(--color-muted, #6b7280);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md, 8px);
+  transition: background 0.15s, color 0.15s;
+}
+
+.access-code-cancel:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--color-text, #1a1c2e);
 }
 
 .profile-modal {
@@ -7601,6 +7739,30 @@ input[type="date"].form-input {
   font-size: 0.85rem;
   text-align: center;
   margin-top: 2rem;
+}
+
+.video-call-chat-input {
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.video-call-chat-input input {
+  width: 100%;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #fff;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.video-call-chat-input input::placeholder {
+  color: #6b7280;
+}
+
+.video-call-chat-input input:focus {
+  border-color: rgba(255,255,255,0.4);
 }
 
 .video-call-ended {

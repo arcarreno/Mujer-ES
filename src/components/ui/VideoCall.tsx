@@ -109,7 +109,14 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             }
           }
         }
-        setParticipants(list.sort((a, b) => a.joinedAt - b.joinedAt))
+        // Always include local participant with current state
+        setParticipants(prev => {
+          const local = prev.find(p => p.userId === userId)
+          if (local && !seen.has(userId)) {
+            list.push(local)
+          }
+          return list.sort((a, b) => a.joinedAt - b.joinedAt)
+        })
       })
 
       // Admin: when a new user joins, send them an offer
@@ -138,14 +145,22 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         if (targetUserId === user.id) {
           setKicked(true)
           sileo.error({ title: 'Expulsado', description: 'Fuiste expulsado de la sesión' })
-          setTimeout(() => onClose(), 2000)
+          setTimeout(() => {
+            manager.peers.cleanup()
+            manager.signaling.leave()
+            onClose()
+          }, 2000)
         }
       }
 
       ;(manager as any).handleEndSession = () => {
         setSessionEnded(true)
         sileo.info({ title: 'Sesión finalizada', description: 'El administrador finalizó la sesión' })
-        setTimeout(() => onClose(), 2000)
+        setTimeout(() => {
+          manager.peers.cleanup()
+          manager.signaling.leave()
+          onClose()
+        }, 2000)
       }
 
       // Join signaling channel
@@ -159,7 +174,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           setLocalStream(stream)
           setMicActive(true)
           setVideoActive(true)
-          await manager.signaling.trackPresence({
+          const presenceData: ParticipantState = {
             userId: user.id,
             username: uname,
             avatarUrl: aUrl,
@@ -168,10 +183,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             isSpeaking: false,
             screenSharing: false,
             joinedAt: Date.now(),
-          })
+          }
+          await manager.signaling.trackPresence(presenceData)
+          // Add local participant immediately so VideoGrid can render the local tile
+          setParticipants([presenceData])
         } catch (e) {
           console.warn('Could not get local stream:', e)
-          await manager.signaling.trackPresence({
+          const presenceData: ParticipantState = {
             userId: user.id,
             username: uname,
             avatarUrl: aUrl,
@@ -180,7 +198,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             isSpeaking: false,
             screenSharing: false,
             joinedAt: Date.now(),
-          })
+          }
+          await manager.signaling.trackPresence(presenceData)
+          setParticipants([presenceData])
         }
       }
     }
@@ -336,13 +356,16 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     if (!manager || !isAdmin) return
     if (!confirm('¿Finalizar la sesión para todos?')) return
     await manager.endSession()
+    manager.peers.cleanup()
+    await manager.signaling.leave()
     onClose()
   }, [isAdmin, onClose])
 
   const handleLeave = useCallback(async () => {
     const manager = managerRef.current
     if (!manager) return
-    await manager.leave()
+    manager.peers.cleanup()
+    await manager.signaling.leave()
     onClose()
   }, [onClose])
 
@@ -418,6 +441,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             </div>
             <div className="video-call-chat-messages">
               <p className="video-call-chat-empty">El chat del curso está disponible en la pestaña de Chats</p>
+            </div>
+            <div className="video-call-chat-input">
+              <input type="text" placeholder="Escribí un mensaje..." disabled />
             </div>
           </div>
         )}
