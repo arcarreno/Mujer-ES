@@ -138,11 +138,8 @@ export class SignalingManager {
   }
 
   async join(): Promise<void> {
-    this.channel = supabase.channel(`call:${this.courseId}`, {
-      config: {
-        broadcast: { self: false },
-      },
-    })
+    // Create channel WITHOUT config to prevent auto-subscribe
+    this.channel = supabase.channel(`call:${this.courseId}`)
 
     // Add ALL handlers BEFORE subscribe (Supabase requirement)
     this.channel
@@ -183,7 +180,11 @@ export class SignalingManager {
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
         this.handlers.onPresenceLeave(key, leftPresences[0])
       })
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Signaling] Subscribed to channel')
+        }
+      })
   }
 
   async trackPresence(state: ParticipantState): Promise<void> {
