@@ -75,10 +75,6 @@
   background-color: var(--alabaster) !important;
 }
 
-/* ============================================
-   GLOBAL RESET — No scroll, fondo blanco
-   ============================================ */
-
 html, body {
   margin: 0;
   padding: 0;

@@ -370,17 +370,23 @@ export class PeerManager {
     }
 
     // ontrack → receive remote stream (W3C §10.1 pattern)
+    // FIX: Process track immediately + also handle onunmute for tracks that arrive muted
     pc.ontrack = ({ track, streams }) => {
-      track.onunmute = () => {
-        if (this.peers.get(remoteUserId)?.stream) return
+      const processStream = () => {
         if (streams[0]) {
           const existing = this.peers.get(remoteUserId)
-          if (existing) {
+          if (existing && !existing.stream) {
             existing.stream = streams[0]
+            this.onRemoteStream?.(remoteUserId, streams[0])
           }
-          this.onRemoteStream?.(remoteUserId, streams[0])
         }
       }
+
+      // Process immediately — onunmute doesn't fire for tracks that arrive already unmuted
+      processStream()
+
+      // Also handle unmute events for tracks that arrive muted
+      track.onunmute = processStream
     }
 
     // ICE connection state → monitor for failure and restart (W3C §4.2.6)
@@ -560,16 +566,28 @@ export class PeerManager {
     }
   }
 
-  // Add screen stream to all peer connections
+  // Add screen stream to all peer connections + trigger renegotiation
   async addScreenStreamToPeers(): Promise<void> {
     if (!this.screenStream) return
     const videoTrack = this.screenStream.getVideoTracks()[0]
     if (!videoTrack) return
 
-    for (const [, peer] of this.peers) {
+    for (const [userId, peer] of this.peers) {
       const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
       if (sender) {
         await sender.replaceTrack(videoTrack)
+        // Trigger renegotiation so remote peer's ontrack fires with new track
+        try {
+          await peer.connection.setLocalDescription()
+          await this.signaling.sendSignal({
+            type: 'offer',
+            fromUserId: this.myUserId,
+            targetUserId: userId,
+            sdp: peer.connection.localDescription!.toJSON(),
+          })
+        } catch (e) {
+          console.warn('[WebRTC] renegotiation after screen share failed:', e)
+        }
       }
     }
   }
@@ -579,10 +597,22 @@ export class PeerManager {
     if (!this.localStream) return
     const videoTrack = this.localStream.getVideoTracks()[0] || null
 
-    for (const [, peer] of this.peers) {
+    for (const [userId, peer] of this.peers) {
       const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
       if (sender) {
         await sender.replaceTrack(videoTrack)
+        // Trigger renegotiation so remote peer's ontrack fires with camera track
+        try {
+          await peer.connection.setLocalDescription()
+          await this.signaling.sendSignal({
+            type: 'offer',
+            fromUserId: this.myUserId,
+            targetUserId: userId,
+            sdp: peer.connection.localDescription!.toJSON(),
+          })
+        } catch (e) {
+          console.warn('[WebRTC] renegotiation after camera restore failed:', e)
+        }
       }
     }
   }

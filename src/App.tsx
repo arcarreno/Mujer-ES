@@ -14,6 +14,7 @@ import BlurText from './components/BlurText'
 import Login from './components/Login'
 import LoadingFallback from './components/ui/LoadingFallback'
 import ErrorBoundary from './components/ui/ErrorBoundary'
+import WelcomeOverlay from './components/ui/WelcomeOverlay'
 
 // Lazy load heavy layouts (admin, home)
 const WelcomeForm = lazy(() => import('./components/form/WelcomeForm'))
@@ -42,6 +43,7 @@ function App() {
     isAdmin: false,
   })
   const [formCheckKey, setFormCheckKey] = useState(0)
+  const [showLandingOverlay, setShowLandingOverlay] = useState(true)
   const isOnline = useNetworkStatus()
   const wasOffline = useRef(!navigator.onLine)
 
@@ -77,6 +79,7 @@ function App() {
     setUser(u)
     if (!u) {
       setSessionData({ profile: null, isAdmin: false })
+      setShowLandingOverlay(true)
       setPhase('landing')
       return
     }
@@ -100,6 +103,7 @@ function App() {
       await supabase.auth.signOut()
       setUser(null)
       setSessionData({ profile: null, isAdmin: false })
+      setShowLandingOverlay(true)
       setPhase('landing')
       return
     }
@@ -123,6 +127,7 @@ function App() {
   const handleLogout = () => {
     setUser(null)
     setSessionData({ profile: null, isAdmin: false })
+    setShowLandingOverlay(true)
     setPhase('landing')
   }
 
@@ -131,47 +136,60 @@ function App() {
       <div style={{ perspective: '1200px', width: '100%', height: '100%' }}>
         <AnimatePresence mode="wait">
           {phase === 'landing' && (
-            <motion.div
-              key="landing"
-              initial={{ opacity: 0, scale: 0.5, rotateX: -25 }}
-              animate={{ opacity: 1, scale: 1, rotateX: 0 }}
-              exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
-              transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
-              className="absolute inset-0 z-10"
-            >
-              <div className="site-header absolute left-0 w-full text-center z-10">
-                <h1 className="inline-flex items-baseline m-0">
-                  <BlurText
-                    text="Mujer"
-                    animateBy="letters"
-                    direction="top"
-                    delay={150}
-                    stepDuration={0.4}
-                    className="site-title"
-                  />
-                  <BlurText
-                    text="-ES"
-                    animateBy="letters"
-                    direction="top"
-                    delay={150}
-                    stepDuration={0.4}
-                    className="site-title-italic"
-                  />
-                </h1>
-                <motion.button
-                  initial={{ opacity: 0, y: 15 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.2, duration: 0.5 }}
-                  onClick={() => setPhase('welcome-form')}
-                  className="comenzar-btn"
+            <>
+              <motion.div
+                key="landing"
+                initial={{ opacity: 0, scale: 0.5, rotateX: -25 }}
+                animate={{ opacity: 1, scale: 1, rotateX: 0 }}
+                exit={{ opacity: 0, scale: 1.4, filter: 'blur(8px)' }}
+                transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
+                className="absolute inset-0 z-10"
+              >
+                <div className="site-header absolute left-0 w-full text-center z-10">
+                  <h1 className="inline-flex items-baseline m-0">
+                    <BlurText
+                      text="Mujer"
+                      animateBy="letters"
+                      direction="top"
+                      delay={150}
+                      stepDuration={0.4}
+                      className="site-title"
+                    />
+                    <BlurText
+                      text="-ES"
+                      animateBy="letters"
+                      direction="top"
+                      delay={150}
+                      stepDuration={0.4}
+                      className="site-title-italic"
+                    />
+                  </h1>
+                  <motion.button
+                    initial={{ opacity: 0, y: 15 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.2, duration: 0.5 }}
+                    onClick={() => setPhase('welcome-form')}
+                    className="comenzar-btn"
+                  >
+                    Comenzar
+                  </motion.button>
+                </div>
+                <div
+                  className="absolute inset-0 flex items-center justify-center z-0"
+                  style={{
+                    opacity: showLandingOverlay ? 0 : 1,
+                    transform: showLandingOverlay ? 'translateY(40px)' : 'translateY(0)',
+                    transition: 'opacity 1.2s ease-out, transform 1.2s ease-out',
+                  }}
                 >
-                  Comenzar
-                </motion.button>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center z-0">
-                <Carousel images={images} />
-              </div>
-            </motion.div>
+                  <Carousel images={images} />
+                </div>
+              </motion.div>
+
+              {showLandingOverlay && (
+                <WelcomeOverlay onDone={() => setShowLandingOverlay(false)} />
+              )}
+            </>
           )}
 
           {phase === 'welcome-form' && !user && (
