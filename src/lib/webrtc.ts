@@ -408,11 +408,14 @@ export class PeerManager {
     // ontrack → receive remote stream (W3C §10.1 pattern)
     // FIX: Process track immediately + also handle onunmute for tracks that arrive muted
     pc.ontrack = ({ track, streams }) => {
+      console.log(`[WebRTC] ontrack from ${remoteUserId}: kind=${track.kind}, readyState=${track.readyState}`)
+      
       const processStream = () => {
         if (streams[0]) {
           const existing = this.peers.get(remoteUserId)
           if (existing && !existing.stream) {
             existing.stream = streams[0]
+            console.log(`[WebRTC] Setting remote stream for ${remoteUserId}`)
             this.onRemoteStream?.(remoteUserId, streams[0])
           }
         }
@@ -460,6 +463,9 @@ export class PeerManager {
 
   // Admin creates offer to new participant
   async createOffer(remoteUserId: string): Promise<void> {
+    console.log(`[WebRTC] Creating offer for ${remoteUserId}`)
+    console.log(`[WebRTC] Local stream tracks:`, this.localStream?.getTracks().length || 0)
+    
     this.removePeer(remoteUserId)
 
     // Admin is impolite, user is polite
@@ -476,6 +482,7 @@ export class PeerManager {
         targetUserId: remoteUserId,
         sdp: pc.localDescription!.toJSON(),
       })
+      console.log(`[WebRTC] Offer sent to ${remoteUserId}`)
     } catch (e) {
       console.error('[WebRTC] createOffer error:', e)
     } finally {
@@ -485,11 +492,13 @@ export class PeerManager {
 
   // Handle offer from remote peer (Perfect Negotiation)
   async handleOffer(fromUserId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
+    console.log(`[WebRTC] Received offer from ${fromUserId}`)
     const peer = this.peers.get(fromUserId)
     const pc = peer?.connection
 
     // If no peer exists, create one (user receiving offer from admin)
     if (!pc) {
+      console.log(`[WebRTC] Creating new peer connection for ${fromUserId}`)
       const newPc = this.createPeerConnection(fromUserId, true)
       await this.handleOfferWithPc(fromUserId, sdp, newPc)
       return
@@ -554,11 +563,16 @@ export class PeerManager {
 
   // Handle answer from remote peer
   async handleAnswer(fromUserId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
+    console.log(`[WebRTC] Received answer from ${fromUserId}`)
     const peer = this.peers.get(fromUserId)
-    if (!peer) return
+    if (!peer) {
+      console.warn(`[WebRTC] No peer found for ${fromUserId}`)
+      return
+    }
 
     try {
       await peer.connection.setRemoteDescription(sdp)
+      console.log(`[WebRTC] Answer set for ${fromUserId}, connection state:`, peer.connection.connectionState)
 
       // Flush buffered ICE candidates that arrived before the answer
       const buffered = this.pendingIceCandidates.get(fromUserId) || []

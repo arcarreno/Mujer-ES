@@ -169,51 +169,39 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         setChatMessages(prev => [...prev, msg])
       })
 
-      // Join signaling channel
-      await manager.join()
-
-      // Get local stream early (so tracks are available for peer connections)
+      // IMPORTANT: Get local stream BEFORE joining signaling
+      // This ensures tracks are available when admin creates offer
       if (!streamInitializedRef.current) {
         streamInitializedRef.current = true
         try {
           const stream = await manager.peers.ensureLocalStream()
           setLocalStream(stream)
-          // Only set active if the stream actually has the tracks
           const hasAudio = stream.getAudioTracks().length > 0
           const hasVideo = stream.getVideoTracks().length > 0
           setMicActive(hasAudio)
           setVideoActive(hasVideo)
-          const presenceData: ParticipantState = {
-            userId: user.id,
-            username: uname,
-            avatarUrl: aUrl,
-            micActive: hasAudio,
-            videoActive: hasVideo,
-            isSpeaking: false,
-            screenSharing: false,
-            joinedAt: Date.now(),
-            epoch: 0, // Will be set by trackPresence
-          }
-          await manager.signaling.trackPresence(presenceData)
-          // Add local participant immediately so VideoGrid can render the local tile
-          setParticipants([presenceData])
         } catch (e) {
           console.warn('Could not get local stream:', e)
-          const presenceData: ParticipantState = {
-            userId: user.id,
-            username: uname,
-            avatarUrl: aUrl,
-            micActive: false,
-            videoActive: false,
-            isSpeaking: false,
-            screenSharing: false,
-            joinedAt: Date.now(),
-            epoch: 0, // Will be set by trackPresence
-          }
-          await manager.signaling.trackPresence(presenceData)
-          setParticipants([presenceData])
         }
       }
+
+      // Now join signaling channel (stream is ready for peer connections)
+      await manager.join()
+
+      // Track presence after joining
+      const presenceData: ParticipantState = {
+        userId: user.id,
+        username: uname,
+        avatarUrl: aUrl,
+        micActive: micActive,
+        videoActive: videoActive,
+        isSpeaking: false,
+        screenSharing: false,
+        joinedAt: Date.now(),
+        epoch: 0,
+      }
+      await manager.signaling.trackPresence(presenceData)
+      setParticipants([presenceData])
     }
 
     // Notify parent that we're in fullscreen mode
