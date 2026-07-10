@@ -192,6 +192,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             isSpeaking: false,
             screenSharing: false,
             joinedAt: Date.now(),
+            epoch: 0, // Will be set by trackPresence
           }
           await manager.signaling.trackPresence(presenceData)
           // Add local participant immediately so VideoGrid can render the local tile
@@ -207,6 +208,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             isSpeaking: false,
             screenSharing: false,
             joinedAt: Date.now(),
+            epoch: 0, // Will be set by trackPresence
           }
           await manager.signaling.trackPresence(presenceData)
           setParticipants([presenceData])
