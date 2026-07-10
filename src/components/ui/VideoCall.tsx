@@ -38,12 +38,24 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const managerRef = useRef<VideoCallManager | null>(null)
   const streamInitializedRef = useRef(false)
   const userIdRef = useRef('')
+  const initRanRef = useRef(false)
 
-  // Initialize
+  // Store callbacks in refs to prevent effect re-runs
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+  const onFullscreenChangeRef = useRef(onFullscreenChange)
+  onFullscreenChangeRef.current = onFullscreenChange
+
+  // Initialize — only runs once per courseId+isAdmin
   useEffect(() => {
+    if (initRanRef.current) return
+    initRanRef.current = true
+
+    let cancelled = false
+
     const init = async () => {
       const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      if (!user || cancelled) return
 
       setUserId(user.id)
       userIdRef.current = user.id
@@ -205,15 +217,22 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     }
 
     // Notify parent that we're in fullscreen mode
-    onFullscreenChange?.(true)
+    onFullscreenChangeRef.current?.(true)
 
     init()
 
     return () => {
-      onFullscreenChange?.(false)
-      managerRef.current?.leave()
+      cancelled = true
+      onFullscreenChangeRef.current?.(false)
+      if (managerRef.current) {
+        managerRef.current.peers.cleanup()
+        managerRef.current.signaling.leave()
+        managerRef.current = null
+      }
+      streamInitializedRef.current = false
+      initRanRef.current = false
     }
-  }, [courseId, isAdmin, onClose, onFullscreenChange])
+  }, [courseId, isAdmin])
 
   // Toggle mic
   const handleToggleMic = useCallback(async () => {

@@ -138,6 +138,12 @@ export class SignalingManager {
   }
 
   async join(): Promise<void> {
+    // Prevent double-subscribe
+    if (this.channel) {
+      console.warn('[Signaling] Already joined, cleaning up previous channel')
+      await this.leave()
+    }
+
     // Create channel WITHOUT config to prevent auto-subscribe
     this.channel = supabase.channel(`call:${this.courseId}`)
 
@@ -225,9 +231,11 @@ export class SignalingManager {
 
   async leave(): Promise<void> {
     if (this.channel) {
+      console.log('[Signaling] Leaving channel, cleaning up...')
       await this.channel.untrack()
       await supabase.removeChannel(this.channel)
       this.channel = null
+      console.log('[Signaling] Channel removed')
     }
   }
 
@@ -279,12 +287,18 @@ export class PeerManager {
 
   async ensureLocalStream(): Promise<MediaStream> {
     if (!this.localStream) {
+      console.log('[WebRTC] Requesting camera/mic access...')
       try {
         this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        console.log(`[WebRTC] Got stream: ${this.localStream.getTracks().length} tracks`)
+        this.localStream.getTracks().forEach(t => {
+          console.log(`[WebRTC]   Track: ${t.kind} - ${t.label} - enabled: ${t.enabled} - readyState: ${t.readyState}`)
+        })
       } catch (videoErr) {
         console.warn('[WebRTC] Video+Audio failed, trying audio only:', videoErr)
         try {
           this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+          console.log(`[WebRTC] Got audio-only stream: ${this.localStream.getTracks().length} tracks`)
         } catch (audioErr) {
           console.error('[WebRTC] Audio also failed, creating empty stream:', audioErr)
           this.localStream = new MediaStream()
