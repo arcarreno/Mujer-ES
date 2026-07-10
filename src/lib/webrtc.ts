@@ -129,7 +129,6 @@ export class SignalingManager {
   async join(): Promise<void> {
     this.channel = supabase.channel(`call:${this.courseId}`, {
       config: {
-        presence: { key: this.myUserId },
         broadcast: { self: false },
       },
     })
