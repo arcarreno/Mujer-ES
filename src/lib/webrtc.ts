@@ -208,7 +208,8 @@ export class SignalingManager {
     state.epoch = currentEpoch + 1
     this.presenceEpochs.set(state.userId, state.epoch)
     this.lastPresenceState = state
-    await this.channel.track(state)
+    // Use auth userId as presence key so targeting works
+    await this.channel.track(state, { key: state.userId })
   }
 
   async updatePresence(state: Partial<ParticipantState>): Promise<void> {
