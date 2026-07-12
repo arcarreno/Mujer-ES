@@ -309,13 +309,20 @@ export class PeerManager {
           console.log(`[WebRTC]   Track: ${t.kind} - ${t.label} - enabled: ${t.enabled} - readyState: ${t.readyState}`)
         })
       } catch (videoErr) {
-        console.warn('[WebRTC] Video+Audio failed, trying audio only:', videoErr)
-        try {
-          this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
-          console.log(`[WebRTC] Got audio-only stream: ${this.localStream.getTracks().length} tracks`)
-        } catch (audioErr) {
-          console.error('[WebRTC] Audio also failed, creating empty stream:', audioErr)
+        console.warn('[WebRTC] Video+Audio failed:', videoErr)
+        // If device not found, skip audio-only fallback (it hangs on devices without media)
+        if (videoErr instanceof DOMException && videoErr.name === 'NotFoundError') {
+          console.warn('[WebRTC] No media devices found, continuing without camera/mic')
           this.localStream = new MediaStream()
+        } else {
+          // Other errors (permission denied, etc.) — try audio only
+          try {
+            this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+            console.log(`[WebRTC] Got audio-only stream: ${this.localStream.getTracks().length} tracks`)
+          } catch (audioErr) {
+            console.error('[WebRTC] Audio also failed:', audioErr)
+            this.localStream = new MediaStream()
+          }
         }
       }
     }

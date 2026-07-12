@@ -54,8 +54,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     let cancelled = false
 
     const init = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || cancelled) return
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user || cancelled) return
 
       setUserId(user.id)
       userIdRef.current = user.id
@@ -186,19 +187,24 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       if (!streamInitializedRef.current) {
         streamInitializedRef.current = true
         try {
+          console.log('[VideoCall] Requesting local stream...')
           const stream = await manager.peers.ensureLocalStream()
+          console.log(`[VideoCall] Local stream ready: ${stream.getTracks().length} tracks`)
           setLocalStream(stream)
           const hasAudio = stream.getAudioTracks().length > 0
           const hasVideo = stream.getVideoTracks().length > 0
           setMicActive(hasAudio)
           setVideoActive(hasVideo)
         } catch (e) {
-          console.warn('Could not get local stream:', e)
+          console.error('[VideoCall] Failed to get local stream:', e)
+          // Continue without stream — user can still receive video
         }
       }
 
       // Now join signaling channel (stream is ready for peer connections)
+      console.log('[VideoCall] Joining signaling...')
       await manager.join()
+      console.log('[VideoCall] Signaling joined, tracking presence...')
 
       // Track presence after joining
       const presenceData: ParticipantState = {
@@ -214,6 +220,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       }
       await manager.signaling.trackPresence(presenceData)
       setParticipants([presenceData])
+      } catch (e) {
+        console.error('[VideoCall] Init error:', e)
+      }
     }
 
     // Notify parent that we're in fullscreen mode
