@@ -144,8 +144,12 @@ export class SignalingManager {
       await this.leave()
     }
 
-    // Create channel WITHOUT config to prevent auto-subscribe
-    this.channel = supabase.channel(`call:${this.courseId}`)
+    // Create channel with presence key = auth userId for offer targeting
+    this.channel = supabase.channel(`call:${this.courseId}`, {
+      config: {
+        presence: { key: this.myUserId },
+      },
+    })
 
     // Add ALL handlers BEFORE subscribe (Supabase requirement)
     this.channel
@@ -189,8 +193,10 @@ export class SignalingManager {
         this.handlers.onPresenceSync()
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        console.log(`[Signaling] Presence join: ${key}`)
-        this.handlers.onPresenceJoin(key, newPresences[0])
+        // Use userId from presence state (auth userId), fallback to key
+        const userId = (newPresences[0] as any)?.userId || key
+        console.log(`[Signaling] Presence join: ${userId} (key: ${key})`)
+        this.handlers.onPresenceJoin(userId, newPresences[0])
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
         console.log(`[Signaling] Presence leave: ${key}`)
@@ -208,8 +214,7 @@ export class SignalingManager {
     state.epoch = currentEpoch + 1
     this.presenceEpochs.set(state.userId, state.epoch)
     this.lastPresenceState = state
-    // Use auth userId as presence key so targeting works
-    await this.channel.track(state, { key: state.userId })
+    await this.channel.track(state)
   }
 
   async updatePresence(state: Partial<ParticipantState>): Promise<void> {

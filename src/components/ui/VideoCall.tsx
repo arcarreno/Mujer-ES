@@ -135,13 +135,20 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         })
       })
 
-      // Admin: when a new user joins, send them an offer
+      // Admin: when a new user joins, send them an offer (deduplicated)
       if (isAdmin) {
+        const offeredUsers = new Set<string>()
         manager.setOnUserJoined(async (newUserId) => {
+          if (offeredUsers.has(newUserId)) {
+            console.log(`[VideoCall] Already offered to ${newUserId}, skipping`)
+            return
+          }
+          offeredUsers.add(newUserId)
           try {
             await manager.peers.createOffer(newUserId)
           } catch (e) {
             console.error('Failed to create offer:', e)
+            offeredUsers.delete(newUserId) // Allow retry on error
           }
         })
       }
