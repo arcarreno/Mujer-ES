@@ -159,9 +159,16 @@ export class SignalingManager {
         const target = 'targetUserId' in event ? event.targetUserId : 'all'
         console.log(`[Signaling] Received broadcast: ${event.type} from=${from} target=${target}`)
 
-        if ('targetUserId' in event && event.targetUserId !== this.myUserId) {
-          console.log(`[Signaling] Ignoring signal not for us (for ${event.targetUserId})`)
-          return
+        // Only filter out targeted commands (kick, mute-all, end-session)
+        // Signal events (offer/answer/ice) are broadcast to ALL users — each user
+        // processes only those from users they have a peer connection with or want to connect to.
+        // We do NOT filter by targetUserId for signals because Supabase presence keys
+        // may not match auth user IDs, causing offers to be silently dropped.
+        if ('targetUserId' in event && (event.type === 'kick' || event.type === 'mute-all' || event.type === 'end-session')) {
+          if (event.targetUserId !== this.myUserId) {
+            console.log(`[Signaling] Ignoring targeted ${event.type} not for us (for ${event.targetUserId})`)
+            return
+          }
         }
 
         if (event.type === 'offer' && 'fromUserId' in event) {
