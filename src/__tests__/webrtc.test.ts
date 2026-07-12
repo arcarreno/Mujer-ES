@@ -32,23 +32,6 @@ function makePresenceState(entries: { micActive?: boolean; videoActive?: boolean
 }
 
 // =====================================================
-// Helper: create a mock SignalingManager for unit tests
-// =====================================================
-function createMockSignaling() {
-  return {
-    channel: { ...mockChannelInstance },
-    sendSignal: vi.fn().mockResolvedValue(undefined),
-    leave: vi.fn().mockResolvedValue(undefined),
-    join: vi.fn().mockResolvedValue(undefined),
-    trackPresence: vi.fn().mockResolvedValue(undefined),
-    updatePresence: vi.fn().mockResolvedValue(undefined),
-    getPresenceState: vi.fn().mockReturnValue({}),
-    presenceEpochs: new Map<string, number>(),
-    onChatMessage: vi.fn(),
-  } as any
-}
-
-// =====================================================
 // Helper: create a PeerManager with real SignalingManager
 // =====================================================
 function createRealPeerManager(userId = 'user-1') {
@@ -129,7 +112,7 @@ describe('getActiveVideoCount', () => {
 
 describe('canUnmuteMic', () => {
   it('returns true when under limit', () => {
-    const state = makePresenceState(Array.from({ length: 5 }, (_, i) => ({ micActive: true })))
+    const state = makePresenceState(Array.from({ length: 5 }, () => ({ micActive: true })))
     expect(canUnmuteMic(state)).toBe(true)
   })
 
@@ -261,7 +244,7 @@ describe('PeerManager.createPeerConnection', () => {
     const stream = new MockMediaStream([new MockMediaStreamTrack('audio')])
     getUserMediaMock.mockResolvedValue(stream)
 
-    const { pm, signaling } = createRealPeerManager()
+    const { pm } = createRealPeerManager()
     await pm.ensureLocalStream()
     await pm.handleOffer('remote-user', { type: 'offer', sdp: 'v=0\r\n' })
 
@@ -365,7 +348,7 @@ describe('PeerManager.handleOffer', () => {
     const stream = new MockMediaStream([new MockMediaStreamTrack('audio')])
     getUserMediaMock.mockResolvedValue(stream)
 
-    const { pm, signaling } = createRealPeerManager()
+    const { pm } = createRealPeerManager()
     await pm.ensureLocalStream()
 
     expect(pm.getPeers().has('sender-1')).toBe(false)
@@ -425,7 +408,7 @@ describe('PeerManager.handleOffer', () => {
 
     // Admin creates offer (impolite)
     await pm.createOffer('target-user')
-    signaling.sendSignal.mockClear()
+    ;(signaling.sendSignal as any).mockClear()
 
     // Simulate collision: set makingOffer=true AND signalingState to 'have-local-offer'
     // This simulates the race condition where we're in the middle of creating our offer
@@ -727,7 +710,7 @@ describe('PeerManager.replaceTrack', () => {
     await pm.handleOffer('peer-1', { type: 'offer', sdp: 'v=0\r\n' })
 
     const newTrack = new MockMediaStreamTrack('audio', 'new-audio')
-    await pm.replaceTrack('audio', newTrack)
+    await pm.replaceTrack('audio', newTrack as any)
 
     const pc = pm.getPeers().get('peer-1')!.connection as any
     const sender = pc.getSenders().find((s: any) => s.track?.kind === 'audio')
@@ -745,7 +728,7 @@ describe('PeerManager.addScreenStreamToPeers', () => {
     const camStream = new MockMediaStream([videoTrack, audioTrack])
     getUserMediaMock.mockResolvedValue(camStream)
 
-    const { pm, signaling } = createRealPeerManager()
+    const { pm } = createRealPeerManager()
     await pm.ensureLocalStream()
     await pm.handleOffer('peer-1', { type: 'offer', sdp: 'v=0\r\n' })
 
@@ -1440,7 +1423,7 @@ describe('Edge cases', () => {
     const camStream = new MockMediaStream([videoTrack, audioTrack])
     getUserMediaMock.mockResolvedValue(camStream)
 
-    const { pm, signaling } = createRealPeerManager()
+    const { pm } = createRealPeerManager()
     const screenShareEndedCb = vi.fn()
     pm.setOnScreenShareEnded(screenShareEndedCb)
 

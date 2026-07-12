@@ -97,10 +97,8 @@ class MockRTCIceCandidate {
 // =====================================================
 class MockRTCRtpSender {
   track: any = null
-  private _kind: string
   constructor(track?: any) {
     this.track = track || null
-    this._kind = track?.kind || ''
   }
   async replaceTrack(newTrack: any) {
     this.track = newTrack
@@ -126,7 +124,7 @@ class MockRTCPeerConnection {
   private _senders: MockRTCRtpSender[] = []
   private _closed = false
 
-  addTrack(track: any, stream: any) {
+  addTrack(track: any, _stream: any) {
     const sender = new MockRTCRtpSender(track)
     this._senders.push(sender)
     return sender as any
@@ -156,7 +154,7 @@ class MockRTCPeerConnection {
     }
   }
 
-  async addIceCandidate(candidate: any) {
+  async addIceCandidate(_candidate: any) {
     // no-op in mock
   }
 
