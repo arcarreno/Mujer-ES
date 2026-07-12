@@ -198,10 +198,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           const stream = await manager.peers.ensureLocalStream()
           console.log(`[VideoCall] Local stream ready: ${stream.getTracks().length} tracks`)
           setLocalStream(stream)
-          const hasAudio = stream.getAudioTracks().length > 0
-          const hasVideo = stream.getVideoTracks().length > 0
-          setMicActive(hasAudio)
-          setVideoActive(hasVideo)
         } catch (e) {
           console.error('[VideoCall] Failed to get local stream:', e)
           // Continue without stream — user can still receive video
@@ -213,19 +209,26 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       await manager.join()
       console.log('[VideoCall] Signaling joined, tracking presence...')
 
-      // Track presence after joining
+      // Track presence after joining — derive mic/video from actual stream tracks,
+      // NOT from React state (which hasn't updated yet due to stale closures)
+      const localStream = manager.peers.getLocalStreamRef()
+      const localTracks = localStream?.getTracks() ?? []
+      const hasMic = localTracks.some(t => t.kind === 'audio' && t.enabled)
+      const hasCam = localTracks.some(t => t.kind === 'video' && t.enabled)
       const presenceData: ParticipantState = {
         userId: user.id,
         username: uname,
         avatarUrl: aUrl,
-        micActive: micActive,
-        videoActive: videoActive,
+        micActive: hasMic,
+        videoActive: hasCam,
         isSpeaking: false,
         screenSharing: false,
         joinedAt: Date.now(),
         epoch: 0,
       }
       await manager.signaling.trackPresence(presenceData)
+      setMicActive(hasMic)
+      setVideoActive(hasCam)
       setParticipants([presenceData])
       } catch (e) {
         console.error('[VideoCall] Init error:', e)
