@@ -151,16 +151,23 @@ export class SignalingManager {
     this.channel
       .on('broadcast', { event: 'signal' }, ({ payload }) => {
         const event = payload as SignalEvent
+        const from = 'fromUserId' in event ? event.fromUserId : 'unknown'
+        const target = 'targetUserId' in event ? event.targetUserId : 'all'
+        console.log(`[Signaling] Received broadcast: ${event.type} from=${from} target=${target}`)
 
         if ('targetUserId' in event && event.targetUserId !== this.myUserId) {
+          console.log(`[Signaling] Ignoring signal not for us (for ${event.targetUserId})`)
           return
         }
 
         if (event.type === 'offer' && 'fromUserId' in event) {
+          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
           this.handlers.onOffer(event.fromUserId, event.sdp)
         } else if (event.type === 'answer' && 'fromUserId' in event) {
+          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
           this.handlers.onAnswer(event.fromUserId, event.sdp)
         } else if (event.type === 'ice-candidate' && 'fromUserId' in event) {
+          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
           this.handlers.onIceCandidate(event.fromUserId, event.candidate)
         } else if (event.type === 'mute-all') {
           this.handlers.onMuteAll()
@@ -178,18 +185,19 @@ export class SignalingManager {
         this.handlers.onChatMessage?.(payload as { userId: string; username: string; text: string; time: number })
       })
       .on('presence', { event: 'sync' }, () => {
+        console.log('[Signaling] Presence sync received')
         this.handlers.onPresenceSync()
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+        console.log(`[Signaling] Presence join: ${key}`)
         this.handlers.onPresenceJoin(key, newPresences[0])
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
+        console.log(`[Signaling] Presence leave: ${key}`)
         this.handlers.onPresenceLeave(key, leftPresences[0])
       })
       .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('[Signaling] Subscribed to channel')
-        }
+        console.log(`[Signaling] Subscribe status: ${status}`)
       })
   }
 
@@ -221,12 +229,18 @@ export class SignalingManager {
   }
 
   async sendSignal(event: SignalEvent): Promise<void> {
-    if (!this.channel) return
-    await this.channel.send({
+    if (!this.channel) {
+      console.error('[Signaling] Cannot send signal: no channel')
+      return
+    }
+    const target = 'targetUserId' in event ? event.targetUserId : 'all'
+    console.log(`[Signaling] Sending ${event.type} to ${target}`)
+    const status = await this.channel.send({
       type: 'broadcast',
       event: 'signal',
       payload: event,
     })
+    console.log(`[Signaling] Send status: ${status}`)
   }
 
   async leave(): Promise<void> {
