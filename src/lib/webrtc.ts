@@ -101,7 +101,6 @@ const RTC_CONFIG_PRIVACY: RTCConfiguration = {
       credential: 'openrelayproject',
     },
   ],
-  iceTransportPolicy: 'relay', // Force TURN relay — hides real IPs
   iceCandidatePoolSize: 4,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
@@ -134,6 +133,10 @@ export class SignalingManager {
   private myUserId: string
   private lastPresenceState: ParticipantState | null = null
   presenceEpochs: Map<string, number> = new Map() // Public for epoch checking on leave events
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectAttempts = 0
+  private maxReconnectAttempts = 10
+  private lastPresenceData: ParticipantState | null = null
 
   constructor(
     courseId: string,
@@ -146,6 +149,12 @@ export class SignalingManager {
   }
 
   async join(): Promise<void> {
+    // Cancel any pending reconnect
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+
     // Prevent double-subscribe
     if (this.channel) {
       console.warn('[Signaling] Already joined, cleaning up previous channel')
@@ -223,11 +232,19 @@ export class SignalingManager {
       })
       .subscribe((status) => {
         console.log(`[Signaling] Subscribe status: ${status}`)
+        if (status === 'SUBSCRIBED') {
+          this.reconnectAttempts = 0
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[Signaling] Channel lost (${status}), scheduling reconnect...`)
+          this.scheduleReconnect()
+        }
       })
   }
 
   async trackPresence(state: ParticipantState): Promise<void> {
     if (!this.channel) return
+    // Save for reconnection
+    this.lastPresenceData = state
     // Set or increment epoch for this user
     const currentEpoch = this.presenceEpochs.get(state.userId) || 0
     state.epoch = currentEpoch + 1
@@ -269,6 +286,13 @@ export class SignalingManager {
   }
 
   async leave(): Promise<void> {
+    // Cancel any pending reconnect
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    this.reconnectAttempts = this.maxReconnectAttempts // Prevent further reconnects
+
     if (this.channel) {
       console.log('[Signaling] Leaving channel, cleaning up...')
       await this.channel.untrack()
@@ -276,6 +300,39 @@ export class SignalingManager {
       this.channel = null
       console.log('[Signaling] Channel removed')
     }
+  }
+
+  // Save presence data so we can re-track after reconnect
+  savePresenceData(data: ParticipantState): void {
+    this.lastPresenceData = data
+  }
+
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.error('[Signaling] Max reconnect attempts reached, giving up')
+      return
+    }
+    if (this.reconnectTimer) return // Already scheduled
+
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 15000)
+    this.reconnectAttempts++
+    console.log(`[Signaling] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
+
+    this.reconnectTimer = setTimeout(async () => {
+      this.reconnectTimer = null
+      try {
+        console.log('[Signaling] Attempting reconnect...')
+        await this.join()
+        // Re-track presence if we had data
+        if (this.lastPresenceData) {
+          await this.trackPresence(this.lastPresenceData)
+          console.log('[Signaling] Re-tracked presence after reconnect')
+        }
+      } catch (e) {
+        console.error('[Signaling] Reconnect failed:', e)
+        this.scheduleReconnect()
+      }
+    }, delay)
   }
 
   onChatMessage(callback: (msg: { userId: string; username: string; text: string; time: number }) => void): void {
@@ -449,6 +506,8 @@ export class PeerManager {
 
     // negotiationneeded → implicit offer (W3C §10.1)
     pc.onnegotiationneeded = async () => {
+      // Suppress during explicit offer creation to prevent duplicate offers
+      if (this.makingOffer.get(remoteUserId)) return
       try {
         this.makingOffer.set(remoteUserId, true)
         await pc.setLocalDescription()
@@ -490,14 +549,39 @@ export class PeerManager {
 
     // ICE connection state → monitor for failure and restart (W3C §4.2.6)
     pc.oniceconnectionstatechange = () => {
+      console.log(`[WebRTC] ICE state for ${remoteUserId}: ${pc.iceConnectionState}`)
       if (pc.iceConnectionState === 'failed') {
         this.restartIce(remoteUserId, pc)
       }
     }
 
-    // Connection state → cleanup on permanent failure
+    // Connection state → monitor for stuck 'new' and cleanup on failure
+    let newConnectionTimer: ReturnType<typeof setTimeout> | null = null
     pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Connection state for ${remoteUserId}: ${pc.connectionState}`)
+      if (pc.connectionState === 'new') {
+        // If stuck in 'new' for 15s, restart ICE
+        if (!newConnectionTimer) {
+          newConnectionTimer = setTimeout(() => {
+            if (pc.connectionState === 'new' || pc.connectionState === 'connecting') {
+              console.warn(`[WebRTC] Connection stuck in ${pc.connectionState}, restarting ICE for ${remoteUserId}`)
+              this.restartIce(remoteUserId, pc)
+            }
+            newConnectionTimer = null
+          }, 15000)
+        }
+      } else {
+        // Connected or transitioning — cancel the stuck timer
+        if (newConnectionTimer) {
+          clearTimeout(newConnectionTimer)
+          newConnectionTimer = null
+        }
+      }
       if (pc.connectionState === 'failed') {
+        if (newConnectionTimer) {
+          clearTimeout(newConnectionTimer)
+          newConnectionTimer = null
+        }
         this.removePeer(remoteUserId)
       }
     }
@@ -839,6 +923,7 @@ export class VideoCallManager {
   private presenceState: Record<string, any[]> = {}
   private onPresenceUpdate: ((state: Record<string, any[]>) => void) | null = null
   private onUserJoined: ((userId: string) => void) | null = null
+  private onUserLeft: ((userId: string) => void) | null = null
   private onActiveSpeaker: ((speakers: { userId: string; level: number; isSpeaking: boolean }[]) => void) | null = null
   private onQualityChange: ((qualities: ConnectionQuality[]) => void) | null = null
   private onReconnectionState: ((state: ReconnectionState, attempt: number) => void) | null = null
@@ -945,6 +1030,7 @@ export class VideoCallManager {
             if (latestEpoch <= leaveEpoch) {
               console.log(`[WebRTC] Grace period expired for ${key}, removing peer`)
               this.peers.removePeer(key)
+              this.onUserLeft?.(key)
             } else {
               console.log(`[WebRTC] Epoch advanced for ${key}, skipping removal (user rejoined)`)
             }
@@ -1006,6 +1092,10 @@ export class VideoCallManager {
 
   setOnUserJoined(callback: (userId: string) => void): void {
     this.onUserJoined = callback
+  }
+
+  setOnUserLeft(callback: (userId: string) => void): void {
+    this.onUserLeft = callback
   }
 
   setOnActiveSpeaker(callback: (speakers: { userId: string; level: number; isSpeaking: boolean }[]) => void): void {

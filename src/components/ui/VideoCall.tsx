@@ -138,6 +138,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       // Admin: when a new user joins, send them an offer (deduplicated)
       if (isAdmin) {
         const offeredUsers = new Set<string>()
+
+        // Clear offered set when user truly leaves (after grace period)
+        manager.setOnUserLeft((leftUserId) => {
+          console.log(`[VideoCall] User ${leftUserId} left, clearing offer state`)
+          offeredUsers.delete(leftUserId)
+        })
+
         manager.setOnUserJoined(async (newUserId) => {
           if (offeredUsers.has(newUserId)) {
             console.log(`[VideoCall] Already offered to ${newUserId}, skipping`)
