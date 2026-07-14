@@ -343,7 +343,7 @@ export class SignalingManager {
     this.reconnectAttempts = this.maxReconnectAttempts
     this.reconnectAttemptsSignal = this.maxReconnectAttempts
 
-    for (const [userId, chan] of this.signalSendChannels) {
+    for (const [, chan] of this.signalSendChannels) {
       await supabase.removeChannel(chan)
     }
     this.signalSendChannels.clear()
