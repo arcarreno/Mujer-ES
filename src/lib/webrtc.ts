@@ -78,10 +78,18 @@ export function canEnableVideo(presenceState: Record<string, any[]>): boolean {
 // RTC CONFIGURATION (W3C §4.2)
 // =====================================================
 
+// STUN servers for ICE candidate gathering (necessary for connection establishment)
+const STUN_SERVERS: RTCIceServer[] = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+]
+
 // Privacy mode: force all traffic through TURN relay to hide client IPs
 // For a gender violence awareness app, this is a safety-critical option
 const RTC_CONFIG_PRIVACY: RTCConfiguration = {
   iceServers: [
+    ...STUN_SERVERS,
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
@@ -94,8 +102,8 @@ const RTC_CONFIG_PRIVACY: RTCConfiguration = {
     },
   ],
   iceTransportPolicy: 'relay', // Force TURN relay — hides real IPs
-  iceCandidatePoolSize: 2,
-  bundlePolicy: 'balanced',
+  iceCandidatePoolSize: 4,
+  bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
 }
 
@@ -208,8 +216,10 @@ export class SignalingManager {
         this.handlers.onPresenceJoin(userId, newPresences[0])
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        console.log(`[Signaling] Presence leave: ${key}`)
-        this.handlers.onPresenceLeave(key, leftPresences[0])
+        // Use userId from presence state (auth userId), fallback to key
+        const userId = (leftPresences[0] as any)?.userId || key
+        console.log(`[Signaling] Presence leave: ${userId} (key: ${key})`)
+        this.handlers.onPresenceLeave(userId, leftPresences[0])
       })
       .subscribe((status) => {
         console.log(`[Signaling] Subscribe status: ${status}`)
@@ -613,12 +623,20 @@ export class PeerManager {
 
   // Handle answer from remote peer
   async handleAnswer(fromUserId: string, sdp: RTCSessionDescriptionInit): Promise<void> {
-    console.log(`[WebRTC] Received answer from ${fromUserId}`)
     const peer = this.peers.get(fromUserId)
     if (!peer) {
       console.warn(`[WebRTC] No peer found for ${fromUserId}`)
       return
     }
+
+    // Guard: ignore duplicate answers — signalingState must be 'have-local-offer'
+    // (Supabase broadcasts can replay, causing the same answer to arrive twice)
+    if (peer.connection.signalingState !== 'have-local-offer') {
+      console.warn(`[WebRTC] Ignoring answer from ${fromUserId} in state ${peer.connection.signalingState}`)
+      return
+    }
+
+    console.log(`[WebRTC] Received answer from ${fromUserId}`)
 
     try {
       await peer.connection.setRemoteDescription(sdp)
@@ -827,6 +845,7 @@ export class VideoCallManager {
   private _handleMuteAll: (() => void) | null = null
   private _handleKick: ((targetUserId: string) => void) | null = null
   private _handleEndSession: (() => void) | null = null
+  private leaveTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
 
   constructor(_courseId: string, myUserId: string, isAdmin: boolean) {
     this.myUserId = myUserId
@@ -867,8 +886,19 @@ export class VideoCallManager {
         this.onPresenceUpdate?.(this.presenceState)
       },
       onPresenceJoin: (key, _presence) => {
-        // Update participants list immediately so UI shows the new user
-        this.onPresenceUpdate?.(this.signaling.getPresenceState())
+        // Cancel any pending leave timer for this user (they rejoined)
+        const pendingTimer = this.leaveTimers.get(key)
+        if (pendingTimer) {
+          clearTimeout(pendingTimer)
+          this.leaveTimers.delete(key)
+          console.log(`[WebRTC] Cancelled pending leave timer for ${key} (user rejoined)`)
+        }
+
+        // Skip self-join updates to prevent feedback loops
+        if (key !== this.myUserId) {
+          // Update participants list so UI shows the new user
+          this.onPresenceUpdate?.(this.signaling.getPresenceState())
+        }
 
         if (this.isAdmin && key !== this.myUserId) {
           // Retry offer creation with exponential backoff
@@ -893,13 +923,36 @@ export class VideoCallManager {
           // Check epoch to prevent stale leave events from tearing down active connections
           const leaveEpoch = presence?.epoch || 0
           const currentEpoch = this.signaling.presenceEpochs.get(key) || 0
-          if (leaveEpoch >= currentEpoch) {
-            this.peers.removePeer(key)
-          } else {
+          if (leaveEpoch < currentEpoch) {
             console.warn(`[WebRTC] Ignoring stale leave event for ${key} (epoch ${leaveEpoch} < ${currentEpoch})`)
+            return
           }
-          // Update participants list so UI removes the departed user
-          this.onPresenceUpdate?.(this.signaling.getPresenceState())
+
+          // Cancel any existing timer for this user
+          const existingTimer = this.leaveTimers.get(key)
+          if (existingTimer) {
+            clearTimeout(existingTimer)
+          }
+
+          // Delayed removal: wait 5s to confirm the user is truly gone
+          // Supabase Realtime presence flaps on network instability — immediate
+          // removal destroys the peer connection before video/audio tracks arrive
+          console.log(`[WebRTC] Scheduling delayed peer removal for ${key} (5s grace period)`)
+          const timer = setTimeout(() => {
+            this.leaveTimers.delete(key)
+            // Re-verify epoch hasn't changed (user may have rejoined)
+            const latestEpoch = this.signaling.presenceEpochs.get(key) || 0
+            if (latestEpoch <= leaveEpoch) {
+              console.log(`[WebRTC] Grace period expired for ${key}, removing peer`)
+              this.peers.removePeer(key)
+            } else {
+              console.log(`[WebRTC] Epoch advanced for ${key}, skipping removal (user rejoined)`)
+            }
+            // Always update participants list
+            this.onPresenceUpdate?.(this.signaling.getPresenceState())
+          }, 5000)
+
+          this.leaveTimers.set(key, timer)
         }
       },
     })
@@ -1071,6 +1124,10 @@ export class VideoCallManager {
     this.connectionQuality.stop()
     this.silenceSuppression.stop()
     this.reconnection.stop()
+
+    // Cancel all pending leave timers
+    this.leaveTimers.forEach((timer) => clearTimeout(timer))
+    this.leaveTimers.clear()
 
     // Clean up peers and signaling
     this.peers.cleanup()
