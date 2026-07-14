@@ -159,6 +159,12 @@ export class SignalingManager {
         const target = 'targetUserId' in event ? event.targetUserId : 'all'
         console.log(`[Signaling] Received broadcast: ${event.type} from=${from} target=${target}`)
 
+        // Ignore our own broadcast signals to prevent processing our own offers/answers
+        if ('fromUserId' in event && event.fromUserId === this.myUserId) {
+          console.log(`[Signaling] Ignoring own signal: ${event.type}`)
+          return
+        }
+
         // Only filter kick by targetUserId — offer/answer/ice are broadcast to all,
         // mute-all/end-session target everyone. Presence keys may not match auth IDs,
         // so we never filter signal events by targetUserId.
@@ -457,9 +463,9 @@ export class PeerManager {
       const processStream = () => {
         if (streams[0]) {
           const existing = this.peers.get(remoteUserId)
-          if (existing && !existing.stream) {
+          if (existing) {
             existing.stream = streams[0]
-            console.log(`[WebRTC] Setting remote stream for ${remoteUserId}`)
+            console.log(`[WebRTC] Setting remote stream for ${remoteUserId} (kind=${track.kind})`)
             this.onRemoteStream?.(remoteUserId, streams[0])
           }
         }
@@ -861,6 +867,9 @@ export class VideoCallManager {
         this.onPresenceUpdate?.(this.presenceState)
       },
       onPresenceJoin: (key, _presence) => {
+        // Update participants list immediately so UI shows the new user
+        this.onPresenceUpdate?.(this.signaling.getPresenceState())
+
         if (this.isAdmin && key !== this.myUserId) {
           // Retry offer creation with exponential backoff
           let attempt = 0
@@ -889,6 +898,8 @@ export class VideoCallManager {
           } else {
             console.warn(`[WebRTC] Ignoring stale leave event for ${key} (epoch ${leaveEpoch} < ${currentEpoch})`)
           }
+          // Update participants list so UI removes the departed user
+          this.onPresenceUpdate?.(this.signaling.getPresenceState())
         }
       },
     })

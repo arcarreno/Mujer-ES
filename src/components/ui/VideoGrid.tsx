@@ -45,8 +45,11 @@ export default function VideoGrid({
   }, [screenStream, isScreenSharing])
 
   // Get active remote speakers (excluding self)
+  // Include users who have a stream even if presence hasn't updated yet
   const activeSpeakers = participants.filter(
-    (p) => p.userId !== userId && (p.micActive || p.videoActive || p.screenSharing)
+    (p) => p.userId !== userId && (
+      p.micActive || p.videoActive || p.screenSharing || remoteStreams.has(p.userId)
+    )
   )
 
   const myParticipant = participants.find((p) => p.userId === userId)
@@ -171,7 +174,7 @@ function RemoteVideoTile({
 
   return (
     <div className={`video-tile video-tile--thumb ${participant.isSpeaking ? 'video-tile--speaking' : ''}`}>
-      {participant.videoActive && stream ? (
+      {stream ? (
         <video ref={videoRef} autoPlay playsInline className="video-tile-stream" />
       ) : (
         <div className="video-tile-avatar">
