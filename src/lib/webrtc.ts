@@ -110,11 +110,13 @@ const RTC_CONFIG_PRIVACY: RTCConfiguration = {
 const RTC_CONFIG = RTC_CONFIG_PRIVACY
 
 // =====================================================
-// SIGNALING MANAGER (Supabase Realtime Broadcast)
+// SIGNALING MANAGER (Dual-Channel: Presence + Per-User Signal)
 // =====================================================
 
 export class SignalingManager {
-  channel: RealtimeChannel | null = null
+  presenceChannel: RealtimeChannel | null = null
+  signalChannel: RealtimeChannel | null = null
+  private signalSendChannels: Map<string, RealtimeChannel> = new Map()
   private courseId: string
   private handlers: {
     onOffer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
@@ -132,9 +134,11 @@ export class SignalingManager {
   }
   private myUserId: string
   private lastPresenceState: ParticipantState | null = null
-  presenceEpochs: Map<string, number> = new Map() // Public for epoch checking on leave events
+  presenceEpochs: Map<string, number> = new Map()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  private reconnectTimerSignal: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
+  private reconnectAttemptsSignal = 0
   private maxReconnectAttempts = 10
   private lastPresenceData: ParticipantState | null = null
 
@@ -149,66 +153,33 @@ export class SignalingManager {
   }
 
   async join(): Promise<void> {
-    // Cancel any pending reconnect
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
-      this.reconnectTimer = null
-    }
-
-    // Prevent double-subscribe
-    if (this.channel) {
-      console.warn('[Signaling] Already joined, cleaning up previous channel')
+    this.cancelReconnects()
+    if (this.presenceChannel || this.signalChannel) {
+      console.warn('[Signaling] Already joined, cleaning up previous channels')
       await this.leave()
     }
+    await this.setupPresenceChannel()
+    await this.setupSignalChannel()
+  }
 
-    // Create channel with presence key = auth userId for offer targeting
-    this.channel = supabase.channel(`call:${this.courseId}`, {
-      config: {
-        presence: { key: this.myUserId },
-      },
+  private async setupPresenceChannel(): Promise<void> {
+    this.presenceChannel = supabase.channel(`call:presence:${this.courseId}`, {
+      config: { presence: { key: this.myUserId } },
     })
 
-    // Add ALL handlers BEFORE subscribe (Supabase requirement)
-    this.channel
+    this.presenceChannel
       .on('broadcast', { event: 'signal' }, ({ payload }) => {
         const event = payload as SignalEvent
-        const from = 'fromUserId' in event ? event.fromUserId : 'unknown'
-        const target = 'targetUserId' in event ? event.targetUserId : 'all'
-        console.log(`[Signaling] Received broadcast: ${event.type} from=${from} target=${target}`)
-
-        // Ignore our own broadcast signals to prevent processing our own offers/answers
-        if ('fromUserId' in event && event.fromUserId === this.myUserId) {
-          console.log(`[Signaling] Ignoring own signal: ${event.type}`)
-          return
-        }
-
-        // Only filter kick by targetUserId — offer/answer/ice are broadcast to all,
-        // mute-all/end-session target everyone. Presence keys may not match auth IDs,
-        // so we never filter signal events by targetUserId.
-        if (event.type === 'kick' && event.targetUserId !== this.myUserId) {
-          console.log(`[Signaling] Ignoring kick not for us (for ${event.targetUserId})`)
-          return
-        }
-
-        if (event.type === 'offer' && 'fromUserId' in event) {
-          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
-          this.handlers.onOffer(event.fromUserId, event.sdp)
-        } else if (event.type === 'answer' && 'fromUserId' in event) {
-          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
-          this.handlers.onAnswer(event.fromUserId, event.sdp)
-        } else if (event.type === 'ice-candidate' && 'fromUserId' in event) {
-          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
-          this.handlers.onIceCandidate(event.fromUserId, event.candidate)
-        } else if (event.type === 'mute-all') {
+        if (event.type === 'mute-all') {
           this.handlers.onMuteAll()
-        } else if (event.type === 'kick' && 'targetUserId' in event) {
-          this.handlers.onKick(event.targetUserId)
         } else if (event.type === 'end-session') {
           this.handlers.onEndSession()
-        } else if (event.type === 'screen-share-started' && 'fromUserId' in event) {
+        } else if (event.type === 'screen-share-started') {
           this.handlers.onScreenShareStarted(event.fromUserId)
-        } else if (event.type === 'screen-share-stopped' && 'fromUserId' in event) {
+        } else if (event.type === 'screen-share-stopped') {
           this.handlers.onScreenShareStopped(event.fromUserId)
+        } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
+          this.handlers.onKick(event.targetUserId)
         }
       })
       .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
@@ -219,120 +190,251 @@ export class SignalingManager {
         this.handlers.onPresenceSync()
       })
       .on('presence', { event: 'join' }, ({ key, newPresences }) => {
-        // Use userId from presence state (auth userId), fallback to key
         const userId = (newPresences[0] as any)?.userId || key
         console.log(`[Signaling] Presence join: ${userId} (key: ${key})`)
         this.handlers.onPresenceJoin(userId, newPresences[0])
       })
       .on('presence', { event: 'leave' }, ({ key, leftPresences }) => {
-        // Use userId from presence state (auth userId), fallback to key
         const userId = (leftPresences[0] as any)?.userId || key
         console.log(`[Signaling] Presence leave: ${userId} (key: ${key})`)
         this.handlers.onPresenceLeave(userId, leftPresences[0])
       })
       .subscribe((status) => {
-        console.log(`[Signaling] Subscribe status: ${status}`)
+        console.log(`[Signaling] Presence subscribe status: ${status}`)
         if (status === 'SUBSCRIBED') {
           this.reconnectAttempts = 0
+          if (this.lastPresenceData) {
+            this.presenceChannel?.track(this.lastPresenceData)
+          }
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.warn(`[Signaling] Channel lost (${status}), scheduling reconnect...`)
+          console.warn(`[Signaling] Presence channel lost (${status}), scheduling reconnect...`)
           this.scheduleReconnect()
         }
       })
   }
 
+  private async setupSignalChannel(): Promise<void> {
+    this.signalChannel = supabase.channel(`call:signal:${this.myUserId}`)
+
+    this.signalChannel
+      .on('broadcast', { event: 'signal' }, ({ payload }) => {
+        const event = payload as SignalEvent
+
+        if ('fromUserId' in event && event.fromUserId === this.myUserId) return
+
+        if (event.type === 'offer') {
+          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
+          this.handlers.onOffer(event.fromUserId, event.sdp)
+        } else if (event.type === 'answer') {
+          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
+          this.handlers.onAnswer(event.fromUserId, event.sdp)
+        } else if (event.type === 'ice-candidate') {
+          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
+          this.handlers.onIceCandidate(event.fromUserId, event.candidate)
+        } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
+          this.handlers.onKick(event.targetUserId)
+        }
+      })
+      .subscribe((status) => {
+        console.log(`[Signaling] Signal subscribe status: ${status}`)
+        if (status === 'SUBSCRIBED') {
+          this.reconnectAttemptsSignal = 0
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[Signaling] Signal channel lost (${status}), scheduling reconnect...`)
+          this.scheduleReconnectSignal()
+        }
+      })
+  }
+
   async trackPresence(state: ParticipantState): Promise<void> {
-    if (!this.channel) return
-    // Save for reconnection
+    if (!this.presenceChannel) return
     this.lastPresenceData = state
-    // Set or increment epoch for this user
     const currentEpoch = this.presenceEpochs.get(state.userId) || 0
     state.epoch = currentEpoch + 1
     this.presenceEpochs.set(state.userId, state.epoch)
     this.lastPresenceState = state
-    await this.channel.track(state)
+    await this.presenceChannel.track(state)
   }
 
   async updatePresence(state: Partial<ParticipantState>): Promise<void> {
-    if (!this.channel) return
-    // Merge with last known state to preserve all fields
+    if (!this.presenceChannel) return
     const merged = { ...this.lastPresenceState, ...state } as ParticipantState
-    // Preserve current epoch
     if (this.lastPresenceState) {
       merged.epoch = this.lastPresenceState.epoch
     }
     this.lastPresenceState = merged
-    await this.channel.track(merged)
+    await this.presenceChannel.track(merged)
   }
 
   getPresenceState(): Record<string, any[]> {
-    if (!this.channel) return {}
-    return this.channel.presenceState()
+    if (!this.presenceChannel) return {}
+    return this.presenceChannel.presenceState()
   }
 
   async sendSignal(event: SignalEvent): Promise<void> {
-    if (!this.channel) {
-      console.error('[Signaling] Cannot send signal: no channel')
-      return
+    switch (event.type) {
+      case 'offer':
+      case 'answer':
+      case 'ice-candidate': {
+        const targetUserId = event.targetUserId
+        if (!targetUserId) {
+          console.error('[Signaling] Cannot send peer-to-peer signal without targetUserId')
+          return
+        }
+        console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via signal channel`)
+        await this.sendToSignalChannel(targetUserId, event)
+        break
+      }
+      case 'mute-all':
+      case 'end-session':
+      case 'screen-share-started':
+      case 'screen-share-stopped': {
+        if (!this.presenceChannel) {
+          console.error('[Signaling] Cannot send broadcast: no presence channel')
+          return
+        }
+        console.log(`[Signaling] Sending ${event.type} via presence broadcast`)
+        await this.presenceChannel.send({
+          type: 'broadcast',
+          event: 'signal',
+          payload: event,
+        })
+        break
+      }
+      case 'kick': {
+        const targetUserId = event.targetUserId
+        console.log(`[Signaling] Sending kick to ${targetUserId}`)
+        await this.sendToSignalChannel(targetUserId, event)
+        break
+      }
     }
-    const target = 'targetUserId' in event ? event.targetUserId : 'all'
-    console.log(`[Signaling] Sending ${event.type} to ${target}`)
-    const status = await this.channel.send({
+  }
+
+  private async sendToSignalChannel(targetUserId: string, event: SignalEvent): Promise<void> {
+    let chan = this.signalSendChannels.get(targetUserId)
+    if (!chan) {
+      console.log(`[Signaling] Creating send channel for ${targetUserId}`)
+      chan = supabase.channel(`call:signal:${targetUserId}`)
+      chan.subscribe()
+      this.signalSendChannels.set(targetUserId, chan)
+    }
+    const status = await chan.send({
       type: 'broadcast',
       event: 'signal',
       payload: event,
     })
-    console.log(`[Signaling] Send status: ${status}`)
+    console.log(`[Signaling] Send status to ${targetUserId}: ${status}`)
+  }
+
+  async sendChatMessage(msg: { userId: string; username: string; text: string; time: number }): Promise<void> {
+    if (!this.presenceChannel) {
+      console.error('[Signaling] Cannot send chat: no presence channel')
+      return
+    }
+    await this.presenceChannel.send({
+      type: 'broadcast',
+      event: 'chat-message',
+      payload: msg,
+    })
   }
 
   async leave(): Promise<void> {
-    // Cancel any pending reconnect
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer)
-      this.reconnectTimer = null
-    }
-    this.reconnectAttempts = this.maxReconnectAttempts // Prevent further reconnects
+    this.cancelReconnects()
+    this.reconnectAttempts = this.maxReconnectAttempts
+    this.reconnectAttemptsSignal = this.maxReconnectAttempts
 
-    if (this.channel) {
-      console.log('[Signaling] Leaving channel, cleaning up...')
-      await this.channel.untrack()
-      await supabase.removeChannel(this.channel)
-      this.channel = null
-      console.log('[Signaling] Channel removed')
+    for (const [userId, chan] of this.signalSendChannels) {
+      await supabase.removeChannel(chan)
+    }
+    this.signalSendChannels.clear()
+
+    if (this.presenceChannel) {
+      console.log('[Signaling] Leaving presence channel...')
+      await this.presenceChannel.untrack()
+      await supabase.removeChannel(this.presenceChannel)
+      this.presenceChannel = null
+      console.log('[Signaling] Presence channel removed')
+    }
+
+    if (this.signalChannel) {
+      console.log('[Signaling] Leaving signal channel...')
+      await supabase.removeChannel(this.signalChannel)
+      this.signalChannel = null
+      console.log('[Signaling] Signal channel removed')
     }
   }
 
-  // Save presence data so we can re-track after reconnect
   savePresenceData(data: ParticipantState): void {
     this.lastPresenceData = data
   }
 
   private scheduleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[Signaling] Max reconnect attempts reached, giving up')
+      console.error('[Signaling] Max presence reconnect attempts reached, giving up')
       return
     }
-    if (this.reconnectTimer) return // Already scheduled
+    if (this.reconnectTimer) return
 
     const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 15000)
     this.reconnectAttempts++
-    console.log(`[Signaling] Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`)
+    console.log(`[Signaling] Reconnecting presence in ${delay}ms (attempt ${this.reconnectAttempts})`)
 
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
       try {
-        console.log('[Signaling] Attempting reconnect...')
-        await this.join()
-        // Re-track presence if we had data
+        console.log('[Signaling] Attempting presence reconnect...')
+        // Remove the old dead channel first
+        if (this.presenceChannel) {
+          await supabase.removeChannel(this.presenceChannel)
+          this.presenceChannel = null
+        }
+        await this.setupPresenceChannel()
         if (this.lastPresenceData) {
           await this.trackPresence(this.lastPresenceData)
-          console.log('[Signaling] Re-tracked presence after reconnect')
         }
       } catch (e) {
-        console.error('[Signaling] Reconnect failed:', e)
+        console.error('[Signaling] Presence reconnect failed:', e)
         this.scheduleReconnect()
       }
     }, delay)
+  }
+
+  private scheduleReconnectSignal(): void {
+    if (this.reconnectAttemptsSignal >= this.maxReconnectAttempts) {
+      console.error('[Signaling] Max signal reconnect attempts reached, giving up')
+      return
+    }
+    if (this.reconnectTimerSignal) return
+
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttemptsSignal), 15000)
+    this.reconnectAttemptsSignal++
+    console.log(`[Signaling] Reconnecting signal in ${delay}ms (attempt ${this.reconnectAttemptsSignal})`)
+
+    this.reconnectTimerSignal = setTimeout(async () => {
+      this.reconnectTimerSignal = null
+      try {
+        console.log('[Signaling] Attempting signal reconnect...')
+        if (this.signalChannel) {
+          await supabase.removeChannel(this.signalChannel)
+          this.signalChannel = null
+        }
+        await this.setupSignalChannel()
+      } catch (e) {
+        console.error('[Signaling] Signal reconnect failed:', e)
+        this.scheduleReconnectSignal()
+      }
+    }, delay)
+  }
+
+  private cancelReconnects(): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    if (this.reconnectTimerSignal) {
+      clearTimeout(this.reconnectTimerSignal)
+      this.reconnectTimerSignal = null
+    }
   }
 
   onChatMessage(callback: (msg: { userId: string; username: string; text: string; time: number }) => void): void {

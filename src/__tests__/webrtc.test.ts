@@ -14,7 +14,8 @@ import {
   getUserMediaMock,
   getDisplayMediaMock,
   mockSupabase,
-  mockChannelInstance,
+  mockPresenceChannel,
+  mockSignalChannel,
   MockMediaStreamTrack,
   MockMediaStream,
 } from './setup'
@@ -878,14 +879,15 @@ describe('SignalingManager', () => {
     await sm.join()
 
     expect(mockSupabase.channel).toHaveBeenCalledWith(
-      'call:course-1',
+      'call:presence:course-1',
       expect.objectContaining({
         config: { presence: { key: 'user-1' } },
       })
     )
+    expect(mockSupabase.channel).toHaveBeenCalledWith('call:signal:user-1')
   })
 
-  it('join cleans up existing channel before creating new', async () => {
+  it('join cleans up existing channels before creating new', async () => {
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
       onAnswer: vi.fn(),
@@ -906,7 +908,8 @@ describe('SignalingManager', () => {
 
     await sm.join()
 
-    expect(mockSupabase.removeChannel).toHaveBeenCalled()
+    // Both presence and signal channels should be removed during cleanup
+    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(2)
   })
 
   it('trackPresence sets epoch and calls channel.track', async () => {
@@ -940,7 +943,7 @@ describe('SignalingManager', () => {
     await sm.trackPresence(state)
 
     expect(state.epoch).toBe(1)
-    expect(mockChannelInstance.track).toHaveBeenCalledWith(state)
+    expect(mockPresenceChannel.track).toHaveBeenCalledWith(state)
   })
 
   it('trackPresence increments epoch on subsequent calls', async () => {
@@ -1014,7 +1017,7 @@ describe('SignalingManager', () => {
     await sm.updatePresence({ micActive: false })
 
     // Should have merged micActive=false with the rest of fullState
-    expect(mockChannelInstance.track).toHaveBeenLastCalledWith(
+    expect(mockPresenceChannel.track).toHaveBeenLastCalledWith(
       expect.objectContaining({
         micActive: false,
         videoActive: true,
@@ -1055,7 +1058,7 @@ describe('SignalingManager', () => {
 
     await sm.updatePresence({ micActive: false })
 
-    expect(mockChannelInstance.track).toHaveBeenLastCalledWith(
+    expect(mockPresenceChannel.track).toHaveBeenLastCalledWith(
       expect.objectContaining({ epoch: epochAfterTrack })
     )
   })
@@ -1078,7 +1081,7 @@ describe('SignalingManager', () => {
 
     await sm.sendSignal({ type: 'mute-all' })
 
-    expect(mockChannelInstance.send).toHaveBeenCalledWith({
+    expect(mockPresenceChannel.send).toHaveBeenCalledWith({
       type: 'broadcast',
       event: 'signal',
       payload: { type: 'mute-all' },
@@ -1126,9 +1129,10 @@ describe('SignalingManager', () => {
 
     await sm.leave()
 
-    expect(mockChannelInstance.untrack).toHaveBeenCalled()
+    expect(mockPresenceChannel.untrack).toHaveBeenCalled()
     expect(mockSupabase.removeChannel).toHaveBeenCalled()
-    expect(sm.channel).toBeNull()
+    expect(sm.presenceChannel).toBeNull()
+    expect(sm.signalChannel).toBeNull()
   })
 
   it('leave handles null channel gracefully', async () => {
@@ -1146,17 +1150,18 @@ describe('SignalingManager', () => {
       onPresenceLeave: vi.fn(),
     })
 
-    // Never joined — channel is null
+    // Never joined — channels are null
     await sm.leave()
-    expect(sm.channel).toBeNull()
+    expect(sm.presenceChannel).toBeNull()
+    expect(sm.signalChannel).toBeNull()
   })
 })
 
 // =====================================================
-// SIGNALING — broadcast handler filtering
+// SIGNALING — broadcast handler filtering (Signal Channel)
 // =====================================================
-describe('SignalingManager broadcast handler', () => {
-  it('does NOT filter signal offers by targetUserId (broadcasts to all)', async () => {
+describe('SignalingManager signal channel handler', () => {
+  it('processes offers arriving on signal channel', async () => {
     const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer,
@@ -1173,15 +1178,14 @@ describe('SignalingManager broadcast handler', () => {
     })
     await sm.join()
 
-    // Get the broadcast handler that was registered
-    const broadcastHandler = mockChannelInstance.on.mock.calls.find(
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
     )?.[2]
 
-    expect(broadcastHandler).toBeDefined()
+    expect(signalHandler).toBeDefined()
 
-    // Signal for different user — should still be processed (no targetUserId filtering for signals)
-    broadcastHandler({
+    // Offer for different user — should still be processed (signal channel is for us)
+    signalHandler({
       payload: {
         type: 'offer',
         fromUserId: 'user-2',
@@ -1193,7 +1197,7 @@ describe('SignalingManager broadcast handler', () => {
     expect(onOffer).toHaveBeenCalledWith('user-2', { type: 'offer', sdp: 'v=0\r\n' })
   })
 
-  it('processes signals targeted at current user', async () => {
+  it('processes signals from other users', async () => {
     const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer,
@@ -1210,11 +1214,11 @@ describe('SignalingManager broadcast handler', () => {
     })
     await sm.join()
 
-    const broadcastHandler = mockChannelInstance.on.mock.calls.find(
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
     )?.[2]
 
-    broadcastHandler({
+    signalHandler({
       payload: {
         type: 'offer',
         fromUserId: 'user-2',
@@ -1226,7 +1230,7 @@ describe('SignalingManager broadcast handler', () => {
     expect(onOffer).toHaveBeenCalledWith('user-2', { type: 'offer', sdp: 'v=0\r\n' })
   })
 
-  it('filters kick commands not targeted at current user', async () => {
+  it('filters kick commands not targeted at current user on signal channel', async () => {
     const onKick = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
@@ -1243,12 +1247,12 @@ describe('SignalingManager broadcast handler', () => {
     })
     await sm.join()
 
-    const broadcastHandler = mockChannelInstance.on.mock.calls.find(
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
     )?.[2]
 
     // Kick for different user — should NOT be processed
-    broadcastHandler({
+    signalHandler({
       payload: {
         type: 'kick',
         targetUserId: 'other-user',
@@ -1258,7 +1262,7 @@ describe('SignalingManager broadcast handler', () => {
     expect(onKick).not.toHaveBeenCalled()
   })
 
-  it('processes kick commands targeted at current user', async () => {
+  it('processes kick commands targeted at current user on signal channel', async () => {
     const onKick = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
@@ -1275,12 +1279,12 @@ describe('SignalingManager broadcast handler', () => {
     })
     await sm.join()
 
-    const broadcastHandler = mockChannelInstance.on.mock.calls.find(
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
     )?.[2]
 
     // Kick for us — should be processed
-    broadcastHandler({
+    signalHandler({
       payload: {
         type: 'kick',
         targetUserId: 'user-1',
@@ -1312,7 +1316,7 @@ describe('SignalingManager presence handlers', () => {
     })
     await sm.join()
 
-    const syncHandler = mockChannelInstance.on.mock.calls.find(
+    const syncHandler = mockPresenceChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'presence' && call[1]?.event === 'sync'
     )?.[2]
 
@@ -1338,7 +1342,7 @@ describe('SignalingManager presence handlers', () => {
     })
     await sm.join()
 
-    const joinHandler = mockChannelInstance.on.mock.calls.find(
+    const joinHandler = mockPresenceChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'presence' && call[1]?.event === 'join'
     )?.[2]
 
@@ -1367,7 +1371,7 @@ describe('SignalingManager presence handlers', () => {
     })
     await sm.join()
 
-    const leaveHandler = mockChannelInstance.on.mock.calls.find(
+    const leaveHandler = mockPresenceChannel.on.mock.calls.find(
       (call: any[]) => call[0] === 'presence' && call[1]?.event === 'leave'
     )?.[2]
 

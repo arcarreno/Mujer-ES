@@ -220,7 +220,16 @@ setupMediaDevices()
 // =====================================================
 // Mock Supabase
 // =====================================================
-const mockChannelInstance = {
+const mockPresenceChannel = {
+  on: vi.fn().mockReturnThis(),
+  subscribe: vi.fn().mockReturnThis(),
+  track: vi.fn().mockResolvedValue('ok'),
+  send: vi.fn().mockResolvedValue('ok'),
+  untrack: vi.fn().mockResolvedValue('ok'),
+  presenceState: vi.fn().mockReturnValue({}),
+}
+
+const mockSignalChannel = {
   on: vi.fn().mockReturnThis(),
   subscribe: vi.fn().mockReturnThis(),
   track: vi.fn().mockResolvedValue('ok'),
@@ -230,7 +239,11 @@ const mockChannelInstance = {
 }
 
 const mockSupabase = {
-  channel: vi.fn().mockReturnValue(mockChannelInstance),
+  channel: vi.fn().mockImplementation((name: string) => {
+    if (name.startsWith('call:presence:')) return mockPresenceChannel
+    if (name.startsWith('call:signal:')) return mockSignalChannel
+    return mockPresenceChannel
+  }),
   removeChannel: vi.fn().mockResolvedValue('ok'),
   auth: {
     getUser: vi.fn().mockResolvedValue({
@@ -292,4 +305,4 @@ vi.mock('../lib/reconnection', () => {
 })
 
 // Export for test access
-export { getUserMediaMock, getDisplayMediaMock, mockSupabase, mockChannelInstance, MockMediaStreamTrack, MockMediaStream }
+export { getUserMediaMock, getDisplayMediaMock, mockSupabase, mockPresenceChannel, mockSignalChannel, MockMediaStreamTrack, MockMediaStream }

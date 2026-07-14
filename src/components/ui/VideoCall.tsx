@@ -382,11 +382,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       text: chatMessage.trim(),
       time: Date.now(),
     }
-    await manager.signaling.channel?.send({
-      type: 'broadcast',
-      event: 'chat-message',
-      payload: msg,
-    })
+    await manager.signaling.sendChatMessage(msg)
     setChatMessages(prev => [...prev, msg])
     setChatMessage('')
   }, [chatMessage, userId, username])
