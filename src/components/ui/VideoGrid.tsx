@@ -9,6 +9,7 @@ interface VideoGridProps {
   userId: string
   isScreenSharing: boolean
   isAdmin: boolean
+  screenShareUserId: string | null
 }
 
 export default function VideoGrid({
@@ -19,6 +20,7 @@ export default function VideoGrid({
   userId,
   isScreenSharing,
   isAdmin: _isAdmin,
+  screenShareUserId,
 }: VideoGridProps) {
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const screenMainRef = useRef<HTMLVideoElement>(null)
@@ -36,12 +38,14 @@ export default function VideoGrid({
     }
   }, [screenStream])
 
-  // Track whether local stream has active video
   const hasLocalVideo = localStream !== null && localStream.getVideoTracks().length > 0
 
-  // Remote participants with active video/audio (not self)
+  // Determine which stream to show as the main screen share
+  const activeScreenStream = screenStream || (screenShareUserId ? remoteStreams.get(screenShareUserId) ?? null : null)
+
+  // Remote participants excluding screen sharer (who's already in main view)
   const activeRemoteParticipants = participants.filter(
-    (p) => p.userId !== userId && (
+    (p) => p.userId !== userId && p.userId !== screenShareUserId && (
       p.videoActive || p.micActive || remoteStreams.has(p.userId)
     )
   )
@@ -93,7 +97,7 @@ export default function VideoGrid({
     </div>
   )
 
-  if (isScreenSharing && screenStream) {
+  if (isScreenSharing && activeScreenStream) {
     return (
       <div className="video-grid video-grid--screenshare">
         <div className="video-grid-screenshare-main">

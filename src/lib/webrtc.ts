@@ -649,11 +649,31 @@ export class PeerManager {
       track.onunmute = processStream
     }
 
-    // ICE connection state → monitor for failure and restart (W3C §4.2.6)
+    // ICE connection state → monitor for failure/disconnect and restart
+    let iceDisconnectTimer: ReturnType<typeof setTimeout> | null = null
     pc.oniceconnectionstatechange = () => {
       console.log(`[WebRTC] ICE state for ${remoteUserId}: ${pc.iceConnectionState}`)
       if (pc.iceConnectionState === 'failed') {
+        if (iceDisconnectTimer) {
+          clearTimeout(iceDisconnectTimer)
+          iceDisconnectTimer = null
+        }
         this.restartIce(remoteUserId, pc)
+      } else if (pc.iceConnectionState === 'disconnected') {
+        if (!iceDisconnectTimer) {
+          iceDisconnectTimer = setTimeout(() => {
+            iceDisconnectTimer = null
+            if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+              console.warn(`[WebRTC] ICE still disconnected, restarting for ${remoteUserId}`)
+              this.restartIce(remoteUserId, pc)
+            }
+          }, 5000)
+        }
+      } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        if (iceDisconnectTimer) {
+          clearTimeout(iceDisconnectTimer)
+          iceDisconnectTimer = null
+        }
       }
     }
 
@@ -1032,6 +1052,8 @@ export class VideoCallManager {
   private _handleMuteAll: (() => void) | null = null
   private _handleKick: ((targetUserId: string) => void) | null = null
   private _handleEndSession: (() => void) | null = null
+  private _handleScreenShareStarted: ((fromUserId: string) => void) | null = null
+  private _handleScreenShareStopped: ((fromUserId: string) => void) | null = null
   private leaveTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
 
   constructor(_courseId: string, myUserId: string, isAdmin: boolean) {
@@ -1066,8 +1088,8 @@ export class VideoCallManager {
       onMuteAll: () => this._handleMuteAll?.(),
       onKick: (targetUserId) => this._handleKick?.(targetUserId),
       onEndSession: () => this._handleEndSession?.(),
-      onScreenShareStarted: () => {},
-      onScreenShareStopped: () => {},
+      onScreenShareStarted: (fromUserId) => this._handleScreenShareStarted?.(fromUserId),
+      onScreenShareStopped: (fromUserId) => this._handleScreenShareStopped?.(fromUserId),
       onPresenceSync: () => {
         this.presenceState = this.signaling.getPresenceState()
         this.onPresenceUpdate?.(this.presenceState)
@@ -1222,6 +1244,14 @@ export class VideoCallManager {
 
   onEndSession(callback: () => void): void {
     this._handleEndSession = callback
+  }
+
+  onScreenShareStarted(callback: (fromUserId: string) => void): void {
+    this._handleScreenShareStarted = callback
+  }
+
+  onScreenShareStopped(callback: (fromUserId: string) => void): void {
+    this._handleScreenShareStopped = callback
   }
 
   onChatMessage(callback: (msg: { userId: string; username: string; text: string; time: number }) => void): void {

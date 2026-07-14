@@ -29,6 +29,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const [micActive, setMicActive] = useState(false)
   const [videoActive, setVideoActive] = useState(false)
   const [isScreenSharing, setIsScreenSharing] = useState(false)
+  const [remoteScreenShareUserId, setRemoteScreenShareUserId] = useState<string | null>(null)
   const [showParticipants, setShowParticipants] = useState(false)
   const [showChat, setShowChat] = useState(false)
   const [chatMessage, setChatMessage] = useState('')
@@ -194,6 +195,17 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       // Register chat message handler before join
       manager.onChatMessage((msg) => {
         setChatMessages(prev => [...prev, msg])
+      })
+
+      // Screen share from remote user → switch layout
+      manager.onScreenShareStarted((fromUserId) => {
+        console.log(`[VideoCall] Remote screen share started by ${fromUserId}`)
+        setRemoteScreenShareUserId(fromUserId)
+      })
+
+      manager.onScreenShareStopped(() => {
+        console.log(`[VideoCall] Remote screen share stopped`)
+        setRemoteScreenShareUserId(null)
       })
 
       // IMPORTANT: Get local stream BEFORE joining signaling
@@ -429,8 +441,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             remoteStreams={remoteStreams}
             participants={uniqueParticipants}
             userId={userId}
-            isScreenSharing={isScreenSharing}
+            isScreenSharing={isScreenSharing || remoteScreenShareUserId !== null}
             isAdmin={isAdmin}
+            screenShareUserId={remoteScreenShareUserId}
           />
         </div>
 
