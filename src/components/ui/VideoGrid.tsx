@@ -32,16 +32,16 @@ export default function VideoGrid({
     }
   }, [localStream])
 
-  useEffect(() => {
-    if (screenMainRef.current && screenStream) {
-      screenMainRef.current.srcObject = screenStream
-    }
-  }, [screenStream])
-
-  const hasLocalVideo = localStream !== null && localStream.getVideoTracks().length > 0
-
   // Determine which stream to show as the main screen share
   const activeScreenStream = screenStream || (screenShareUserId ? remoteStreams.get(screenShareUserId) ?? null : null)
+
+  useEffect(() => {
+    if (screenMainRef.current) {
+      screenMainRef.current.srcObject = activeScreenStream || null
+    }
+  }, [activeScreenStream])
+
+  const hasLocalVideo = localStream !== null && localStream.getVideoTracks().length > 0
 
   // Remote participants excluding screen sharer (who's already in main view)
   const activeRemoteParticipants = participants.filter(

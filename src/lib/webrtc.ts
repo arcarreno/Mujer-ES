@@ -233,6 +233,12 @@ export class SignalingManager {
           this.handlers.onIceCandidate(event.fromUserId, event.candidate)
         } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
           this.handlers.onKick(event.targetUserId)
+        } else if (event.type === 'end-session') {
+          console.log(`[WebRTC] Received end-session via signal channel`)
+          this.handlers.onEndSession()
+        } else if (event.type === 'mute-all') {
+          console.log(`[WebRTC] Received mute-all via signal channel`)
+          this.handlers.onMuteAll()
         }
       })
       .subscribe((status) => {
@@ -263,6 +269,8 @@ export class SignalingManager {
       merged.epoch = this.lastPresenceState.epoch
     }
     this.lastPresenceState = merged
+    // Sync lastPresenceData so channel reconnects use the latest state
+    this.lastPresenceData = merged
     await this.presenceChannel.track(merged)
   }
 
@@ -1054,7 +1062,6 @@ export class VideoCallManager {
   private _handleEndSession: (() => void) | null = null
   private _handleScreenShareStarted: ((fromUserId: string) => void) | null = null
   private _handleScreenShareStopped: ((fromUserId: string) => void) | null = null
-  private leaveTimers: Map<string, ReturnType<typeof setTimeout>> = new Map()
 
   constructor(_courseId: string, myUserId: string, isAdmin: boolean) {
     this.myUserId = myUserId
@@ -1095,14 +1102,6 @@ export class VideoCallManager {
         this.onPresenceUpdate?.(this.presenceState)
       },
       onPresenceJoin: (key, _presence) => {
-        // Cancel any pending leave timer for this user (they rejoined)
-        const pendingTimer = this.leaveTimers.get(key)
-        if (pendingTimer) {
-          clearTimeout(pendingTimer)
-          this.leaveTimers.delete(key)
-          console.log(`[WebRTC] Cancelled pending leave timer for ${key} (user rejoined)`)
-        }
-
         // Skip self-join updates to prevent feedback loops
         if (key !== this.myUserId) {
           // Update participants list so UI shows the new user
@@ -1137,32 +1136,23 @@ export class VideoCallManager {
             return
           }
 
-          // Cancel any existing timer for this user
-          const existingTimer = this.leaveTimers.get(key)
-          if (existingTimer) {
-            clearTimeout(existingTimer)
-          }
+          // Do NOT destroy the peer connection on presence leave.
+          // Supabase Realtime presence frequently flaps (CLOSED → reconnect → CLOSED)
+          // during network instability. Destroying peers on presence flaps causes
+          // the screen-share black screen and video freeze problems.
+          //
+          // The WebRTC connection monitors itself via onconnectionstatechange:
+          // - 'failed' → peer is removed automatically
+          // - ICE restarts on 'disconnected' (5s timer) and 'failed'
+          // - Stuck 'new' → ICE restart after 15s
+          //
+          // Only the participants list is updated — the WebRTC connection stays alive.
+          console.log(`[WebRTC] Presence leave for ${key} — keeping peer connection alive (epoch ${leaveEpoch})`)
 
-          // Delayed removal: wait 5s to confirm the user is truly gone
-          // Supabase Realtime presence flaps on network instability — immediate
-          // removal destroys the peer connection before video/audio tracks arrive
-          console.log(`[WebRTC] Scheduling delayed peer removal for ${key} (5s grace period)`)
-          const timer = setTimeout(() => {
-            this.leaveTimers.delete(key)
-            // Re-verify epoch hasn't changed (user may have rejoined)
-            const latestEpoch = this.signaling.presenceEpochs.get(key) || 0
-            if (latestEpoch <= leaveEpoch) {
-              console.log(`[WebRTC] Grace period expired for ${key}, removing peer`)
-              this.peers.removePeer(key)
-              this.onUserLeft?.(key)
-            } else {
-              console.log(`[WebRTC] Epoch advanced for ${key}, skipping removal (user rejoined)`)
-            }
-            // Always update participants list
-            this.onPresenceUpdate?.(this.signaling.getPresenceState())
-          }, 5000)
-
-          this.leaveTimers.set(key, timer)
+          // Notify UI that user left so participants list updates
+          this.onUserLeft?.(key)
+          // Always update participants list via presence state
+          this.onPresenceUpdate?.(this.signaling.getPresenceState())
         }
       },
     })
@@ -1313,7 +1303,19 @@ export class VideoCallManager {
 
   async endSession(): Promise<void> {
     if (this.isAdmin) {
-      await this.signaling.sendSignal({ type: 'end-session' })
+      // Send via presence broadcast (the primary channel)
+      this.signaling.sendSignal({ type: 'end-session' }).catch(() => {})
+
+      // ALSO send to every known peer's signal channel as fallback.
+      // If the presence channel is CLOSED/reconnecting, the broadcast won't reach
+      // anyone — but each peer's individual signal channel may still be live.
+      for (const userId of this.peers.getPeers().keys()) {
+        this.signaling.sendSignal({
+          type: 'end-session',
+          fromUserId: this.myUserId,
+          targetUserId: userId,
+        } as SignalEvent).catch(() => {})
+      }
     }
   }
 
@@ -1346,10 +1348,6 @@ export class VideoCallManager {
     this.connectionQuality.stop()
     this.silenceSuppression.stop()
     this.reconnection.stop()
-
-    // Cancel all pending leave timers
-    this.leaveTimers.forEach((timer) => clearTimeout(timer))
-    this.leaveTimers.clear()
 
     // Clean up peers and signaling
     this.peers.cleanup()
