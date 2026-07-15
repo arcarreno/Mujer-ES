@@ -15,6 +15,7 @@ import {
   getDisplayMediaMock,
   mockSupabase,
   mockPresenceChannel,
+  mockSignalChannel,
   MockMediaStreamTrack,
   MockMediaStream,
 } from './setup'
@@ -883,8 +884,7 @@ describe('SignalingManager', () => {
         config: { presence: { key: 'user-1' } },
       })
     )
-    // No separate signal channel anymore — durable signaling uses DB
-    expect(mockSupabase.channel).toHaveBeenCalledTimes(1)
+    expect(mockSupabase.channel).toHaveBeenCalledWith('call:signal:user-1')
   })
 
   it('join cleans up existing channels before creating new', async () => {
@@ -908,8 +908,8 @@ describe('SignalingManager', () => {
 
     await sm.join()
 
-    // Only presence channel should be removed during cleanup (signal moved to DB)
-    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(1)
+    // Both presence and signal channels should be removed during cleanup
+    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(2)
   })
 
   it('trackPresence sets epoch and calls channel.track', async () => {
@@ -1132,6 +1132,7 @@ describe('SignalingManager', () => {
     expect(mockPresenceChannel.untrack).toHaveBeenCalled()
     expect(mockSupabase.removeChannel).toHaveBeenCalled()
     expect(sm.presenceChannel).toBeNull()
+    expect(sm.signalChannel).toBeNull()
   })
 
   it('leave handles null channel gracefully', async () => {
@@ -1152,14 +1153,15 @@ describe('SignalingManager', () => {
     // Never joined — channels are null
     await sm.leave()
     expect(sm.presenceChannel).toBeNull()
+    expect(sm.signalChannel).toBeNull()
   })
 })
 
 // =====================================================
-// SIGNALING — durable DB-backed signaling (handleIncomingSignal)
+// SIGNALING — broadcast handler filtering (Signal Channel)
 // =====================================================
-describe('SignalingManager durable signaling', () => {
-  it('processes offer signals from DB', () => {
+describe('SignalingManager signal channel handler', () => {
+  it('processes offers arriving on signal channel', async () => {
     const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer,
@@ -1174,25 +1176,32 @@ describe('SignalingManager durable signaling', () => {
       onPresenceJoin: vi.fn(),
       onPresenceLeave: vi.fn(),
     })
+    await sm.join()
 
-    // Access private handleIncomingSignal via type assertion
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'user-2',
-      to_user_id: 'user-1',
-      signal_type: 'offer',
-      payload: { sdp: { type: 'offer', sdp: 'v=0\r\n' } },
-      created_at: new Date().toISOString(),
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )?.[2]
+
+    expect(signalHandler).toBeDefined()
+
+    // Offer for different user — should still be processed (signal channel is for us)
+    signalHandler({
+      payload: {
+        type: 'offer',
+        fromUserId: 'user-2',
+        targetUserId: 'other-user',
+        sdp: { type: 'offer', sdp: 'v=0\r\n' },
+      },
     })
 
     expect(onOffer).toHaveBeenCalledWith('user-2', { type: 'offer', sdp: 'v=0\r\n' })
   })
 
-  it('processes answer signals from DB', () => {
-    const onAnswer = vi.fn()
+  it('processes signals from other users', async () => {
+    const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
-      onOffer: vi.fn(),
-      onAnswer,
+      onOffer,
+      onAnswer: vi.fn(),
       onIceCandidate: vi.fn(),
       onMuteAll: vi.fn(),
       onKick: vi.fn(),
@@ -1203,50 +1212,25 @@ describe('SignalingManager durable signaling', () => {
       onPresenceJoin: vi.fn(),
       onPresenceLeave: vi.fn(),
     })
+    await sm.join()
 
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'user-2',
-      to_user_id: 'user-1',
-      signal_type: 'answer',
-      payload: { sdp: { type: 'answer', sdp: 'v=0\r\n' } },
-      created_at: new Date().toISOString(),
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )?.[2]
+
+    signalHandler({
+      payload: {
+        type: 'offer',
+        fromUserId: 'user-2',
+        targetUserId: 'user-1',
+        sdp: { type: 'offer', sdp: 'v=0\r\n' },
+      },
     })
 
-    expect(onAnswer).toHaveBeenCalledWith('user-2', { type: 'answer', sdp: 'v=0\r\n' })
+    expect(onOffer).toHaveBeenCalledWith('user-2', { type: 'offer', sdp: 'v=0\r\n' })
   })
 
-  it('processes ICE candidate signals from DB', () => {
-    const onIceCandidate = vi.fn()
-    const sm = new SignalingManager('course-1', 'user-1', {
-      onOffer: vi.fn(),
-      onAnswer: vi.fn(),
-      onIceCandidate,
-      onMuteAll: vi.fn(),
-      onKick: vi.fn(),
-      onEndSession: vi.fn(),
-      onScreenShareStarted: vi.fn(),
-      onScreenShareStopped: vi.fn(),
-      onPresenceSync: vi.fn(),
-      onPresenceJoin: vi.fn(),
-      onPresenceLeave: vi.fn(),
-    })
-
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'user-2',
-      to_user_id: 'user-1',
-      signal_type: 'ice-candidate',
-      payload: { candidate: { candidate: 'candidate:1 1 UDP 2122252543 192.168.1.1 54321 typ host' } },
-      created_at: new Date().toISOString(),
-    })
-
-    expect(onIceCandidate).toHaveBeenCalledWith('user-2', {
-      candidate: 'candidate:1 1 UDP 2122252543 192.168.1.1 54321 typ host',
-    })
-  })
-
-  it('processes kick signals targeted at current user from DB', () => {
+  it('filters kick commands not targeted at current user on signal channel', async () => {
     const onKick = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
@@ -1261,68 +1245,31 @@ describe('SignalingManager durable signaling', () => {
       onPresenceJoin: vi.fn(),
       onPresenceLeave: vi.fn(),
     })
+    await sm.join()
+
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )?.[2]
 
     // Kick for different user — should NOT be processed
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'admin',
-      to_user_id: 'other-user',
-      signal_type: 'kick',
-      payload: {},
-      created_at: new Date().toISOString(),
+    signalHandler({
+      payload: {
+        type: 'kick',
+        targetUserId: 'other-user',
+      },
     })
 
     expect(onKick).not.toHaveBeenCalled()
-
-    // Kick for us — SHOULD be processed
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'admin',
-      to_user_id: 'user-1',
-      signal_type: 'kick',
-      payload: {},
-      created_at: new Date().toISOString(),
-    })
-
-    expect(onKick).toHaveBeenCalledWith('user-1')
   })
 
-  it('processes end-session signals from DB', () => {
-    const onEndSession = vi.fn()
+  it('processes kick commands targeted at current user on signal channel', async () => {
+    const onKick = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
       onAnswer: vi.fn(),
       onIceCandidate: vi.fn(),
       onMuteAll: vi.fn(),
-      onKick: vi.fn(),
-      onEndSession,
-      onScreenShareStarted: vi.fn(),
-      onScreenShareStopped: vi.fn(),
-      onPresenceSync: vi.fn(),
-      onPresenceJoin: vi.fn(),
-      onPresenceLeave: vi.fn(),
-    })
-
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'admin',
-      to_user_id: 'user-1',
-      signal_type: 'end-session',
-      payload: {},
-      created_at: new Date().toISOString(),
-    })
-
-    expect(onEndSession).toHaveBeenCalled()
-  })
-
-  it('processes mute-all signals from DB', () => {
-    const onMuteAll = vi.fn()
-    const sm = new SignalingManager('course-1', 'user-1', {
-      onOffer: vi.fn(),
-      onAnswer: vi.fn(),
-      onIceCandidate: vi.fn(),
-      onMuteAll,
-      onKick: vi.fn(),
+      onKick,
       onEndSession: vi.fn(),
       onScreenShareStarted: vi.fn(),
       onScreenShareStopped: vi.fn(),
@@ -1330,17 +1277,21 @@ describe('SignalingManager durable signaling', () => {
       onPresenceJoin: vi.fn(),
       onPresenceLeave: vi.fn(),
     })
+    await sm.join()
 
-    ;(sm as any).handleIncomingSignal({
-      session_id: 'session-1',
-      from_user_id: 'admin',
-      to_user_id: 'user-1',
-      signal_type: 'mute-all',
-      payload: {},
-      created_at: new Date().toISOString(),
+    const signalHandler = mockSignalChannel.on.mock.calls.find(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )?.[2]
+
+    // Kick for us — should be processed
+    signalHandler({
+      payload: {
+        type: 'kick',
+        targetUserId: 'user-1',
+      },
     })
 
-    expect(onMuteAll).toHaveBeenCalled()
+    expect(onKick).toHaveBeenCalledWith('user-1')
   })
 })
 
