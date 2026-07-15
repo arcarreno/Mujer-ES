@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sileo } from 'sileo'
 import { supabase } from '../../lib/supabase'
+import { createCallSession, getActiveSession } from '../../lib/call-api'
 import {
   VideoCallManager,
   type ParticipantState,
@@ -40,6 +41,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const streamInitializedRef = useRef(false)
   const userIdRef = useRef('')
   const initRanRef = useRef(false)
+  const durableSignalingRef = useRef(false)
 
   // Store callbacks in refs to prevent effect re-runs
   const onCloseRef = useRef(onClose)
@@ -249,6 +251,38 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       setMicActive(hasMic)
       setVideoActive(hasCam)
       setParticipants([presenceData])
+
+      // =====================================================
+      // SESSION LIFECYCLE FOR DURABLE SIGNALING
+      // Admin creates the DB session; users discover via presence.
+      // =====================================================
+      if (isAdmin) {
+        try {
+          const sessionId = await createCallSession(courseId)
+          if (sessionId) {
+            console.log(`[VideoCall] Created DB session: ${sessionId}`)
+            await manager.signaling.initDurableSignaling(sessionId)
+            durableSignalingRef.current = true
+            // Update presence to include sessionId so peers discover it
+            await manager.signaling.updatePresence({ sessionId })
+          }
+        } catch (e) {
+          console.error('[VideoCall] Failed to create call session:', e)
+        }
+      } else {
+        // Non-admin: check if any existing presence already has sessionId
+        const existingPresence = manager.signaling.getPresenceState()
+        for (const [, presences] of Object.entries(existingPresence)) {
+          for (const p of presences) {
+            const ps = p as ParticipantState
+            if (ps.sessionId && !durableSignalingRef.current) {
+              console.log(`[VideoCall] Discovered session ${ps.sessionId} from presence`)
+              await manager.signaling.initDurableSignaling(ps.sessionId)
+              durableSignalingRef.current = true
+            }
+          }
+        }
+      }
       } catch (e) {
         console.error('[VideoCall] Init error:', e)
       }
@@ -398,6 +432,22 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     setChatMessages(prev => [...prev, msg])
     setChatMessage('')
   }, [chatMessage, userId, username])
+
+  // Effect: discover sessionId from presence for non-admin users who joined
+  // before the admin created the session or whose presence sync missed it.
+  useEffect(() => {
+    const manager = managerRef.current
+    if (!manager || durableSignalingRef.current || isAdmin) return
+
+    const sessionIdFromPresence = participants.find(p => p.sessionId)?.sessionId
+    if (sessionIdFromPresence) {
+      console.log(`[VideoCall] Discovered session ${sessionIdFromPresence} via presence effect`)
+      manager.signaling.initDurableSignaling(sessionIdFromPresence).catch((e) => {
+        console.error('[VideoCall] Failed to init durable signaling from effect:', e)
+      })
+      durableSignalingRef.current = true
+    }
+  }, [participants, isAdmin])
 
   // Deduplicate participants for display
   const uniqueParticipants = (() => {

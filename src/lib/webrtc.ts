@@ -1,5 +1,14 @@
 import { supabase } from './supabase'
 import type { RealtimeChannel } from '@supabase/supabase-js'
+import {
+  sendSignal as apiSendSignal,
+  subscribeToSignals,
+  joinCallSession,
+  leaveCallSession,
+  endCallSession,
+  getActiveSession,
+} from './call-api'
+import type { CallSignal } from './call-api'
 import { ActiveSpeakerDetector } from './active-speaker'
 import { SilenceSuppressor } from './silence-suppression'
 import { ConnectionQualityMonitor, type ConnectionQuality } from './connection-quality'
@@ -19,6 +28,7 @@ export interface ParticipantState {
   screenSharing: boolean
   joinedAt: number
   epoch: number // Monotonic epoch to prevent stale leave events
+  sessionId?: string // Set by admin, used by peers for durable signaling
 }
 
 export interface RemotePeer {
@@ -110,13 +120,11 @@ const RTC_CONFIG_PRIVACY: RTCConfiguration = {
 const RTC_CONFIG = RTC_CONFIG_PRIVACY
 
 // =====================================================
-// SIGNALING MANAGER (Dual-Channel: Presence + Per-User Signal)
+// SIGNALING MANAGER (Presence + DB-Backed Durable Signaling)
 // =====================================================
 
 export class SignalingManager {
   presenceChannel: RealtimeChannel | null = null
-  signalChannel: RealtimeChannel | null = null
-  private signalSendChannels: Map<string, RealtimeChannel> = new Map()
   private courseId: string
   private handlers: {
     onOffer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
@@ -136,13 +144,14 @@ export class SignalingManager {
   private lastPresenceState: ParticipantState | null = null
   presenceEpochs: Map<string, number> = new Map()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private reconnectTimerSignal: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
-  private reconnectAttemptsSignal = 0
   private maxReconnectAttempts = 10
   private lastPresenceData: ParticipantState | null = null
   private stableConnectionTimer: ReturnType<typeof setTimeout> | null = null
-  private stableConnectionTimerSignal: ReturnType<typeof setTimeout> | null = null
+
+  // Durable signaling via call_signals table (replaces ephemeral signal channels)
+  sessionId: string | null = null
+  private signalUnsubscribe: (() => void) | null = null
 
   constructor(
     courseId: string,
@@ -156,12 +165,68 @@ export class SignalingManager {
 
   async join(): Promise<void> {
     this.cancelReconnects()
-    if (this.presenceChannel || this.signalChannel) {
+    if (this.presenceChannel) {
       console.warn('[Signaling] Already joined, cleaning up previous channels')
       await this.leave()
     }
     await this.setupPresenceChannel()
-    await this.setupSignalChannel()
+  }
+
+  /** Initialize durable DB-backed signaling for peer-to-peer messages.
+   *  Call AFTER join() once sessionId is known (admin creates it, users discover via presence). */
+  async initDurableSignaling(sessionId: string): Promise<void> {
+    if (this.sessionId === sessionId) {
+      console.log('[Signaling] Durable signaling already initialized for this session')
+      return
+    }
+    this.sessionId = sessionId
+    this.setupDurableSignalSubscription()
+    // Join call session server-side so we can send/receive signals
+    await joinCallSession(sessionId)
+    console.log(`[Signaling] Durable signaling initialized (session: ${sessionId})`)
+  }
+
+  private setupDurableSignalSubscription(): void {
+    if (this.signalUnsubscribe) {
+      this.signalUnsubscribe()
+      this.signalUnsubscribe = null
+    }
+    this.signalUnsubscribe = subscribeToSignals(
+      this.sessionId!,
+      this.myUserId,
+      this.handleIncomingSignal.bind(this)
+    )
+  }
+
+  private handleIncomingSignal(signal: CallSignal): void {
+    switch (signal.signal_type) {
+      case 'offer':
+        console.log(`[WebRTC] Received offer from ${signal.from_user_id} via DB`)
+        this.handlers.onOffer(signal.from_user_id, signal.payload.sdp)
+        break
+      case 'answer':
+        console.log(`[WebRTC] Received answer from ${signal.from_user_id} via DB`)
+        this.handlers.onAnswer(signal.from_user_id, signal.payload.sdp)
+        break
+      case 'ice-candidate':
+        console.log(`[WebRTC] Received ICE candidate from ${signal.from_user_id} via DB`)
+        this.handlers.onIceCandidate(signal.from_user_id, signal.payload.candidate)
+        break
+      case 'kick':
+        if (signal.to_user_id === this.myUserId) {
+          console.log(`[WebRTC] Received kick via DB`)
+          this.handlers.onKick(signal.to_user_id)
+        }
+        break
+      case 'end-session':
+        console.log(`[WebRTC] Received end-session via DB`)
+        this.handlers.onEndSession()
+        break
+      case 'mute-all':
+        console.log(`[WebRTC] Received mute-all via DB`)
+        this.handlers.onMuteAll()
+        break
+    }
   }
 
   private async setupPresenceChannel(): Promise<void> {
@@ -298,6 +363,10 @@ export class SignalingManager {
     if (this.lastPresenceState) {
       merged.epoch = this.lastPresenceState.epoch
     }
+    // Automatically include sessionId so peers can discover it for durable signaling
+    if (this.sessionId) {
+      merged.sessionId = this.sessionId
+    }
     this.lastPresenceState = merged
     // Sync lastPresenceData so channel reconnects use the latest state
     this.lastPresenceData = merged
@@ -319,8 +388,20 @@ export class SignalingManager {
           console.error('[Signaling] Cannot send peer-to-peer signal without targetUserId')
           return
         }
-        console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via signal channel`)
-        await this.sendToSignalChannel(targetUserId, event)
+        if (!this.sessionId) {
+          console.error('[Signaling] Cannot send peer-to-peer signal: no sessionId (initDurableSignaling not called)')
+          return
+        }
+        console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via DB (session: ${this.sessionId})`)
+        await apiSendSignal({
+          session_id: this.sessionId,
+          from_user_id: this.myUserId,
+          to_user_id: targetUserId,
+          signal_type: event.type,
+          payload: event.type === 'ice-candidate'
+            ? { candidate: event.candidate }
+            : { sdp: event.sdp },
+        })
         break
       }
       case 'mute-all':
@@ -340,28 +421,22 @@ export class SignalingManager {
         break
       }
       case 'kick': {
+        if (!this.sessionId) {
+          console.error('[Signaling] Cannot send kick: no sessionId')
+          return
+        }
         const targetUserId = event.targetUserId
-        console.log(`[Signaling] Sending kick to ${targetUserId}`)
-        await this.sendToSignalChannel(targetUserId, event)
+        console.log(`[Signaling] Sending kick to ${targetUserId} via DB`)
+        await apiSendSignal({
+          session_id: this.sessionId,
+          from_user_id: this.myUserId,
+          to_user_id: targetUserId,
+          signal_type: 'kick',
+          payload: {},
+        })
         break
       }
     }
-  }
-
-  private async sendToSignalChannel(targetUserId: string, event: SignalEvent): Promise<void> {
-    let chan = this.signalSendChannels.get(targetUserId)
-    if (!chan) {
-      console.log(`[Signaling] Creating send channel for ${targetUserId}`)
-      chan = supabase.channel(`call:signal:${targetUserId}`)
-      chan.subscribe()
-      this.signalSendChannels.set(targetUserId, chan)
-    }
-    const status = await chan.send({
-      type: 'broadcast',
-      event: 'signal',
-      payload: event,
-    })
-    console.log(`[Signaling] Send status to ${targetUserId}: ${status}`)
   }
 
   async sendChatMessage(msg: { userId: string; username: string; text: string; time: number }): Promise<void> {
@@ -379,12 +454,23 @@ export class SignalingManager {
   async leave(): Promise<void> {
     this.cancelReconnects()
     this.reconnectAttempts = this.maxReconnectAttempts
-    this.reconnectAttemptsSignal = this.maxReconnectAttempts
 
-    for (const [, chan] of this.signalSendChannels) {
-      await supabase.removeChannel(chan)
+    // Unsubscribe from DB signal subscription
+    if (this.signalUnsubscribe) {
+      this.signalUnsubscribe()
+      this.signalUnsubscribe = null
     }
-    this.signalSendChannels.clear()
+
+    // Leave the call session in the DB
+    if (this.sessionId) {
+      try {
+        await leaveCallSession(this.sessionId)
+        console.log(`[Signaling] Left DB session ${this.sessionId}`)
+      } catch (e) {
+        console.warn('[Signaling] Error leaving DB session:', e)
+      }
+      this.sessionId = null
+    }
 
     if (this.presenceChannel) {
       console.log('[Signaling] Leaving presence channel...')
@@ -392,13 +478,6 @@ export class SignalingManager {
       await supabase.removeChannel(this.presenceChannel)
       this.presenceChannel = null
       console.log('[Signaling] Presence channel removed')
-    }
-
-    if (this.signalChannel) {
-      console.log('[Signaling] Leaving signal channel...')
-      await supabase.removeChannel(this.signalChannel)
-      this.signalChannel = null
-      console.log('[Signaling] Signal channel removed')
     }
   }
 
@@ -473,17 +552,9 @@ export class SignalingManager {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    if (this.reconnectTimerSignal) {
-      clearTimeout(this.reconnectTimerSignal)
-      this.reconnectTimerSignal = null
-    }
     if (this.stableConnectionTimer) {
       clearTimeout(this.stableConnectionTimer)
       this.stableConnectionTimer = null
-    }
-    if (this.stableConnectionTimerSignal) {
-      clearTimeout(this.stableConnectionTimerSignal)
-      this.stableConnectionTimerSignal = null
     }
   }
 
@@ -1345,19 +1416,18 @@ export class VideoCallManager {
 
   async endSession(): Promise<void> {
     if (this.isAdmin) {
-      // Send via presence broadcast (the primary channel)
-      this.signaling.sendSignal({ type: 'end-session' }).catch(() => {})
-
-      // ALSO send to every known peer's signal channel as fallback.
-      // If the presence channel is CLOSED/reconnecting, the broadcast won't reach
-      // anyone — but each peer's individual signal channel may still be live.
-      for (const userId of this.peers.getPeers().keys()) {
-        this.signaling.sendSignal({
-          type: 'end-session',
-          fromUserId: this.myUserId,
-          targetUserId: userId,
-        } as SignalEvent).catch(() => {})
+      // Send durable end-session to all participants via the DB
+      if (this.signaling.sessionId) {
+        try {
+          await endCallSession(this.signaling.sessionId)
+          console.log(`[WebRTC] DB session ended: ${this.signaling.sessionId}`)
+        } catch (e) {
+          console.warn('[WebRTC] Error ending DB session:', e)
+        }
       }
+
+      // Also broadcast via presence as a fast path
+      this.signaling.sendSignal({ type: 'end-session' }).catch(() => {})
     }
   }
 
@@ -1390,6 +1460,16 @@ export class VideoCallManager {
     this.connectionQuality.stop()
     this.silenceSuppression.stop()
     this.reconnection.stop()
+
+    // End the DB session if admin
+    if (this.isAdmin && this.signaling.sessionId) {
+      try {
+        await endCallSession(this.signaling.sessionId)
+        console.log('[WebRTC] DB session ended during leave')
+      } catch (e) {
+        console.warn('[WebRTC] Error ending DB session on leave:', e)
+      }
+    }
 
     // Clean up peers and signaling
     this.peers.cleanup()
