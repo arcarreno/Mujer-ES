@@ -342,15 +342,14 @@ export class SignalingManager {
           return
         }
         console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via DB (session: ${this.sessionId})`)
-        await apiSendSignal({
-          session_id: this.sessionId,
-          from_user_id: this.myUserId,
-          to_user_id: targetUserId,
-          signal_type: event.type,
-          payload: event.type === 'ice-candidate'
+        await apiSendSignal(
+          this.sessionId,
+          targetUserId,
+          event.type,
+          event.type === 'ice-candidate'
             ? { candidate: event.candidate }
             : { sdp: event.sdp },
-        })
+        )
         break
       }
       case 'mute-all':
@@ -376,13 +375,12 @@ export class SignalingManager {
         }
         const targetUserId = event.targetUserId
         console.log(`[Signaling] Sending kick to ${targetUserId} via DB`)
-        await apiSendSignal({
-          session_id: this.sessionId,
-          from_user_id: this.myUserId,
-          to_user_id: targetUserId,
-          signal_type: 'kick',
-          payload: {},
-        })
+        await apiSendSignal(
+          this.sessionId,
+          targetUserId,
+          'kick',
+          {},
+        )
         break
       }
     }

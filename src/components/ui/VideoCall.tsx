@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sileo } from 'sileo'
 import { supabase } from '../../lib/supabase'
-import { createCallSession, getActiveSession } from '../../lib/call-api'
+import { createCallSession } from '../../lib/call-api'
 import {
   VideoCallManager,
   type ParticipantState,

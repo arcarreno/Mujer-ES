@@ -15,7 +15,6 @@ import {
   getDisplayMediaMock,
   mockSupabase,
   mockPresenceChannel,
-  mockSignalChannel,
   MockMediaStreamTrack,
   MockMediaStream,
 } from './setup'
