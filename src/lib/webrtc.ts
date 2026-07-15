@@ -141,6 +141,8 @@ export class SignalingManager {
   private reconnectAttemptsSignal = 0
   private maxReconnectAttempts = 10
   private lastPresenceData: ParticipantState | null = null
+  private stableConnectionTimer: ReturnType<typeof setTimeout> | null = null
+  private stableConnectionTimerSignal: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     courseId: string,
@@ -202,11 +204,28 @@ export class SignalingManager {
       .subscribe((status) => {
         console.log(`[Signaling] Presence subscribe status: ${status}`)
         if (status === 'SUBSCRIBED') {
-          this.reconnectAttempts = 0
+          // Start stability timer: only reset reconnectAttempts if the channel
+          // stays connected for 10s. Without this, a rapid SUBSCRIBED → CLOSED
+          // loop keeps resetting attempts to 0, so backoff never accumulates.
+          if (this.stableConnectionTimer) {
+            clearTimeout(this.stableConnectionTimer)
+          }
+          this.stableConnectionTimer = setTimeout(() => {
+            this.stableConnectionTimer = null
+            this.reconnectAttempts = 0
+            console.log('[Signaling] Presence channel stable, reset reconnect attempts')
+          }, 10000)
+
+          // Track presence with proper epoch increment via trackPresence
           if (this.lastPresenceData) {
-            this.presenceChannel?.track(this.lastPresenceData)
+            this.trackPresence(this.lastPresenceData)
           }
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Cancel stability timer since channel is down
+          if (this.stableConnectionTimer) {
+            clearTimeout(this.stableConnectionTimer)
+            this.stableConnectionTimer = null
+          }
           console.warn(`[Signaling] Presence channel lost (${status}), scheduling reconnect...`)
           this.scheduleReconnect()
         }
@@ -244,8 +263,19 @@ export class SignalingManager {
       .subscribe((status) => {
         console.log(`[Signaling] Signal subscribe status: ${status}`)
         if (status === 'SUBSCRIBED') {
-          this.reconnectAttemptsSignal = 0
+          if (this.stableConnectionTimerSignal) {
+            clearTimeout(this.stableConnectionTimerSignal)
+          }
+          this.stableConnectionTimerSignal = setTimeout(() => {
+            this.stableConnectionTimerSignal = null
+            this.reconnectAttemptsSignal = 0
+            console.log('[Signaling] Signal channel stable, reset reconnect attempts')
+          }, 10000)
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (this.stableConnectionTimerSignal) {
+            clearTimeout(this.stableConnectionTimerSignal)
+            this.stableConnectionTimerSignal = null
+          }
           console.warn(`[Signaling] Signal channel lost (${status}), scheduling reconnect...`)
           this.scheduleReconnectSignal()
         }
@@ -383,7 +413,10 @@ export class SignalingManager {
     }
     if (this.reconnectTimer) return
 
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 15000)
+    // Exponential backoff with ±20% jitter to prevent synchronized storms
+    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 15000)
+    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1)
+    const delay = Math.round(baseDelay + jitter)
     this.reconnectAttempts++
     console.log(`[Signaling] Reconnecting presence in ${delay}ms (attempt ${this.reconnectAttempts})`)
 
@@ -397,9 +430,8 @@ export class SignalingManager {
           this.presenceChannel = null
         }
         await this.setupPresenceChannel()
-        if (this.lastPresenceData) {
-          await this.trackPresence(this.lastPresenceData)
-        }
+        // Tracking happens in the subscribe callback on SUBSCRIBED — not here.
+        // Doing it here races with async subscription and silently fails.
       } catch (e) {
         console.error('[Signaling] Presence reconnect failed:', e)
         this.scheduleReconnect()
@@ -414,7 +446,9 @@ export class SignalingManager {
     }
     if (this.reconnectTimerSignal) return
 
-    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttemptsSignal), 15000)
+    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttemptsSignal), 15000)
+    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1)
+    const delay = Math.round(baseDelay + jitter)
     this.reconnectAttemptsSignal++
     console.log(`[Signaling] Reconnecting signal in ${delay}ms (attempt ${this.reconnectAttemptsSignal})`)
 
@@ -442,6 +476,14 @@ export class SignalingManager {
     if (this.reconnectTimerSignal) {
       clearTimeout(this.reconnectTimerSignal)
       this.reconnectTimerSignal = null
+    }
+    if (this.stableConnectionTimer) {
+      clearTimeout(this.stableConnectionTimer)
+      this.stableConnectionTimer = null
+    }
+    if (this.stableConnectionTimerSignal) {
+      clearTimeout(this.stableConnectionTimerSignal)
+      this.stableConnectionTimerSignal = null
     }
   }
 
