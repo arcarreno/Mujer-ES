@@ -6,7 +6,6 @@ import {
   joinCallSession,
   leaveCallSession,
   endCallSession,
-  getActiveSession,
 } from './call-api'
 import type { CallSignal } from './call-api'
 import { ActiveSpeakerDetector } from './active-speaker'
@@ -297,56 +296,6 @@ export class SignalingManager {
       })
   }
 
-  private async setupSignalChannel(): Promise<void> {
-    this.signalChannel = supabase.channel(`call:signal:${this.myUserId}`)
-
-    this.signalChannel
-      .on('broadcast', { event: 'signal' }, ({ payload }) => {
-        const event = payload as SignalEvent
-
-        if ('fromUserId' in event && event.fromUserId === this.myUserId) return
-
-        if (event.type === 'offer') {
-          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
-          this.handlers.onOffer(event.fromUserId, event.sdp)
-        } else if (event.type === 'answer') {
-          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
-          this.handlers.onAnswer(event.fromUserId, event.sdp)
-        } else if (event.type === 'ice-candidate') {
-          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
-          this.handlers.onIceCandidate(event.fromUserId, event.candidate)
-        } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
-          this.handlers.onKick(event.targetUserId)
-        } else if (event.type === 'end-session') {
-          console.log(`[WebRTC] Received end-session via signal channel`)
-          this.handlers.onEndSession()
-        } else if (event.type === 'mute-all') {
-          console.log(`[WebRTC] Received mute-all via signal channel`)
-          this.handlers.onMuteAll()
-        }
-      })
-      .subscribe((status) => {
-        console.log(`[Signaling] Signal subscribe status: ${status}`)
-        if (status === 'SUBSCRIBED') {
-          if (this.stableConnectionTimerSignal) {
-            clearTimeout(this.stableConnectionTimerSignal)
-          }
-          this.stableConnectionTimerSignal = setTimeout(() => {
-            this.stableConnectionTimerSignal = null
-            this.reconnectAttemptsSignal = 0
-            console.log('[Signaling] Signal channel stable, reset reconnect attempts')
-          }, 10000)
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          if (this.stableConnectionTimerSignal) {
-            clearTimeout(this.stableConnectionTimerSignal)
-            this.stableConnectionTimerSignal = null
-          }
-          console.warn(`[Signaling] Signal channel lost (${status}), scheduling reconnect...`)
-          this.scheduleReconnectSignal()
-        }
-      })
-  }
-
   async trackPresence(state: ParticipantState): Promise<void> {
     if (!this.presenceChannel) return
     this.lastPresenceData = state
@@ -514,35 +463,6 @@ export class SignalingManager {
       } catch (e) {
         console.error('[Signaling] Presence reconnect failed:', e)
         this.scheduleReconnect()
-      }
-    }, delay)
-  }
-
-  private scheduleReconnectSignal(): void {
-    if (this.reconnectAttemptsSignal >= this.maxReconnectAttempts) {
-      console.error('[Signaling] Max signal reconnect attempts reached, giving up')
-      return
-    }
-    if (this.reconnectTimerSignal) return
-
-    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttemptsSignal), 15000)
-    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1)
-    const delay = Math.round(baseDelay + jitter)
-    this.reconnectAttemptsSignal++
-    console.log(`[Signaling] Reconnecting signal in ${delay}ms (attempt ${this.reconnectAttemptsSignal})`)
-
-    this.reconnectTimerSignal = setTimeout(async () => {
-      this.reconnectTimerSignal = null
-      try {
-        console.log('[Signaling] Attempting signal reconnect...')
-        if (this.signalChannel) {
-          await supabase.removeChannel(this.signalChannel)
-          this.signalChannel = null
-        }
-        await this.setupSignalChannel()
-      } catch (e) {
-        console.error('[Signaling] Signal reconnect failed:', e)
-        this.scheduleReconnectSignal()
       }
     }, delay)
   }
