@@ -6,6 +6,7 @@ import {
   joinCallSession,
   leaveCallSession,
   endCallSession,
+  pollSignals,
 } from './call-api'
 import type { CallSignal } from './call-api'
 import { ActiveSpeakerDetector } from './active-speaker'
@@ -182,6 +183,21 @@ export class SignalingManager {
     this.setupDurableSignalSubscription()
     // Join call session server-side so we can send/receive signals
     await joinCallSession(sessionId)
+    // Poll for missed signals that were inserted before our postgres_changes
+    // subscription was active. Without this, offers/answers/ICE candidates
+    // sent before subscribe() are lost forever (postgres_changes only fires
+    // for future INSERTs).
+    try {
+      const missed = await pollSignals(sessionId)
+      if (missed.length > 0) {
+        console.log(`[Signaling] Processing ${missed.length} missed signals`)
+        for (const signal of missed) {
+          this.handleIncomingSignal(signal)
+        }
+      }
+    } catch (e) {
+      console.warn('[Signaling] Failed to poll missed signals:', e)
+    }
     console.log(`[Signaling] Durable signaling initialized (session: ${sessionId})`)
   }
 
@@ -224,6 +240,14 @@ export class SignalingManager {
       case 'mute-all':
         console.log(`[WebRTC] Received mute-all via DB`)
         this.handlers.onMuteAll()
+        break
+      case 'screen-share-started':
+        console.log(`[WebRTC] Received screen-share-started via DB`)
+        this.handlers.onScreenShareStarted(signal.from_user_id)
+        break
+      case 'screen-share-stopped':
+        console.log(`[WebRTC] Received screen-share-stopped via DB`)
+        this.handlers.onScreenShareStopped(signal.from_user_id)
         break
     }
   }
