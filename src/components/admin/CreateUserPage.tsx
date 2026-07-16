@@ -11,34 +11,30 @@ interface CreateUserPageProps {
 
 export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProps) {
   const [email, setEmail] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [username, setUsername] = useState('')
-  const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!email.trim()) {
+      sileo.error({ title: 'Correo requerido', description: 'El correo electrónico es obligatorio' })
+      return
+    }
     setLoading(true)
     try {
       await adminCreateUser({
         email: email.trim(),
-        password,
-        full_name: fullName.trim(),
-        username: username.trim().toLowerCase(),
-        phone: phone.trim() || undefined,
         is_admin: isAdmin,
       })
       sileo.success({
-        title: isAdmin ? 'Administrador creado' : 'Usuario creado',
-        description: 'Ya puede iniciar sesión con su correo y contraseña.',
+        title: isAdmin ? 'Administrador creado' : 'Usuario creada',
+        description: `Se creó con el correo como contraseña temporal. La usuaria deberá cambiarla al iniciar sesión.`,
       })
       onCreated()
     } catch (err) {
       sileo.error({
         title: 'No pudimos crear la cuenta',
-        description: getErrorMessage(err, 'Revisá que el usuario y el correo no estén en uso'),
+        description: getErrorMessage(err, 'Revisá que el correo no esté en uso'),
       })
     } finally {
       setLoading(false)
@@ -64,32 +60,16 @@ export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProp
       </button>
 
       <h2 className="login-title">
-        {isAdmin ? 'Crear administrador' : 'Crear usuario'}
+        {isAdmin ? 'Crear administrador' : 'Crear usuaria'}
       </h2>
       <p className="otp-subtitle">
-        Ingresá los datos del usuario. El correo es opcional.
+        Ingresá solo el correo electrónico. La contraseña inicial será el mismo correo.
       </p>
 
       <form onSubmit={handleSubmit} className="login-form">
         <div className="login-field">
-          <label htmlFor="cu-email">Correo <span style={{fontSize: '0.75em', opacity: 0.6}}>(opcional)</span></label>
-                <input id="cu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@correo.com (opcional)" />
-        </div>
-        <div className="login-field">
-          <label htmlFor="cu-name">Nombre completo</label>
-          <input id="cu-name" type="text" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nombre" required />
-        </div>
-        <div className="login-field">
-          <label htmlFor="cu-user">Usuario</label>
-          <input id="cu-user" type="text" value={username} onChange={(e) => setUsername(e.target.value.toLowerCase())} placeholder="usuario_unico" required />
-        </div>
-        <div className="login-field">
-          <label htmlFor="cu-phone">Teléfono (opcional)</label>
-          <input id="cu-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="10 dígitos" />
-        </div>
-        <div className="login-field">
-          <label htmlFor="cu-pwd">Contraseña</label>
-          <input id="cu-pwd" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Mínimo 6 caracteres" required minLength={6} />
+          <label htmlFor="cu-email">Correo electrónico</label>
+          <input id="cu-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="usuario@correo.com" required />
         </div>
 
         <button
@@ -98,12 +78,12 @@ export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProp
           className="cu-type-toggle"
           aria-pressed={isAdmin}
         >
-          <span className={`cu-type-pill ${!isAdmin ? 'active' : ''}`}>Usuario</span>
+          <span className={`cu-type-pill ${!isAdmin ? 'active' : ''}`}>Usuaria</span>
           <span className={`cu-type-pill ${isAdmin ? 'active' : ''}`}>Administrador</span>
         </button>
 
         <button type="submit" className="login-submit" disabled={loading}>
-          {loading ? 'Creando...' : isAdmin ? 'Crear administrador' : 'Crear usuario'}
+          {loading ? 'Creando...' : isAdmin ? 'Crear administrador' : 'Crear usuaria'}
         </button>
       </form>
     </motion.div>

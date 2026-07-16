@@ -1,6 +1,3 @@
-// supabase/functions/admin-create-user/index.ts
-// Desplegar con: supabase functions deploy admin-create-user
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -49,24 +46,21 @@ serve(async (req) => {
       )
     }
 
-    const { email, password, full_name, username, phone, is_admin } = await req.json()
-    if (!password || !full_name || !username) {
-      return new Response(JSON.stringify({ error: 'Faltan campos requeridos: password, full_name, username' }), {
+    const { email, full_name, username, phone, is_admin } = await req.json()
+    if (!email || !email.trim()) {
+      return new Response(JSON.stringify({ error: 'El correo electrónico es obligatorio' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
-    const cleanUsername = username.trim().toLowerCase()
+    const finalEmail = email.trim().toLowerCase()
+    const cleanUsername = username?.trim().toLowerCase() || finalEmail.split('@')[0].replace(/[^a-z0-9]/g, '_')
+    const cleanFullName = full_name?.trim() || cleanUsername
 
     // Check username uniqueness across both profiles and admins
-    const { data: usernameTaken, error: usernameCheckErr } = await callerClient
+    const { data: usernameTaken } = await callerClient
       .rpc('username_exists', { p_username: cleanUsername })
-
-    if (usernameCheckErr) {
-      // If the RPC function doesn't exist or fails, log it but don't block
-      console.error('username_exists RPC error:', usernameCheckErr.message)
-    }
 
     if (usernameTaken) {
       return new Response(
@@ -75,14 +69,8 @@ serve(async (req) => {
       )
     }
 
-    // Generate placeholder email if not provided
-    const finalEmail = email && email.trim()
-      ? email.trim()
-      : `${cleanUsername}-${Math.random().toString(36).slice(2, 8)}@noemail.mujeres.app`
-
     const role = is_admin ? 'admin' : 'user'
 
-    // Verify service role key is available
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')
     if (!serviceRoleKey) {
       console.error('SUPABASE_SERVICE_ROLE_KEY is not set in edge function env')
@@ -97,22 +85,23 @@ serve(async (req) => {
       serviceRoleKey
     )
 
+    // The email itself is the initial password
+    const initialPassword = finalEmail
+
     const { data: newUser, error } = await adminClient.auth.admin.createUser({
       email: finalEmail,
-      password,
+      password: initialPassword,
       email_confirm: true,
       user_metadata: {
-        full_name: full_name.trim(),
+        full_name: cleanFullName,
         username: cleanUsername,
         phone: phone?.trim() || null,
         role,
-        password,
       },
     })
 
     if (error) {
       console.error('createUser error:', error.message, error.status)
-      // Map common Supabase auth errors to friendly messages
       let friendlyMsg = error.message
       if (error.message.includes('already registered')) {
         friendlyMsg = 'Ya existe una cuenta con ese correo electrónico'
@@ -126,7 +115,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, user: newUser.user }),
+      JSON.stringify({ ok: true, user: newUser.user, initial_password: initialPassword }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (e) {

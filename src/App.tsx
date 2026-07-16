@@ -6,6 +6,7 @@ import {
   getProfile,
   hasCompletedInitialForm,
   isUserAdmin,
+  checkFirstLogin,
   type Profile,
 } from './lib/queries'
 import useNetworkStatus from './hooks/useNetworkStatus'
@@ -15,6 +16,7 @@ import Login from './components/Login'
 import LoadingFallback from './components/ui/LoadingFallback'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import WelcomeOverlay from './components/ui/WelcomeOverlay'
+import SetPasswordForm from './components/form/SetPasswordForm'
 
 // Lazy load heavy layouts (admin, home)
 const WelcomeForm = lazy(() => import('./components/form/WelcomeForm'))
@@ -28,7 +30,7 @@ const images = Array.from({ length: 11 }, (_, i) => ({
 }))
 
 type SessionUser = { id: string; email?: string }
-type AppPhase = 'loading' | 'landing' | 'welcome-form' | 'home'
+type AppPhase = 'loading' | 'landing' | 'welcome-form' | 'first-login' | 'home'
 
 interface SessionData {
   profile: Profile | null
@@ -83,10 +85,11 @@ function App() {
       setPhase('landing')
       return
     }
-    const [p, completed, admin] = await Promise.all([
+    const [p, completed, admin, firstLogin] = await Promise.all([
       getProfile(u.id),
       hasCompletedInitialForm(u.id),
       isUserAdmin(u.id),
+      checkFirstLogin(u.id),
     ])
 
     setSessionData({ profile: p, isAdmin: admin })
@@ -108,8 +111,14 @@ function App() {
       return
     }
 
-    if (admin || completed) {
+    if (admin && !firstLogin) {
       setPhase('home')
+    } else if (admin && firstLogin) {
+      setPhase('first-login')
+    } else if (completed && !firstLogin) {
+      setPhase('home')
+    } else if (firstLogin) {
+      setPhase('first-login')
     } else {
       setPhase('welcome-form')
     }
@@ -122,6 +131,10 @@ function App() {
     if (completed) {
       setPhase('home')
     }
+  }
+
+  const handlePasswordSet = () => {
+    setPhase('welcome-form')
   }
 
   const handleLogout = () => {
@@ -216,6 +229,19 @@ function App() {
                 />
               </Suspense>
             </ErrorBoundary>
+          )}
+
+          {phase === 'first-login' && user && (
+            <motion.div
+              key="first-login"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.3 }}
+              className="absolute inset-0 flex items-center justify-center z-20"
+            >
+              <SetPasswordForm userId={user.id} onComplete={handlePasswordSet} />
+            </motion.div>
           )}
 
           {phase === 'home' && user && sessionData.profile && (

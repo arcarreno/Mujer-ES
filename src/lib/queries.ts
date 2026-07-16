@@ -148,6 +148,39 @@ export async function signOut(): Promise<void> {
   await supabase.auth.signOut()
 }
 
+export async function checkFirstLogin(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('check_first_login', {
+    p_user_id: userId,
+  })
+  if (error) throw error
+  return !!data
+}
+
+export async function setInitialPassword(
+  userId: string,
+  newPassword: string,
+): Promise<void> {
+  const { error } = await supabase.rpc('set_initial_password', {
+    p_user_id: userId,
+    p_new_password: newPassword,
+  })
+  if (error) throw error
+}
+
+export async function saveOnboardingForm(
+  userId: string,
+  responses: Record<string, string>
+): Promise<void> {
+  const { error } = await supabase
+    .from('form_responses')
+    .insert({
+      user_id: userId,
+      form_type: 'initial_profile',
+      responses,
+    })
+  if (error) throw error
+}
+
 export function isEmail(input: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.trim())
 }
