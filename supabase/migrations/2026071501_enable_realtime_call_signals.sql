@@ -10,4 +10,13 @@
 -- Realtime broadcast channels which lose messages when CLOSED.
 
 -- Add call_signals to the supabase_realtime publication
-ALTER PUBLICATION supabase_realtime ADD TABLE public.call_signals;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and tablename = 'call_signals'
+  ) then
+    alter publication supabase_realtime add table public.call_signals;
+  end if;
+end;
+$$;

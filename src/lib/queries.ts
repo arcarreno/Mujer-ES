@@ -254,86 +254,46 @@ export function getErrorMessage(e: unknown, fallback: string): string {
 }
 
 // =====================================================
-// Security questions — recovery flow
+// Recovery flow — email code via Resend
 // =====================================================
 
-export interface SecurityQuestionsData {
-  user_id: string
-  is_admin: boolean
-  question_1: string
-  question_2: string
-  question_3: string
-  has_answer_1: boolean
-  has_answer_2: boolean
-  has_answer_3: boolean
-}
-
-/**
- * Returns the 3 security questions for the given identifier
- * (username or email), plus flags indicating which ones
- * actually have answers (i.e. weren't N/A at signup).
- *
- * Returns null if the account doesn't exist.
- */
-export async function getSecurityQuestions(
-  identifier: string,
-): Promise<SecurityQuestionsData | null> {
-  const { data, error } = await supabase.rpc('get_security_questions', {
-    p_identifier: identifier.trim().toLowerCase(),
-  })
-  if (error) throw error
-  if (!data || data.length === 0) return null
-  return data[0] as SecurityQuestionsData
-}
-
-export interface VerifyAnswersResult {
+export interface VerifyRecoveryCodeResult {
   reset_token: string
-  user_id: string
   expires_at: string
 }
 
 /**
- * Verifies the 3 security question answers. If all the
- * answered questions match (NULL stored = user picked N/A,
- * treated as correct), returns a one-time reset_token valid
- * for 10 minutes.
- *
- * Throws an Error if the answers don't match.
+ * Sends a 6-digit recovery code to the user's email via the
+ * send-recovery-code edge function (Resend).
+ * Always returns ok even if the email doesn't exist (privacy).
  */
-export async function verifySecurityAnswers(
-  identifier: string,
-  a1: string,
-  a2: string,
-  a3: string,
-): Promise<VerifyAnswersResult> {
-  const { data, error } = await supabase.rpc('verify_security_answers', {
-    p_identifier: identifier.trim().toLowerCase(),
-    p_answer_1: a1,
-    p_answer_2: a2,
-    p_answer_3: a3,
+export async function sendRecoveryCode(email: string): Promise<void> {
+  const { error } = await supabase.functions.invoke('send-recovery-code', {
+    body: { email: email.trim().toLowerCase() },
   })
   if (error) throw error
-  if (!data || data.length === 0) {
-    throw new Error('Las respuestas no son correctas')
-  }
-  return data[0] as VerifyAnswersResult
 }
 
 /**
- * Returns the plaintext password from profiles or admins if
- * the reset_token is valid (not used, not expired). The token
- * is marked as used atomically — calling twice with the same
- * token returns an error the second time.
+ * Verifies a 6-digit recovery code. If valid, returns a
+ * one-time reset_token valid for 10 minutes (to be used
+ * with modifyPassword).
+ *
+ * Throws an Error if the code is invalid or expired.
  */
-export async function viewPassword(resetToken: string): Promise<string> {
-  const { data, error } = await supabase.rpc('view_password_with_token', {
-    p_token: resetToken,
+export async function verifyRecoveryCode(
+  email: string,
+  code: string,
+): Promise<VerifyRecoveryCodeResult> {
+  const { data, error } = await supabase.rpc('verify_recovery_code', {
+    p_email: email.trim().toLowerCase(),
+    p_code: code.trim(),
   })
   if (error) throw error
-  if (!data) {
-    throw new Error('El enlace expiró. Volvé a verificar tus respuestas')
+  if (!data || data.length === 0) {
+    throw new Error('Código incorrecto o expirado. Solicitá uno nuevo.')
   }
-  return data as string
+  return data[0] as VerifyRecoveryCodeResult
 }
 
 /**
