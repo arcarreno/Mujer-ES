@@ -97,7 +97,7 @@ serve(async (req) => {
       serviceRoleKey
     )
 
-    const { data: userId, error: lookupErr } = await supabase
+    const { data: userIdRow, error: lookupErr } = await supabase
       .rpc("get_user_id_by_email", { p_email: cleanEmail })
       .maybeSingle()
 
@@ -109,7 +109,7 @@ serve(async (req) => {
       )
     }
 
-    if (!userId) {
+    if (!userIdRow) {
       return new Response(
         JSON.stringify({ ok: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -122,7 +122,7 @@ serve(async (req) => {
     const { error: insertErr } = await supabase
       .from("password_reset_tokens")
       .insert({
-        user_id: userId,
+        user_id: userIdRow.user_id,
         token: code,
         expires_at: expiresAt,
       })

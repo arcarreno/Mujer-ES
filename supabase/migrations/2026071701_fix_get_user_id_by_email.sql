@@ -1,5 +1,7 @@
--- RPC para buscar user_id por email en auth.users
--- Usado por la edge function send-recovery-code
+-- Fix: drop old function (returned uuid) and recreate with table type
+-- so PostgREST returns { user_id: "..." } instead of { get_user_id_by_email: "..." }
+
+drop function if exists public.get_user_id_by_email(text);
 
 create or replace function public.get_user_id_by_email(p_email text)
 returns table (user_id uuid)
