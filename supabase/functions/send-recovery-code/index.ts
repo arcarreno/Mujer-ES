@@ -1,8 +1,3 @@
-// supabase/functions/send-recovery-code/index.ts
-// Envía un código de recuperación de 6 dígitos por email vía Resend.
-// Desplegar con: supabase functions deploy send-recovery-code
-// Secrets: supabase secrets set RESEND_API_KEY=re_...
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
@@ -102,29 +97,19 @@ serve(async (req) => {
       serviceRoleKey
     )
 
-    // Look up user by email via the get_email_by_username RPC (now overloaded)
-    const { data: userData, error: lookupErr } = await supabase
-      .rpc("get_email_by_username", { p_username: cleanEmail })
+    const { data: userId, error: lookupErr } = await supabase
+      .rpc("get_user_id_by_email", { p_email: cleanEmail })
       .maybeSingle()
 
     if (lookupErr) {
-      console.error("lookup error:", lookupErr)
-    }
-
-    // Try direct email lookup in auth.users
-    const { data: authUsers, error: authErr } = await supabase.auth.admin.listUsers()
-    if (authErr) {
-      console.error("listUsers error:", authErr)
+      console.error("get_user_id_by_email error:", lookupErr)
       return new Response(
         JSON.stringify({ error: "Error al buscar el usuario" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
-    const matchedUser = authUsers.users.find((u) => u.email === cleanEmail)
-
-    // Don't reveal whether the user exists — always return ok
-    if (!matchedUser) {
+    if (!userId) {
       return new Response(
         JSON.stringify({ ok: true }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -137,7 +122,7 @@ serve(async (req) => {
     const { error: insertErr } = await supabase
       .from("password_reset_tokens")
       .insert({
-        user_id: matchedUser.id,
+        user_id: userId,
         token: code,
         expires_at: expiresAt,
       })
