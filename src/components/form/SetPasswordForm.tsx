@@ -33,13 +33,10 @@ export default function SetPasswordForm({ userId, onComplete }: SetPasswordFormP
       })
       if (error) throw error
 
-      // Update the session so the new password is used
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: (await supabase.auth.getUser()).data.user?.email ?? '',
-        password,
-      })
-      if (signInError) throw signInError
-
+      // No need to re-sign-in — the existing session is still valid.
+      // The RPC updated auth.users.encrypted_password on the server side.
+      // onComplete will trigger handlePasswordSet which re-checks
+      // checkFirstLogin and advances to welcome-form.
       sileo.success({ title: 'Contraseña guardada', description: 'Ya podés usar tu nueva contraseña' })
       onComplete()
     } catch (err) {
