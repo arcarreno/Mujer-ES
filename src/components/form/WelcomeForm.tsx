@@ -7,12 +7,12 @@ import SuccessAnimation from '../ui/SuccessAnimation'
 import { saveOnboardingForm } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
 
-import cardImg1 from '../../assets/imagenes-cards/woman.webp'
-import cardImg2 from '../../assets/imagenes-cards/woman2.webp'
-import cardImg3 from '../../assets/imagenes-cards/woman3.webp'
-import cardImg4 from '../../assets/imagenes-cards/woman4.webp'
-import cardImg5 from '../../assets/imagenes-cards/woman5.webp'
-import cardImg6 from '../../assets/imagenes-cards/woman6.webp'
+import cardImg1 from '../../assets/imagenes-cards/woman.jpg'
+import cardImg2 from '../../assets/imagenes-cards/woman2.jpg'
+import cardImg3 from '../../assets/imagenes-cards/woman3.jpg'
+import cardImg4 from '../../assets/imagenes-cards/woman4.jpg'
+import cardImg5 from '../../assets/imagenes-cards/woman5.jpg'
+import cardImg6 from '../../assets/imagenes-cards/woman6.jpg'
 import cardImg7 from '../../assets/imagenes-cards/woman7.jpg'
 
 const CARD_IMAGES = [cardImg1, cardImg2, cardImg3, cardImg4, cardImg5, cardImg6, cardImg7]
