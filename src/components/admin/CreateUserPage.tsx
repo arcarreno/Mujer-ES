@@ -67,7 +67,7 @@ export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProp
         exit={{ opacity: 0, y: 20 }}
         transition={{ duration: 0.35, ease: [0.34, 1.56, 0.64, 1] }}
       >
-        <button onClick={onBack} className="volver-btn-sm" type="button">
+        <button onClick={onBack} className="volver-btn-sm volver-btn-sm-no-expand" type="button">
           <div className="volver-btn-sm-bg">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
               <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />

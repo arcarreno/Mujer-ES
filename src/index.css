@@ -979,6 +979,10 @@ input::-ms-clear {
   width: 18rem;
 }
 
+.volver-btn-sm-no-expand:hover .volver-btn-sm-bg {
+  width: 2.25rem;
+}
+
 /* Light variant for dark backgrounds (chats) */
 .volver-btn-sm-light .volver-btn-sm-bg {
   background: #ffffff;
