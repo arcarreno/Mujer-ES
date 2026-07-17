@@ -9077,31 +9077,16 @@ select.haccordion-input {
   flex-shrink: 0;
 }
 
-.haccordion-save-btn {
+.haccordion-error-msg {
   font-family: var(--font-body);
-  font-size: var(--text-sm);
-  font-weight: 600;
-  padding: var(--space-2) var(--space-5);
-  background: var(--color-accent, #581C87);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: opacity 0.2s, transform 0.15s;
-  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--color-error, #dc2626);
+  margin: 0;
+  flex-shrink: 0;
 }
 
-.haccordion-save-btn:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.haccordion-save-btn:active:not(:disabled) {
-  transform: scale(0.97);
-}
-
-.haccordion-save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.haccordion-input.input-error {
+  border-color: var(--color-error, #dc2626);
 }
 
 .haccordion-saved-label {

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import WelcomeModal from '../welcome/WelcomeModal'
 import PrivacyModal from './PrivacyModal'
+import SuccessAnimation from '../ui/SuccessAnimation'
 import { saveOnboardingForm } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
 
@@ -10,11 +11,6 @@ interface WelcomeFormProps {
   userId: string
   username: string
   onComplete: () => void
-}
-
-interface Answer {
-  value: string
-  saved: boolean
 }
 
 const EDUCATION_OPTIONS = [
@@ -131,8 +127,9 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
   const [showWelcome, setShowWelcome] = useState(true)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
-  const [answers, setAnswers] = useState<Record<string, Answer>>({})
+  const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -148,40 +145,20 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
   }
 
   const updateValue = (id: string, val: string) => {
-    setAnswers((prev) => {
-      const existing = prev[id]
-      return {
-        ...prev,
-        [id]: { value: val, saved: existing?.saved ?? false },
-      }
-    })
+    setValues((prev) => ({ ...prev, [id]: val }))
   }
 
-  const saveAnswer = (q: QuestionDef) => {
-    const val = answers[q.id]?.value ?? ''
-    const err = q.validate(val)
-    if (err) {
-      sileo.error({ title: 'Revisa este campo', description: err })
-      return
-    }
-    setAnswers((prev) => ({
-      ...prev,
-      [q.id]: { value: val, saved: true },
-    }))
-    sileo.success({ title: q.title, description: 'Respuesta guardada' })
+  const isFieldValid = (q: QuestionDef): boolean => {
+    const val = values[q.id]?.trim() ?? ''
+    if (!val) return false
+    return q.validate(val) === null
   }
 
-  const savedCount = Object.values(answers).filter((a) => a.saved).length
-  const allSaved = savedCount === QUESTIONS.length
+  const allValid = QUESTIONS.every(isFieldValid)
+  const validCount = QUESTIONS.filter(isFieldValid).length
 
   const handleFinish = async () => {
-    if (!allSaved) {
-      sileo.error({
-        title: 'Faltan preguntas',
-        description: 'Responde todas las preguntas antes de continuar',
-      })
-      return
-    }
+    if (!allValid) return
     setSaving(true)
     try {
       const { data: session } = await supabase.auth.getSession()
@@ -189,27 +166,38 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
 
       const responses: Record<string, string> = {}
       for (const q of QUESTIONS) {
-        responses[q.id] = answers[q.id]?.value ?? ''
+        responses[q.id] = values[q.id] ?? ''
       }
 
       await saveOnboardingForm(userId, responses)
-      sileo.success({
-        title: '¡Todo listo!',
-        description: 'Tu perfil está completo',
-      })
-      onComplete()
+      setSaving(false)
+      setShowSuccess(true)
     } catch (e) {
       sileo.error({
         title: 'No pudimos guardar tu perfil',
         description: e instanceof Error ? e.message : 'Revisa tu conexión e intenta de nuevo',
       })
-    } finally {
       setSaving(false)
     }
   }
 
+  const handleSuccessDone = () => {
+    setShowSuccess(false)
+    onComplete()
+  }
+
+  const getFieldError = (q: QuestionDef): string | null => {
+    const val = values[q.id]?.trim() ?? ''
+    if (!val) return null
+    return q.validate(val)
+  }
+
   return (
     <>
+      <AnimatePresence>
+        {showSuccess && <SuccessAnimation message="¡Bienvenida!" onDone={handleSuccessDone} />}
+      </AnimatePresence>
+
       <AnimatePresence>
         {showWelcome && <WelcomeModal username={username} />}
       </AnimatePresence>
@@ -223,17 +211,17 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
           <div className="onboarding-haccordion-header">
             <h2 className="onboarding-haccordion-title">Queremos conocerte mejor</h2>
             <p className="onboarding-haccordion-sub">
-              Toca cada ficha para expandirla y responde.
+              Tocá cada ficha para expandirla y completá los datos.
             </p>
             <div className="onboarding-haccordion-progress">
               <div className="haccordion-progress-track">
                 <div
                   className="haccordion-progress-fill"
-                  style={{ width: `${(savedCount / QUESTIONS.length) * 100}%` }}
+                  style={{ width: `${(validCount / QUESTIONS.length) * 100}%` }}
                 />
               </div>
               <span className="haccordion-progress-text">
-                {savedCount} de {QUESTIONS.length}
+                {validCount} de {QUESTIONS.length}
               </span>
             </div>
           </div>
@@ -242,15 +230,15 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
             <div className="onboarding-haccordion-track">
               {QUESTIONS.map((q, idx) => {
                 const isOpen = expandedIdx === idx
-                const answer = answers[q.id]
-                const saved = answer?.saved ?? false
-                const val = answer?.value ?? ''
+                const val = values[q.id] ?? ''
+                const fieldValid = isFieldValid(q)
+                const error = getFieldError(q)
 
                 return (
                   <motion.div
                     key={q.id}
                     layout
-                    className={`haccordion-card ${isOpen ? 'open' : ''} ${saved ? 'saved' : ''}`}
+                    className={`haccordion-card ${isOpen ? 'open' : ''} ${fieldValid ? 'saved' : ''}`}
                     onClick={() => {
                       if (!isOpen) toggleCard(idx)
                     }}
@@ -258,8 +246,8 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
                   >
                     <div className="haccordion-card-inner">
                       <div className="haccordion-card-header">
-                        <span className={`haccordion-card-badge ${saved ? 'done' : ''}`}>
-                          {saved ? '✓' : `${idx + 1}`}
+                        <span className={`haccordion-card-badge ${fieldValid ? 'done' : ''}`}>
+                          {fieldValid ? '✓' : `${idx + 1}`}
                         </span>
                         <span className="haccordion-card-short">{q.short}</span>
                         <motion.svg
@@ -314,24 +302,20 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
                                 value={val}
                                 onChange={(e) => updateValue(q.id, e.target.value)}
                                 placeholder={q.placeholder}
-                                className="haccordion-input"
+                                className={`haccordion-input ${error ? 'input-error' : ''}`}
                                 maxLength={q.type === 'tel' ? 15 : undefined}
                                 disabled={saving}
                                 autoFocus
                               />
                             )}
 
+                            {error && (
+                              <p className="haccordion-error-msg">{error}</p>
+                            )}
+
                             <div className="haccordion-content-footer">
-                              <button
-                                className="haccordion-save-btn"
-                                onClick={() => saveAnswer(q)}
-                                disabled={saving}
-                                type="button"
-                              >
-                                {saved ? 'Actualizar' : 'Guardar'}
-                              </button>
-                              {saved && (
-                                <span className="haccordion-saved-label">✓ Guardado</span>
+                              {fieldValid && (
+                                <span className="haccordion-saved-label">✓ Completo</span>
                               )}
                             </div>
                           </motion.div>
@@ -348,9 +332,9 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
             <button
               className="onboarding-haccordion-finish"
               onClick={handleFinish}
-              disabled={saving || !allSaved}
+              disabled={saving || !allValid}
             >
-              {saving ? 'Guardando...' : 'Ir a la plataforma'}
+              {saving ? 'Guardando...' : 'Iniciar la experiencia'}
             </button>
           </div>
         </div>

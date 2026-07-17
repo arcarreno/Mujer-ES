@@ -171,6 +171,21 @@ export async function saveOnboardingForm(
   userId: string,
   responses: Record<string, string>
 ): Promise<void> {
+  const fullName = responses.full_name?.trim()
+  const username = responses.username?.trim()
+
+  const profileUpdate: Record<string, string> = {}
+  if (fullName) profileUpdate.full_name = fullName
+  if (username) profileUpdate.username = username
+
+  if (Object.keys(profileUpdate).length > 0) {
+    const { error: profileErr } = await supabase
+      .from('profiles')
+      .update(profileUpdate)
+      .eq('id', userId)
+    if (profileErr) throw profileErr
+  }
+
   const { error } = await supabase
     .from('form_responses')
     .insert({
