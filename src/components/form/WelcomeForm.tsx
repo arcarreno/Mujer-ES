@@ -7,6 +7,16 @@ import SuccessAnimation from '../ui/SuccessAnimation'
 import { saveOnboardingForm } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
 
+import cardImg1 from '../../assets/imagenes-cards/woman.webp'
+import cardImg2 from '../../assets/imagenes-cards/woman2.webp'
+import cardImg3 from '../../assets/imagenes-cards/woman3.webp'
+import cardImg4 from '../../assets/imagenes-cards/woman4.webp'
+import cardImg5 from '../../assets/imagenes-cards/woman5.webp'
+import cardImg6 from '../../assets/imagenes-cards/woman6.webp'
+import cardImg7 from '../../assets/imagenes-cards/woman7.jpg'
+
+const CARD_IMAGES = [cardImg1, cardImg2, cardImg3, cardImg4, cardImg5, cardImg6, cardImg7]
+
 interface WelcomeFormProps {
   userId: string
   username: string
@@ -37,7 +47,7 @@ const QUESTIONS: QuestionDef[] = [
   {
     id: 'full_name',
     short: 'Nombre',
-    title: '¿Cuál es tu nombre completo?',
+    title: '¿Cuál es tu nombre?',
     type: 'text',
     placeholder: 'Tu nombre completo',
     validate: (v) => {
@@ -49,19 +59,19 @@ const QUESTIONS: QuestionDef[] = [
     id: 'username',
     short: 'Usuario',
     title: 'Elige un nombre de usuario',
-    subtitle: 'Con este nombre te verán las demás usuarias',
+    subtitle: 'Con este nombre te verán las demás',
     type: 'text',
     placeholder: 'tu_usuario',
     validate: (v) => {
       if (!v || v.trim().length < 3) return 'Elige un nombre de usuario'
-      if (!/^[a-z0-9_]+$/.test(v.trim())) return 'Solo letras minúsculas, números y guión bajo'
+      if (!/^[a-z0-9_]+$/.test(v.trim())) return 'Solo minúsculas, números y guión bajo'
       return null
     },
   },
   {
     id: 'birthdate',
     short: 'Cumple',
-    title: '¿Cuál es tu fecha de nacimiento?',
+    title: '¿Tu fecha de nacimiento?',
     type: 'date',
     validate: (v) => {
       if (!v) return 'Selecciona tu fecha de nacimiento'
@@ -77,7 +87,7 @@ const QUESTIONS: QuestionDef[] = [
     id: 'occupation',
     short: 'Ocupación',
     title: '¿A qué te dedicas?',
-    subtitle: 'Estudiante, profesionista, ama de casa, etc.',
+    subtitle: 'Estudiante, profesionista, ama de casa…',
     type: 'text',
     placeholder: 'Tu ocupación',
     validate: (v) => {
@@ -100,7 +110,7 @@ const QUESTIONS: QuestionDef[] = [
   {
     id: 'education',
     short: 'Estudios',
-    title: '¿Cuál es tu grado de estudios?',
+    title: '¿Tu grado de estudios?',
     type: 'select',
     options: EDUCATION_OPTIONS,
     validate: (v) => {
@@ -111,8 +121,8 @@ const QUESTIONS: QuestionDef[] = [
   {
     id: 'phone',
     short: 'Teléfono',
-    title: '¿Cuál es tu número de teléfono?',
-    subtitle: 'Para que el equipo pueda contactarte si es necesario',
+    title: '¿Tu número de teléfono?',
+    subtitle: 'Para contactarte si es necesario',
     type: 'tel',
     placeholder: '10 dígitos',
     validate: (v) => {
@@ -209,7 +219,7 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
       {!showWelcome && !showPrivacy && (
         <div className="onboarding-haccordion">
           <div className="onboarding-haccordion-header">
-            <h2 className="onboarding-haccordion-title">Queremos conocerte mejor</h2>
+            <h2 className="onboarding-haccordion-title">Queremos conocerte</h2>
             <p className="onboarding-haccordion-sub">
               Tocá cada ficha para expandirla y completá los datos.
             </p>
@@ -239,42 +249,29 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
                     key={q.id}
                     layout
                     className={`haccordion-card ${isOpen ? 'open' : ''} ${fieldValid ? 'saved' : ''}`}
+                    style={{ backgroundImage: `url(${CARD_IMAGES[idx]})` }}
                     onClick={() => {
                       if (!isOpen) toggleCard(idx)
                     }}
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   >
+                    <div className="haccordion-card-overlay" />
                     <div className="haccordion-card-inner">
                       <div className="haccordion-card-header">
                         <span className={`haccordion-card-badge ${fieldValid ? 'done' : ''}`}>
                           {fieldValid ? '✓' : `${idx + 1}`}
                         </span>
                         <span className="haccordion-card-short">{q.short}</span>
-                        <motion.svg
-                          animate={{ rotate: isOpen ? 180 : 0 }}
-                          transition={{ duration: 0.25 }}
-                          width="16"
-                          height="16"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="haccordion-chevron"
-                        >
-                          <path d="m6 9 6 6 6-6" />
-                        </motion.svg>
                       </div>
 
                       <AnimatePresence initial={false}>
                         {isOpen && (
                           <motion.div
                             key="content"
-                            initial={{ width: 0, opacity: 0 }}
-                            animate={{ width: 'auto', opacity: 1 }}
-                            exit={{ width: 0, opacity: 0 }}
-                            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                            initial={{ opacity: 0, y: 16 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 16 }}
+                            transition={{ duration: 0.25, ease: [0.32, 0.72, 0, 1] }}
                             className="haccordion-card-content"
                             onClick={(e) => e.stopPropagation()}
                           >
@@ -291,7 +288,7 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
                                 disabled={saving}
                                 autoFocus
                               >
-                                <option value="" disabled>Selecciona una opción</option>
+                                <option value="" disabled>Selecciona</option>
                                 {q.options?.map((opt) => (
                                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                                 ))}
