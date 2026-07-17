@@ -135,6 +135,7 @@ export async function pollSignals(sessionId: string): Promise<CallSignal[]> {
 
 export function subscribeToSignals(
   sessionId: string,
+  userId: string,
   callback: (signal: CallSignal) => void
 ): () => void {
   const channel = supabase
@@ -149,12 +150,9 @@ export function subscribeToSignals(
       },
       (payload) => {
         const signal = payload.new as CallSignal
-        // Only process signals sent to current user
-        supabase.auth.getUser().then(({ data }) => {
-          if (data.user?.id === signal.to_user_id) {
-            callback(signal)
-          }
-        })
+        if (userId === signal.to_user_id) {
+          callback(signal)
+        }
       }
     )
     .subscribe()

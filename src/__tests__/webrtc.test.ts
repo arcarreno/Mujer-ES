@@ -1202,7 +1202,7 @@ describe('SignalingManager initDurableSignaling', () => {
 
     // Get the callback that was registered with subscribeToSignals
     const subscribeMock = subscribeToSignals as ReturnType<typeof vi.fn>
-    const callback = subscribeMock.mock.calls[0][1]
+    const callback = subscribeMock.mock.calls[0][2]
 
     // Simulate receiving an offer from another user
     callback({
@@ -1239,7 +1239,7 @@ describe('SignalingManager initDurableSignaling', () => {
     await sm.initDurableSignaling('session-1')
 
     const subscribeMock = subscribeToSignals as ReturnType<typeof vi.fn>
-    const callback = subscribeMock.mock.calls[0][1]
+    const callback = subscribeMock.mock.calls[0][2]
 
     // Signal from self — should be ignored
     callback({

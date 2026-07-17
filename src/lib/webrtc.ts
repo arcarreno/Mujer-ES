@@ -234,7 +234,7 @@ export class SignalingManager {
 
     await joinCallSession(sessionId)
 
-    const sub = subscribeToSignals(sessionId, (signal) => {
+    const sub = subscribeToSignals(sessionId, this.myUserId, (signal) => {
       const event = signal.payload as SignalEvent
 
       if ('fromUserId' in event && event.fromUserId === this.myUserId) return
@@ -440,7 +440,7 @@ export class PeerManager {
   private screenStream: MediaStream | null = null
   private signaling: SignalingManager
   private myUserId: string
-  private onRemoteStream: ((userId: string, stream: MediaStream) => void) | null = null
+  private onRemoteStream: ((userId: string, stream: MediaStream) => void)[] = []
   private onPeerRemoved: ((userId: string) => void) | null = null
   private onScreenShareEnded: (() => void) | null = null
   private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
@@ -456,7 +456,12 @@ export class PeerManager {
   }
 
   setOnRemoteStream(callback: (userId: string, stream: MediaStream) => void): void {
-    this.onRemoteStream = callback
+    this.onRemoteStream.push(callback)
+  }
+
+  removeOnRemoteStream(callback: (userId: string, stream: MediaStream) => void): void {
+    const idx = this.onRemoteStream.indexOf(callback)
+    if (idx !== -1) this.onRemoteStream.splice(idx, 1)
   }
 
   setOnPeerRemoved(callback: (userId: string) => void): void {
@@ -626,7 +631,9 @@ export class PeerManager {
           if (existing) {
             existing.stream = streams[0]
             console.log(`[WebRTC] Setting remote stream for ${remoteUserId} (kind=${track.kind})`)
-            this.onRemoteStream?.(remoteUserId, streams[0])
+            for (const cb of this.onRemoteStream) {
+              cb(remoteUserId, streams[0])
+            }
           }
         }
       }

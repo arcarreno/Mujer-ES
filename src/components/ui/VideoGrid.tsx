@@ -195,8 +195,16 @@ function RemoteVideoTile({
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = stream || null
+      if (stream) {
+        videoRef.current.play().catch((e) => {
+          // Audio tracks in remote video may block autoplay — log but don't crash
+          if (e.name !== 'AbortError') {
+            console.warn(`[VideoGrid] play() failed for ${participant.username}:`, e.message)
+          }
+        })
+      }
     }
-  }, [stream])
+  }, [stream, participant.username])
 
   useEffect(() => {
     return () => {
@@ -206,9 +214,11 @@ function RemoteVideoTile({
     }
   }, [])
 
+  const hasVideo = stream && stream.getVideoTracks().length > 0
+
   return (
     <div className={`video-tile video-tile--${compact ? 'thumb-col' : 'grid'} ${participant.isSpeaking ? 'video-tile--speaking' : ''}`}>
-      {stream ? (
+      {hasVideo ? (
         <video ref={videoRef} autoPlay playsInline className="video-tile-stream" />
       ) : (
         <div className="video-tile-avatar">
