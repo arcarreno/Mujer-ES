@@ -133,24 +133,8 @@ function App() {
     }
   }
 
-  const handlePasswordSet = async () => {
-    if (!user) return
-    const first = await checkFirstLogin(user.id)
-    if (!first) {
-      // first_login is now false — advance to onboarding
-      // Re-run full session check to get fresh data
-      const [p, completed, admin] = await Promise.all([
-        getProfile(user.id),
-        hasCompletedInitialForm(user.id),
-        isUserAdmin(user.id),
-      ])
-      setSessionData({ profile: p, isAdmin: admin })
-      if (admin || completed) {
-        setPhase('home')
-      } else {
-        setPhase('welcome-form')
-      }
-    }
+  const handlePasswordSet = () => {
+    setPhase('welcome-form')
   }
 
   const handleLogout = () => {
