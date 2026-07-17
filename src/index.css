@@ -8970,7 +8970,7 @@ input[type="date"].onboarding-input {
 }
 
 .haccordion-card.open .haccordion-card-overlay {
-  background: linear-gradient(90deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.1) 60%, rgba(0,0,0,0.02) 100%);
+  background: linear-gradient(90deg, rgba(0,0,0,0.02) 0%, rgba(0,0,0,0.1) 50%, rgba(0,0,0,0.4) 100%);
 }
 
 .haccordion-card-inner {
@@ -9035,7 +9035,7 @@ input[type="date"].onboarding-input {
   padding: var(--space-3);
   background: transparent;
   position: absolute;
-  left: var(--space-2);
+  right: var(--space-2);
   top: var(--space-2);
   bottom: var(--space-2);
   width: 55%;
