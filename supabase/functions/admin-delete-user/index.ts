@@ -1,7 +1,3 @@
-// supabase/functions/admin-delete-user/index.ts
-// Desplegar con: supabase functions deploy admin-delete-user
-// Requiere: SUPABASE_SERVICE_ROLE_KEY configurado como secret
-
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
@@ -33,8 +29,7 @@ serve(async (req) => {
       return new Response('Unauthorized', { status: 401, headers: corsHeaders })
     }
 
-    const { data: isAdmin } = await callerClient
-      .rpc('is_admin')
+    const { data: isAdmin } = await callerClient.rpc('is_admin')
 
     if (!isAdmin) {
       return new Response('Forbidden - admin only', { status: 403, headers: corsHeaders })
@@ -54,6 +49,14 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!
     )
 
+    // Clean up WebRTC data manually before auth delete
+    // (belt-and-suspenders: some FKs may lack ON DELETE CASCADE)
+    await adminClient.from('call_signals').delete().or(`from_user_id.eq.${user_id},to_user_id.eq.${user_id}`)
+    await adminClient.from('call_participants').delete().eq('user_id', user_id)
+    await adminClient.from('call_sessions').delete().eq('admin_user_id', user_id)
+
+    // Delete from auth.users — this cascades to profiles, admins,
+    // course_enrollments, reports, security_questions, etc.
     const { error } = await adminClient.auth.admin.deleteUser(user_id)
 
     if (error) {
