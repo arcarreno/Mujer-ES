@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? ""
+import { sendEmail, isSmtpConfigured } from "../_shared/smtp.ts"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,37 +38,15 @@ function buildRecoveryEmailHtml(code: string): string {
 </html>`
 }
 
-async function sendEmailViaResend(to: string, html: string): Promise<void> {
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "onboarding@resend.dev",
-      to,
-      subject: "Tu código de recuperación - Mujer-ES",
-      html,
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error("Resend API error:", response.status, errorText)
-    throw new Error(`Error al enviar el email: ${response.status}`)
-  }
-}
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
 
   try {
-    if (!RESEND_API_KEY) {
+    if (!isSmtpConfigured()) {
       return new Response(
-        JSON.stringify({ error: "Resend no está configurado" }),
+        JSON.stringify({ error: "El servicio de correo no está configurado" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
@@ -135,7 +112,7 @@ serve(async (req) => {
       )
     }
 
-    await sendEmailViaResend(cleanEmail, buildRecoveryEmailHtml(code))
+    await sendEmail(cleanEmail, "Tu código de recuperación - Mujer-ES", buildRecoveryEmailHtml(code))
 
     return new Response(
       JSON.stringify({ ok: true }),

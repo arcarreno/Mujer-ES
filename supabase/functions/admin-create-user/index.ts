@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? ""
+import { sendEmail, isSmtpConfigured } from "../_shared/smtp.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,29 +40,15 @@ function buildWelcomeEmailHtml(email: string, password: string): string {
 }
 
 async function sendWelcomeEmail(to: string, password: string): Promise<void> {
-  if (!RESEND_API_KEY) {
-    console.warn("RESEND_API_KEY not set — skipping welcome email")
+  if (!isSmtpConfigured()) {
+    console.warn("SMTP not configured — skipping welcome email")
     return
   }
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: "onboarding@resend.dev",
-      to,
-      subject: "Bienvenida a Mujer-ES — tus credenciales",
-      html: buildWelcomeEmailHtml(to, password),
-    }),
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text()
-    console.error("Resend API error:", response.status, errorText)
-    throw new Error(`Resend responded with ${response.status}: ${errorText}`)
-  }
+  await sendEmail(
+    to,
+    "Bienvenida a Mujer-ES — tus credenciales",
+    buildWelcomeEmailHtml(to, password),
+  )
 }
 
 serve(async (req) => {
