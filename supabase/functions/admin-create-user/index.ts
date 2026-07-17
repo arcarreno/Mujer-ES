@@ -1,10 +1,68 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? ""
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
+function buildWelcomeEmailHtml(email: string, password: string): string {
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head><meta charset="utf-8"></head>
+<body style="font-family: Georgia, 'Times New Roman', serif; background: #fafafa; padding: 40px 20px; margin: 0;">
+  <div style="max-width: 480px; margin: 0 auto; background: #ffffff; padding: 40px 32px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05);">
+    <h1 style="color: #581C87; font-size: 32px; margin: 0 0 4px; font-style: italic; font-weight: 600;">Mujer-ES</h1>
+    <h2 style="color: #1a1a1a; font-size: 20px; font-weight: 400; margin: 0 0 28px;">Tu cuenta ha sido creada</h2>
+    <p style="color: #4a4a4a; font-size: 15px; line-height: 1.6; margin: 0 0 20px;">
+      Bienvenida a Mujer-ES. Estas son tus credenciales para ingresar a la plataforma:
+    </p>
+    <div style="background: #f5f3ff; border-radius: 12px; padding: 24px; margin: 24px 0;">
+      <p style="margin: 0 0 12px; font-size: 14px; color: #6b7280;">
+        <strong style="color: #1a1a1a;">Correo:</strong><br>
+        <span style="font-size: 16px; color: #581C87; word-break: break-all;">${email}</span>
+      </p>
+      <p style="margin: 0; font-size: 14px; color: #6b7280;">
+        <strong style="color: #1a1a1a;">Contraseña inicial:</strong><br>
+        <span style="font-size: 16px; color: #581C87; word-break: break-all;">${password}</span>
+      </p>
+    </div>
+    <p style="color: #9ca3af; font-size: 13px; line-height: 1.5; margin: 24px 0 0; text-align: center;">
+      Al iniciar sesión por primera vez, el sistema te pedirá que crees una contraseña nueva.<br>
+      Si no solicitaste esta cuenta, podés ignorar este mensaje.
+    </p>
+  </div>
+</body>
+</html>`
+}
+
+async function sendWelcomeEmail(to: string, password: string): Promise<void> {
+  if (!RESEND_API_KEY) {
+    console.warn("RESEND_API_KEY not set — skipping welcome email")
+    return
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "onboarding@resend.dev",
+      to,
+      subject: "Bienvenida a Mujer-ES — tus credenciales",
+      html: buildWelcomeEmailHtml(to, password),
+    }),
+  })
+
+  if (!response.ok) {
+    const errorText = await response.text()
+    console.error("Resend API error:", response.status, errorText)
+  }
 }
 
 serve(async (req) => {
@@ -58,7 +116,6 @@ serve(async (req) => {
     const cleanUsername = username?.trim().toLowerCase() || finalEmail.split('@')[0].replace(/[^a-z0-9]/g, '_')
     const cleanFullName = full_name?.trim() || cleanUsername
 
-    // Check username uniqueness across both profiles and admins
     const { data: usernameTaken } = await callerClient
       .rpc('username_exists', { p_username: cleanUsername })
 
@@ -85,7 +142,6 @@ serve(async (req) => {
       serviceRoleKey
     )
 
-    // The email itself is the initial password
     const initialPassword = finalEmail
 
     const { data: newUser, error } = await adminClient.auth.admin.createUser({
@@ -113,6 +169,11 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // Send welcome email asynchronously (don't block on failure)
+    sendWelcomeEmail(finalEmail, initialPassword).catch((e) => {
+      console.error('sendWelcomeEmail failed:', e)
+    })
 
     return new Response(
       JSON.stringify({ ok: true, user: newUser.user, initial_password: initialPassword }),
