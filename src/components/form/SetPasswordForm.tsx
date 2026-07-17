@@ -15,6 +15,10 @@ export default function SetPasswordForm({ userId, onComplete }: SetPasswordFormP
   const [confirm, setConfirm] = useState('')
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const handleSuccessDone = () => {
+    setShowSuccess(false)
+    onComplete()
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,10 +57,6 @@ export default function SetPasswordForm({ userId, onComplete }: SetPasswordFormP
       }
 
       setShowSuccess(true)
-      setTimeout(() => {
-        setShowSuccess(false)
-        onComplete()
-      }, 2000)
     } catch (error) {
       sileo.error({
         title: 'No se pudo establecer la contraseña',
@@ -70,7 +70,7 @@ export default function SetPasswordForm({ userId, onComplete }: SetPasswordFormP
   return (
     <>
       <AnimatePresence>
-        {showSuccess && <SuccessAnimation />}
+        {showSuccess && <SuccessAnimation message="¡Contraseña creada!" onDone={handleSuccessDone} />}
       </AnimatePresence>
 
       <div className="set-password-overlay">
