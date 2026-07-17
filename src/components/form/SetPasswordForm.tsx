@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'motion/react'
+import { AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
+import { setInitialPassword } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
 import SuccessAnimation from '../ui/SuccessAnimation'
 
@@ -12,112 +13,105 @@ interface SetPasswordFormProps {
 export default function SetPasswordForm({ userId, onComplete }: SetPasswordFormProps) {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
-
     if (password.length < 6) {
-      setError('Debe tener al menos 6 caracteres')
+      sileo.error({ title: 'La contraseña debe tener al menos 6 caracteres' })
       return
     }
     if (password !== confirm) {
-      setError('Las contraseñas no son iguales')
+      sileo.error({ title: 'Las contraseñas no coinciden' })
       return
     }
 
-    setLoading(true)
+    setSaving(true)
     try {
-      const { error: rpcErr } = await supabase.rpc('set_initial_password', {
-        p_user_id: userId,
-        p_new_password: password,
-      })
-      if (rpcErr) throw rpcErr
+      const { error: authError } = await supabase.auth.updateUser({ password })
+      if (authError) throw authError
+
+      try {
+        await setInitialPassword(userId, password)
+      } catch (rpcError) {
+        console.warn('RPC set_initial_password failed, trying direct update:', rpcError)
+      }
+
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ first_login: false })
+        .eq('id', userId)
+      if (profileError) {
+        const { error: adminError } = await supabase
+          .from('admins')
+          .update({ first_login: false })
+          .eq('id', userId)
+        if (adminError) {
+          console.warn('Direct first_login update failed on both tables:', profileError, adminError)
+        }
+      }
 
       setShowSuccess(true)
-    } catch (err) {
+      setTimeout(() => {
+        setShowSuccess(false)
+        onComplete()
+      }, 2000)
+    } catch (error) {
       sileo.error({
-        title: 'No pudimos guardar la contraseña',
-        description: err instanceof Error ? err.message : 'Intentá de nuevo',
+        title: 'No se pudo establecer la contraseña',
+        description: error instanceof Error ? error.message : 'Intenta de nuevo',
       })
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
   return (
     <>
-      <motion.div
-        className="set-password-overlay"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <motion.div
-          className="set-password-card"
-          initial={{ scale: 0.85, y: 40, opacity: 0 }}
-          animate={{ scale: 1, y: 0, opacity: 1 }}
-          exit={{ scale: 0.85, y: 40, opacity: 0 }}
-          transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-        >
-          <h2 className="set-password-title">Establecé tu contraseña</h2>
+      <AnimatePresence>
+        {showSuccess && <SuccessAnimation />}
+      </AnimatePresence>
+
+      <div className="set-password-overlay">
+        <div className="set-password-card">
+          <h1 className="set-password-title">Establece tu contraseña</h1>
           <p className="set-password-subtitle">
-            Por ser tu primera vez, necesitás crear una contraseña personalizada.
-            La que usaste para iniciar sesión fue temporal.
+            Esta es la primera vez que inicias sesión. Crea una contraseña segura para tu cuenta.
           </p>
 
           <form onSubmit={handleSubmit} className="set-password-form">
-            <div className="login-field">
-              <label htmlFor="sp-password">Nueva contraseña</label>
+            <div className="set-password-field">
+              <label htmlFor="new-password">Nueva contraseña</label>
               <input
-                id="sp-password"
+                id="new-password"
                 type="password"
                 value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(null) }}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Mínimo 6 caracteres"
-                minLength={6}
-                required
+                disabled={saving}
+                autoComplete="new-password"
                 autoFocus
-                disabled={showSuccess}
               />
             </div>
-            <div className="login-field">
-              <label htmlFor="sp-confirm">Confirmar contraseña</label>
+            <div className="set-password-field">
+              <label htmlFor="confirm-password">Confirma tu contraseña</label>
               <input
-                id="sp-confirm"
+                id="confirm-password"
                 type="password"
                 value={confirm}
-                onChange={(e) => { setConfirm(e.target.value); setError(null) }}
-                placeholder="Repetí la contraseña"
-                minLength={6}
-                required
-                disabled={showSuccess}
+                onChange={(e) => setConfirm(e.target.value)}
+                placeholder="Repite la contraseña"
+                disabled={saving}
+                autoComplete="new-password"
               />
             </div>
-            {error && <p className="field-error">{error}</p>}
-            <button
-              type="submit"
-              className="login-submit"
-              disabled={loading || showSuccess}
-            >
-              {loading ? 'Guardando...' : 'Guardar contraseña'}
+            <button type="submit" className="set-password-btn" disabled={saving}>
+              {saving ? 'Guardando...' : 'Crear contraseña'}
             </button>
           </form>
-        </motion.div>
-      </motion.div>
-
-      <AnimatePresence>
-        {showSuccess && (
-          <SuccessAnimation
-            message="Contraseña guardada correctamente"
-            onDone={onComplete}
-          />
-        )}
-      </AnimatePresence>
+        </div>
+      </div>
     </>
   )
 }

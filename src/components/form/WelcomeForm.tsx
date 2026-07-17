@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
 import WelcomeModal from '../welcome/WelcomeModal'
@@ -13,13 +13,11 @@ interface WelcomeFormProps {
 }
 
 interface Answer {
-  id: string
   value: string
   saved: boolean
 }
 
 const EDUCATION_OPTIONS = [
-  { value: '', label: 'Selecciona una opción' },
   { value: 'sin_estudios', label: 'Sin estudios' },
   { value: 'primaria', label: 'Primaria' },
   { value: 'secundaria', label: 'Secundaria' },
@@ -30,6 +28,7 @@ const EDUCATION_OPTIONS = [
 
 interface QuestionDef {
   id: string
+  short: string
   title: string
   subtitle?: string
   type: 'date' | 'text' | 'select' | 'tel'
@@ -41,6 +40,7 @@ interface QuestionDef {
 const QUESTIONS: QuestionDef[] = [
   {
     id: 'full_name',
+    short: 'Nombre',
     title: '¿Cuál es tu nombre completo?',
     type: 'text',
     placeholder: 'Tu nombre completo',
@@ -51,6 +51,7 @@ const QUESTIONS: QuestionDef[] = [
   },
   {
     id: 'username',
+    short: 'Usuario',
     title: 'Elige un nombre de usuario',
     subtitle: 'Con este nombre te verán las demás usuarias',
     type: 'text',
@@ -63,6 +64,7 @@ const QUESTIONS: QuestionDef[] = [
   },
   {
     id: 'birthdate',
+    short: 'Cumple',
     title: '¿Cuál es tu fecha de nacimiento?',
     type: 'date',
     validate: (v) => {
@@ -77,6 +79,7 @@ const QUESTIONS: QuestionDef[] = [
   },
   {
     id: 'occupation',
+    short: 'Ocupación',
     title: '¿A qué te dedicas?',
     subtitle: 'Estudiante, profesionista, ama de casa, etc.',
     type: 'text',
@@ -88,6 +91,7 @@ const QUESTIONS: QuestionDef[] = [
   },
   {
     id: 'location',
+    short: 'Ubicación',
     title: '¿Dónde vives?',
     subtitle: 'Ciudad o estado',
     type: 'text',
@@ -99,6 +103,7 @@ const QUESTIONS: QuestionDef[] = [
   },
   {
     id: 'education',
+    short: 'Estudios',
     title: '¿Cuál es tu grado de estudios?',
     type: 'select',
     options: EDUCATION_OPTIONS,
@@ -109,6 +114,7 @@ const QUESTIONS: QuestionDef[] = [
   },
   {
     id: 'phone',
+    short: 'Teléfono',
     title: '¿Cuál es tu número de teléfono?',
     subtitle: 'Para que el equipo pueda contactarte si es necesario',
     type: 'tel',
@@ -124,10 +130,10 @@ const QUESTIONS: QuestionDef[] = [
 export default function WelcomeForm({ userId, username, onComplete }: WelcomeFormProps) {
   const [showWelcome, setShowWelcome] = useState(true)
   const [showPrivacy, setShowPrivacy] = useState(false)
-  const [currentIdx, setCurrentIdx] = useState(0)
-  const [answers, setAnswers] = useState<Answer[]>([])
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+  const [answers, setAnswers] = useState<Record<string, Answer>>({})
   const [saving, setSaving] = useState(false)
-  const [direction, setDirection] = useState(0)
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -137,74 +143,53 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
     return () => clearTimeout(timer)
   }, [])
 
-  const q = QUESTIONS[currentIdx]
-  const answer = answers.find((a) => a.id === q.id)
-  const value = answer?.value ?? ''
-  const isAnswered = answer?.saved ?? false
-  // allQuestionsAnswered is available for future use
-  void QUESTIONS.every((qq) => answers.some((a) => a.id === qq.id && a.saved))
+  const toggleCard = (idx: number) => {
+    setExpandedIdx((prev) => (prev === idx ? null : idx))
+  }
 
-  const updateValue = (val: string) => {
+  const updateValue = (id: string, val: string) => {
     setAnswers((prev) => {
-      const existing = prev.findIndex((a) => a.id === q.id)
-      if (existing >= 0) {
-        const next = [...prev]
-        next[existing] = { id: q.id, value: val, saved: next[existing].saved }
-        return next
+      const existing = prev[id]
+      return {
+        ...prev,
+        [id]: { value: val, saved: existing?.saved ?? false },
       }
-      return [...prev, { id: q.id, value: val, saved: false }]
     })
   }
 
-  const markSaved = () => {
-    setAnswers((prev) => {
-      const existing = prev.findIndex((a) => a.id === q.id)
-      if (existing >= 0) {
-        const next = [...prev]
-        next[existing] = { ...next[existing], saved: true }
-        return next
-      }
-      return [...prev, { id: q.id, value, saved: true }]
-    })
-  }
-
-  const saveCurrent = (): boolean => {
-    const err = q.validate(value)
+  const saveAnswer = (q: QuestionDef) => {
+    const val = answers[q.id]?.value ?? ''
+    const err = q.validate(val)
     if (err) {
       sileo.error({ title: 'Revisa este campo', description: err })
-      return false
+      return
     }
-    markSaved()
-    return true
+    setAnswers((prev) => ({
+      ...prev,
+      [q.id]: { value: val, saved: true },
+    }))
+    sileo.success({ title: q.title, description: 'Respuesta guardada' })
   }
 
-  const goNext = () => {
-    if (!saveCurrent()) return
-    if (currentIdx < QUESTIONS.length - 1) {
-      setDirection(1)
-      setCurrentIdx((i) => i + 1)
-    } else {
-      handleFinish()
-    }
-  }
-
-  const goBack = () => {
-    if (currentIdx > 0) {
-      setDirection(-1)
-      setCurrentIdx((i) => i - 1)
-    }
-  }
+  const savedCount = Object.values(answers).filter((a) => a.saved).length
+  const allSaved = savedCount === QUESTIONS.length
 
   const handleFinish = async () => {
+    if (!allSaved) {
+      sileo.error({
+        title: 'Faltan preguntas',
+        description: 'Responde todas las preguntas antes de continuar',
+      })
+      return
+    }
     setSaving(true)
     try {
       const { data: session } = await supabase.auth.getSession()
       if (!session.session?.user) throw new Error('Sesión expirada')
 
       const responses: Record<string, string> = {}
-      for (const qq of QUESTIONS) {
-        const a = answers.find((aa) => aa.id === qq.id)
-        responses[qq.id] = a?.value ?? ''
+      for (const q of QUESTIONS) {
+        responses[q.id] = answers[q.id]?.value ?? ''
       }
 
       await saveOnboardingForm(userId, responses)
@@ -223,33 +208,6 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
     }
   }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !saving) {
-      goNext()
-    }
-  }
-
-  const variants = {
-    enter: (dir: number) => ({
-      x: dir > 0 ? 400 : -400,
-      opacity: 0,
-      rotate: dir > 0 ? 6 : -6,
-      scale: 0.92,
-    }),
-    center: {
-      x: 0,
-      opacity: 1,
-      rotate: 0,
-      scale: 1,
-    },
-    exit: (dir: number) => ({
-      x: dir > 0 ? -400 : 400,
-      opacity: 0,
-      rotate: dir > 0 ? -6 : 6,
-      scale: 0.92,
-    }),
-  }
-
   return (
     <>
       <AnimatePresence>
@@ -261,109 +219,138 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
       </AnimatePresence>
 
       {!showWelcome && !showPrivacy && (
-        <div className="onboarding-flow">
-          <div className="onboarding-flow-header">
-            <h2 className="onboarding-flow-title">Queremos conocerte mejor</h2>
-            <p className="onboarding-flow-subtitle">
-              Responde las preguntas para que podamos brindarte una mejor experiencia
+        <div className="onboarding-haccordion">
+          <div className="onboarding-haccordion-header">
+            <h2 className="onboarding-haccordion-title">Queremos conocerte mejor</h2>
+            <p className="onboarding-haccordion-sub">
+              Toca cada ficha para expandirla y responde.
             </p>
-            <div className="onboarding-flow-steps">
-              {QUESTIONS.map((_, i) => (
+            <div className="onboarding-haccordion-progress">
+              <div className="haccordion-progress-track">
                 <div
-                  key={i}
-                  className={`step-dot ${i === currentIdx ? 'active' : ''} ${answers.some((a) => a.id === QUESTIONS[i].id && a.saved) ? 'done' : ''}`}
-                  onClick={() => {
-                    if (i !== currentIdx) {
-                      setDirection(i > currentIdx ? 1 : -1)
-                      setCurrentIdx(i)
-                    }
-                  }}
+                  className="haccordion-progress-fill"
+                  style={{ width: `${(savedCount / QUESTIONS.length) * 100}%` }}
                 />
-              ))}
+              </div>
+              <span className="haccordion-progress-text">
+                {savedCount} de {QUESTIONS.length}
+              </span>
             </div>
           </div>
 
-          <div className="onboarding-flow-card-area">
-            <AnimatePresence mode="wait" custom={direction}>
-              <motion.div
-                key={q.id}
-                custom={direction}
-                variants={variants}
-                initial="enter"
-                animate="center"
-                exit="exit"
-                transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-                className="onboarding-card-tall"
-                onKeyDown={handleKeyDown}
-              >
-                <div className="onboarding-card-badge">
-                  {isAnswered ? '✓ Respondida' : `Pregunta ${currentIdx + 1} de ${QUESTIONS.length}`}
-                </div>
+          <div className="onboarding-haccordion-scroll" ref={scrollRef}>
+            <div className="onboarding-haccordion-track">
+              {QUESTIONS.map((q, idx) => {
+                const isOpen = expandedIdx === idx
+                const answer = answers[q.id]
+                const saved = answer?.saved ?? false
+                const val = answer?.value ?? ''
 
-                <h3 className="onboarding-card-question">{q.title}</h3>
-                {q.subtitle && <p className="onboarding-card-subtitle">{q.subtitle}</p>}
+                return (
+                  <motion.div
+                    key={q.id}
+                    layout
+                    className={`haccordion-card ${isOpen ? 'open' : ''} ${saved ? 'saved' : ''}`}
+                    onClick={() => {
+                      if (!isOpen) toggleCard(idx)
+                    }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  >
+                    <div className="haccordion-card-inner">
+                      <div className="haccordion-card-header">
+                        <span className={`haccordion-card-badge ${saved ? 'done' : ''}`}>
+                          {saved ? '✓' : `${idx + 1}`}
+                        </span>
+                        <span className="haccordion-card-short">{q.short}</span>
+                        <motion.svg
+                          animate={{ rotate: isOpen ? 180 : 0 }}
+                          transition={{ duration: 0.25 }}
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className="haccordion-chevron"
+                        >
+                          <path d="m6 9 6 6 6-6" />
+                        </motion.svg>
+                      </div>
 
-                <div className="onboarding-card-field">
-                  {q.type === 'select' ? (
-                    <select
-                      value={value}
-                      onChange={(e) => updateValue(e.target.value)}
-                      className="onboarding-input"
-                      disabled={saving}
-                    >
-                      <option value="" disabled>Selecciona una opción</option>
-                      {q.options?.slice(1).map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type={q.type === 'date' ? 'date' : q.type}
-                      value={value}
-                      onChange={(e) => updateValue(e.target.value)}
-                      placeholder={q.placeholder}
-                      className="onboarding-input"
-                      maxLength={q.type === 'tel' ? 15 : undefined}
-                      disabled={saving}
-                      autoFocus
-                    />
-                  )}
-                </div>
+                      <AnimatePresence initial={false}>
+                        {isOpen && (
+                          <motion.div
+                            key="content"
+                            initial={{ width: 0, opacity: 0 }}
+                            animate={{ width: 'auto', opacity: 1 }}
+                            exit={{ width: 0, opacity: 0 }}
+                            transition={{ duration: 0.3, ease: [0.32, 0.72, 0, 1] }}
+                            className="haccordion-card-content"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <h3 className="haccordion-content-title">{q.title}</h3>
+                            {q.subtitle && (
+                              <p className="haccordion-content-sub">{q.subtitle}</p>
+                            )}
 
-                {isAnswered && (
-                  <p className="onboarding-card-ok">Listo ✓</p>
-                )}
-              </motion.div>
-            </AnimatePresence>
+                            {q.type === 'select' ? (
+                              <select
+                                value={val}
+                                onChange={(e) => updateValue(q.id, e.target.value)}
+                                className="haccordion-input"
+                                disabled={saving}
+                                autoFocus
+                              >
+                                <option value="" disabled>Selecciona una opción</option>
+                                {q.options?.map((opt) => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                type={q.type === 'date' ? 'date' : q.type}
+                                value={val}
+                                onChange={(e) => updateValue(q.id, e.target.value)}
+                                placeholder={q.placeholder}
+                                className="haccordion-input"
+                                maxLength={q.type === 'tel' ? 15 : undefined}
+                                disabled={saving}
+                                autoFocus
+                              />
+                            )}
+
+                            <div className="haccordion-content-footer">
+                              <button
+                                className="haccordion-save-btn"
+                                onClick={() => saveAnswer(q)}
+                                disabled={saving}
+                                type="button"
+                              >
+                                {saved ? 'Actualizar' : 'Guardar'}
+                              </button>
+                              {saved && (
+                                <span className="haccordion-saved-label">✓ Guardado</span>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </div>
           </div>
 
-          <div className="onboarding-flow-nav">
+          <div className="onboarding-haccordion-footer">
             <button
-              className="onboarding-nav-btn secondary"
-              onClick={goBack}
-              disabled={currentIdx === 0 || saving}
+              className="onboarding-haccordion-finish"
+              onClick={handleFinish}
+              disabled={saving || !allSaved}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-              Anterior
-            </button>
-
-            <button
-              className="onboarding-nav-btn primary"
-              onClick={goNext}
-              disabled={saving}
-            >
-              {saving
-                ? 'Guardando...'
-                : currentIdx === QUESTIONS.length - 1
-                  ? 'Finalizar'
-                  : 'Siguiente'}
-              {!saving && (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M5 12h14M12 5l7 7-7 7" />
-                </svg>
-              )}
+              {saving ? 'Guardando...' : 'Ir a la plataforma'}
             </button>
           </div>
         </div>

@@ -133,8 +133,31 @@ function App() {
     }
   }
 
-  const handlePasswordSet = () => {
-    setPhase('welcome-form')
+  const handlePasswordSet = async () => {
+    if (!user) return
+    const [p, completed, firstLogin] = await Promise.all([
+      getProfile(user.id),
+      hasCompletedInitialForm(user.id),
+      checkFirstLogin(user.id),
+    ])
+    if (p) setSessionData((s) => ({ ...s, profile: p }))
+    if (p?.blocked_until && new Date(p.blocked_until) > new Date()) {
+      await supabase.auth.signOut()
+      setUser(null)
+      setSessionData({ profile: null, isAdmin: false })
+      setShowLandingOverlay(true)
+      setPhase('landing')
+      return
+    }
+    if (firstLogin) {
+      sileo.warning({
+        title: 'No se pudo actualizar',
+        description: 'Volvé a intentar o cerrá sesión y entrá de nuevo.',
+      })
+      setPhase('first-login')
+      return
+    }
+    setPhase(completed ? 'home' : 'welcome-form')
   }
 
   const handleLogout = () => {
