@@ -8741,24 +8741,53 @@ input[type="date"].onboarding-input {
   color: #374151;
 }
 
-.set-password-field input {
+.set-password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.set-password-input-wrap input {
   font-family: var(--font-body);
   font-size: var(--text-base);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-10) var(--space-3) var(--space-4);
   border: 1.5px solid #e5e7eb;
   border-radius: var(--radius-md);
   outline: none;
   background: #fafafa;
   transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.set-password-field input:focus {
+.set-password-input-wrap input:focus {
   border-color: var(--color-accent, #581C87);
   box-shadow: 0 0 0 3px rgba(88, 28, 135, 0.1);
 }
 
-.set-password-field input::placeholder {
+.set-password-input-wrap input::placeholder {
   color: #9ca3af;
+}
+
+.set-password-eye {
+  position: absolute;
+  right: var(--space-2);
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9ca3af;
+  padding: var(--space-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  border-radius: var(--radius-sm);
+}
+
+.set-password-eye:hover {
+  color: #374151;
 }
 
 .set-password-btn {
