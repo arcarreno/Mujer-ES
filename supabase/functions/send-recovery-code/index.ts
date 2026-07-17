@@ -112,7 +112,14 @@ serve(async (req) => {
       )
     }
 
-    await sendEmail(cleanEmail, "Tu código de recuperación - Mujer-ES", buildRecoveryEmailHtml(code))
+    const recoveryText = `Mujer-ES — Restablecer contraseña
+
+Tu código de recuperación es: ${code}
+
+El código expira en 10 minutos.
+Si no solicitaste esto, podés ignorar este mensaje.`
+
+    await sendEmail(cleanEmail, "Tu código de recuperación - Mujer-ES", buildRecoveryEmailHtml(code), { text: recoveryText })
 
     return new Response(
       JSON.stringify({ ok: true }),

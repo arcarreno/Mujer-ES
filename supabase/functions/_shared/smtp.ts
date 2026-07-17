@@ -16,28 +16,32 @@ export function isSmtpConfigured(): boolean {
   return !!(SMTP_USER && SMTP_PASS)
 }
 
+interface SendEmailOptions {
+  text?: string
+}
+
 /**
- * Envía un email vía SMTP usando la API de nodemailer.
+ * Envía un email vía SMTP usando nodemailer.
  * Requiere que SMTP_USER y SMTP_PASS estén configurados en secrets.
+ * Incluir text alternativo mejora la entregabilidad (evita filtro de spam).
  */
 export async function sendEmail(
   to: string,
   subject: string,
-  html: string
+  html: string,
+  options: SendEmailOptions = {}
 ): Promise<void> {
   if (!isSmtpConfigured()) {
     console.warn("SMTP not configured — skipping email")
     return
   }
 
-  // Construimos el mensaje SMTP manualmente usando fetch al endpoint de Gmail SMTP
-  // Usamos nodemailer vía npm
   const nodemailer = await import("npm:nodemailer@6.9.16")
 
   const transporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: SMTP_PORT,
-    secure: false, // STARTTLS en puerto 587
+    secure: false,
     auth: {
       user: SMTP_USER,
       pass: SMTP_PASS,
@@ -50,6 +54,8 @@ export async function sendEmail(
       to,
       subject,
       html,
+      text: options.text,
+      replyTo: SMTP_FROM,
     })
     console.log("Email sent:", info.messageId)
   } catch (err) {

@@ -39,6 +39,17 @@ function buildWelcomeEmailHtml(email: string, password: string): string {
 </html>`
 }
 
+function buildWelcomeEmailText(email: string, password: string): string {
+  return `Bienvenida a Mujer-ES
+Tu cuenta ha sido creada
+
+Correo: ${email}
+Contraseña inicial: ${password}
+
+Al iniciar sesión por primera vez, el sistema te pedirá que crees una contraseña nueva.
+Si no solicitaste esta cuenta, podés ignorar este mensaje.`
+}
+
 async function sendWelcomeEmail(to: string, password: string): Promise<void> {
   if (!isSmtpConfigured()) {
     console.warn("SMTP not configured — skipping welcome email")
@@ -48,6 +59,7 @@ async function sendWelcomeEmail(to: string, password: string): Promise<void> {
     to,
     "Bienvenida a Mujer-ES — tus credenciales",
     buildWelcomeEmailHtml(to, password),
+    { text: buildWelcomeEmailText(to, password) },
   )
 }
 

@@ -4,6 +4,7 @@ import { ActiveSpeakerDetector } from './active-speaker'
 import { SilenceSuppressor } from './silence-suppression'
 import { ConnectionQualityMonitor, type ConnectionQuality } from './connection-quality'
 import { ReconnectionManager, type ReconnectionState } from './reconnection'
+import { sendSignal as apiSendSignal, pollSignals, subscribeToSignals, joinCallSession, leaveCallSession, endCallSession } from './call-api'
 
 // =====================================================
 // TYPES
@@ -115,8 +116,8 @@ const RTC_CONFIG = RTC_CONFIG_PRIVACY
 
 export class SignalingManager {
   presenceChannel: RealtimeChannel | null = null
-  signalChannel: RealtimeChannel | null = null
-  private signalSendChannels: Map<string, RealtimeChannel> = new Map()
+  sessionId: string | null = null
+  private signalUnsubscribe: (() => void) | null = null
   private courseId: string
   private handlers: {
     onOffer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
@@ -136,13 +137,10 @@ export class SignalingManager {
   private lastPresenceState: ParticipantState | null = null
   presenceEpochs: Map<string, number> = new Map()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private reconnectTimerSignal: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
-  private reconnectAttemptsSignal = 0
   private maxReconnectAttempts = 10
   private lastPresenceData: ParticipantState | null = null
   private stableConnectionTimer: ReturnType<typeof setTimeout> | null = null
-  private stableConnectionTimerSignal: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     courseId: string,
@@ -156,12 +154,11 @@ export class SignalingManager {
 
   async join(): Promise<void> {
     this.cancelReconnects()
-    if (this.presenceChannel || this.signalChannel) {
+    if (this.presenceChannel) {
       console.warn('[Signaling] Already joined, cleaning up previous channels')
       await this.leave()
     }
     await this.setupPresenceChannel()
-    await this.setupSignalChannel()
   }
 
   private async setupPresenceChannel(): Promise<void> {
@@ -232,54 +229,43 @@ export class SignalingManager {
       })
   }
 
-  private async setupSignalChannel(): Promise<void> {
-    this.signalChannel = supabase.channel(`call:signal:${this.myUserId}`)
+  async initDurableSignaling(sessionId: string): Promise<void> {
+    this.sessionId = sessionId
 
-    this.signalChannel
-      .on('broadcast', { event: 'signal' }, ({ payload }) => {
-        const event = payload as SignalEvent
+    await joinCallSession(sessionId)
 
-        if ('fromUserId' in event && event.fromUserId === this.myUserId) return
+    const sub = subscribeToSignals(sessionId, (signal) => {
+      const event = signal.payload as SignalEvent
 
-        if (event.type === 'offer') {
-          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
-          this.handlers.onOffer(event.fromUserId, event.sdp)
-        } else if (event.type === 'answer') {
-          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
-          this.handlers.onAnswer(event.fromUserId, event.sdp)
-        } else if (event.type === 'ice-candidate') {
-          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
-          this.handlers.onIceCandidate(event.fromUserId, event.candidate)
-        } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
-          this.handlers.onKick(event.targetUserId)
-        } else if (event.type === 'end-session') {
-          console.log(`[WebRTC] Received end-session via signal channel`)
-          this.handlers.onEndSession()
-        } else if (event.type === 'mute-all') {
-          console.log(`[WebRTC] Received mute-all via signal channel`)
-          this.handlers.onMuteAll()
-        }
-      })
-      .subscribe((status) => {
-        console.log(`[Signaling] Signal subscribe status: ${status}`)
-        if (status === 'SUBSCRIBED') {
-          if (this.stableConnectionTimerSignal) {
-            clearTimeout(this.stableConnectionTimerSignal)
-          }
-          this.stableConnectionTimerSignal = setTimeout(() => {
-            this.stableConnectionTimerSignal = null
-            this.reconnectAttemptsSignal = 0
-            console.log('[Signaling] Signal channel stable, reset reconnect attempts')
-          }, 10000)
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          if (this.stableConnectionTimerSignal) {
-            clearTimeout(this.stableConnectionTimerSignal)
-            this.stableConnectionTimerSignal = null
-          }
-          console.warn(`[Signaling] Signal channel lost (${status}), scheduling reconnect...`)
-          this.scheduleReconnectSignal()
-        }
-      })
+      if ('fromUserId' in event && event.fromUserId === this.myUserId) return
+
+      if (event.type === 'offer') {
+        console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
+        this.handlers.onOffer(event.fromUserId, event.sdp)
+      } else if (event.type === 'answer') {
+        console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
+        this.handlers.onAnswer(event.fromUserId, event.sdp)
+      } else if (event.type === 'ice-candidate') {
+        console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
+        this.handlers.onIceCandidate(event.fromUserId, event.candidate)
+      }
+    })
+
+    this.signalUnsubscribe = sub
+
+    const missed = await pollSignals(sessionId)
+    for (const sig of missed) {
+      if (sig.to_user_id !== this.myUserId) continue
+      if (sig.from_user_id === this.myUserId) continue
+      const event = sig.payload as SignalEvent
+      if (event.type === 'offer') {
+        this.handlers.onOffer(sig.from_user_id, event.sdp)
+      } else if (event.type === 'answer') {
+        this.handlers.onAnswer(sig.from_user_id, event.sdp)
+      } else if (event.type === 'ice-candidate') {
+        this.handlers.onIceCandidate(sig.from_user_id, event.candidate)
+      }
+    }
   }
 
   async trackPresence(state: ParticipantState): Promise<void> {
@@ -319,8 +305,12 @@ export class SignalingManager {
           console.error('[Signaling] Cannot send peer-to-peer signal without targetUserId')
           return
         }
-        console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via signal channel`)
-        await this.sendToSignalChannel(targetUserId, event)
+        if (!this.sessionId) {
+          console.error('[Signaling] Cannot send P2P signal without sessionId (call initDurableSignaling first)')
+          return
+        }
+        console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via durable DB signaling`)
+        await apiSendSignal(this.sessionId, targetUserId, event.type, event)
         break
       }
       case 'mute-all':
@@ -341,27 +331,15 @@ export class SignalingManager {
       }
       case 'kick': {
         const targetUserId = event.targetUserId
+        if (!this.sessionId) {
+          console.error('[Signaling] Cannot send kick without sessionId')
+          return
+        }
         console.log(`[Signaling] Sending kick to ${targetUserId}`)
-        await this.sendToSignalChannel(targetUserId, event)
+        await apiSendSignal(this.sessionId, targetUserId, 'kick', event)
         break
       }
     }
-  }
-
-  private async sendToSignalChannel(targetUserId: string, event: SignalEvent): Promise<void> {
-    let chan = this.signalSendChannels.get(targetUserId)
-    if (!chan) {
-      console.log(`[Signaling] Creating send channel for ${targetUserId}`)
-      chan = supabase.channel(`call:signal:${targetUserId}`)
-      chan.subscribe()
-      this.signalSendChannels.set(targetUserId, chan)
-    }
-    const status = await chan.send({
-      type: 'broadcast',
-      event: 'signal',
-      payload: event,
-    })
-    console.log(`[Signaling] Send status to ${targetUserId}: ${status}`)
   }
 
   async sendChatMessage(msg: { userId: string; username: string; text: string; time: number }): Promise<void> {
@@ -379,12 +357,16 @@ export class SignalingManager {
   async leave(): Promise<void> {
     this.cancelReconnects()
     this.reconnectAttempts = this.maxReconnectAttempts
-    this.reconnectAttemptsSignal = this.maxReconnectAttempts
 
-    for (const [, chan] of this.signalSendChannels) {
-      await supabase.removeChannel(chan)
+    if (this.signalUnsubscribe) {
+      this.signalUnsubscribe()
+      this.signalUnsubscribe = null
     }
-    this.signalSendChannels.clear()
+
+    if (this.sessionId) {
+      await leaveCallSession(this.sessionId)
+      this.sessionId = null
+    }
 
     if (this.presenceChannel) {
       console.log('[Signaling] Leaving presence channel...')
@@ -392,13 +374,6 @@ export class SignalingManager {
       await supabase.removeChannel(this.presenceChannel)
       this.presenceChannel = null
       console.log('[Signaling] Presence channel removed')
-    }
-
-    if (this.signalChannel) {
-      console.log('[Signaling] Leaving signal channel...')
-      await supabase.removeChannel(this.signalChannel)
-      this.signalChannel = null
-      console.log('[Signaling] Signal channel removed')
     }
   }
 
@@ -439,51 +414,14 @@ export class SignalingManager {
     }, delay)
   }
 
-  private scheduleReconnectSignal(): void {
-    if (this.reconnectAttemptsSignal >= this.maxReconnectAttempts) {
-      console.error('[Signaling] Max signal reconnect attempts reached, giving up')
-      return
-    }
-    if (this.reconnectTimerSignal) return
-
-    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttemptsSignal), 15000)
-    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1)
-    const delay = Math.round(baseDelay + jitter)
-    this.reconnectAttemptsSignal++
-    console.log(`[Signaling] Reconnecting signal in ${delay}ms (attempt ${this.reconnectAttemptsSignal})`)
-
-    this.reconnectTimerSignal = setTimeout(async () => {
-      this.reconnectTimerSignal = null
-      try {
-        console.log('[Signaling] Attempting signal reconnect...')
-        if (this.signalChannel) {
-          await supabase.removeChannel(this.signalChannel)
-          this.signalChannel = null
-        }
-        await this.setupSignalChannel()
-      } catch (e) {
-        console.error('[Signaling] Signal reconnect failed:', e)
-        this.scheduleReconnectSignal()
-      }
-    }, delay)
-  }
-
   private cancelReconnects(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    if (this.reconnectTimerSignal) {
-      clearTimeout(this.reconnectTimerSignal)
-      this.reconnectTimerSignal = null
-    }
     if (this.stableConnectionTimer) {
       clearTimeout(this.stableConnectionTimer)
       this.stableConnectionTimer = null
-    }
-    if (this.stableConnectionTimerSignal) {
-      clearTimeout(this.stableConnectionTimerSignal)
-      this.stableConnectionTimerSignal = null
     }
   }
 
@@ -1345,6 +1283,10 @@ export class VideoCallManager {
 
   async endSession(): Promise<void> {
     if (this.isAdmin) {
+      const sessionId = this.signaling.sessionId
+      if (sessionId) {
+        await endCallSession(sessionId)
+      }
       // Send via presence broadcast (the primary channel)
       this.signaling.sendSignal({ type: 'end-session' }).catch(() => {})
 
