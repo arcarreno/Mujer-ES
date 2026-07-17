@@ -62,6 +62,7 @@ async function sendWelcomeEmail(to: string, password: string): Promise<void> {
   if (!response.ok) {
     const errorText = await response.text()
     console.error("Resend API error:", response.status, errorText)
+    throw new Error(`Resend responded with ${response.status}: ${errorText}`)
   }
 }
 
@@ -170,13 +171,23 @@ serve(async (req) => {
       )
     }
 
-    // Send welcome email asynchronously (don't block on failure)
-    sendWelcomeEmail(finalEmail, initialPassword).catch((e) => {
-      console.error('sendWelcomeEmail failed:', e)
-    })
+    // Send welcome email
+    let emailStatus: 'ok' | 'skipped' | 'error' = 'skipped'
+    try {
+      await sendWelcomeEmail(finalEmail, initialPassword)
+      emailStatus = 'ok'
+    } catch (emailErr) {
+      console.error('sendWelcomeEmail error:', emailErr)
+      emailStatus = 'error'
+    }
 
     return new Response(
-      JSON.stringify({ ok: true, user: newUser.user, initial_password: initialPassword }),
+      JSON.stringify({
+        ok: true,
+        user: newUser.user,
+        initial_password: initialPassword,
+        email_sent: emailStatus,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (e) {

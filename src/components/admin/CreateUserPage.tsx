@@ -22,12 +22,23 @@ export default function CreateUserPage({ onCreated, onBack }: CreateUserPageProp
       sileo.error({ title: 'Correo requerido', description: 'El correo electrónico es obligatorio' })
       return
     }
-    setLoading(true)
+      setLoading(true)
     try {
-      await adminCreateUser({
+      const result = await adminCreateUser({
         email: email.trim(),
         is_admin: isAdmin,
       })
+      if (result.email_sent === 'error') {
+        sileo.warning({
+          title: 'Cuenta creada, pero no se pudo enviar el email',
+          description: 'La usuaria deberá iniciar con su correo como contraseña inicial.',
+        })
+      } else if (result.email_sent === 'ok') {
+        sileo.success({
+          title: 'Correo enviado',
+          description: 'La usuaria recibió sus credenciales por correo.',
+        })
+      }
       setShowSuccess(true)
     } catch (err) {
       sileo.error({

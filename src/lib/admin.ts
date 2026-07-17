@@ -130,7 +130,7 @@ export interface CreateUserPayload {
 
 export async function adminCreateUser(
   payload: CreateUserPayload
-): Promise<{ type: UserType }> {
+): Promise<{ type: UserType; email_sent?: string }> {
   // Use fetch directly to get the full error response body
   const { data: { session } } = await supabase.auth.getSession()
   const token = session?.access_token
@@ -156,6 +156,7 @@ export async function adminCreateUser(
 
   return {
     type: payload.is_admin ? 'admin' : 'user',
+    email_sent: body.email_sent,
   }
 }
 
