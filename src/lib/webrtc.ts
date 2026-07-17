@@ -600,7 +600,8 @@ export class PeerManager {
       if (this.makingOffer.get(remoteUserId)) return
       try {
         this.makingOffer.set(remoteUserId, true)
-        await pc.setLocalDescription()
+        const offer = await pc.createOffer()
+        await pc.setLocalDescription(offer)
         await this.signaling.sendSignal({
           type: 'offer',
           fromUserId: this.myUserId,
@@ -692,7 +693,15 @@ export class PeerManager {
           clearTimeout(newConnectionTimer)
           newConnectionTimer = null
         }
-        this.removePeer(remoteUserId)
+        // Don't removePeer immediately — iceConnectionState handler already
+        // calls restartIce(). Give it 5s to recover before giving up.
+        newConnectionTimer = setTimeout(() => {
+          newConnectionTimer = null
+          if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+            console.warn(`[WebRTC] Connection still failed after 5s, removing peer ${remoteUserId}`)
+            this.removePeer(remoteUserId)
+          }
+        }, 5000)
       }
     }
 
@@ -729,7 +738,8 @@ export class PeerManager {
     this.makingOffer.set(remoteUserId, true)
 
     try {
-      await pc.setLocalDescription()
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
       await this.signaling.sendSignal({
         type: 'offer',
         fromUserId: this.myUserId,
@@ -800,7 +810,8 @@ export class PeerManager {
 
       // If we received an offer, send an answer
       if (sdp.type === 'offer') {
-        await pc.setLocalDescription()
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
         await this.signaling.sendSignal({
           type: 'answer',
           fromUserId: this.myUserId,
@@ -921,7 +932,8 @@ export class PeerManager {
         await sender.replaceTrack(videoTrack)
         // Trigger renegotiation so remote peer's ontrack fires with new track
         try {
-          await peer.connection.setLocalDescription()
+          const offer = await peer.connection.createOffer()
+          await peer.connection.setLocalDescription(offer)
           await this.signaling.sendSignal({
             type: 'offer',
             fromUserId: this.myUserId,
@@ -940,7 +952,8 @@ export class PeerManager {
   // Restore camera to all peer connections after screen share
   async restoreCameraToPeers(): Promise<void> {
     if (!this.localStream) return
-    const videoTrack = this.localStream.getVideoTracks()[0] || null
+    const videoTrack = this.localStream.getVideoTracks()[0]
+    if (!videoTrack) return
 
     const operations = Array.from(this.peers.entries()).map(async ([userId, peer]) => {
       const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
@@ -948,7 +961,8 @@ export class PeerManager {
         await sender.replaceTrack(videoTrack)
         // Trigger renegotiation so remote peer's ontrack fires with camera track
         try {
-          await peer.connection.setLocalDescription()
+          const offer = await peer.connection.createOffer()
+          await peer.connection.setLocalDescription(offer)
           await this.signaling.sendSignal({
             type: 'offer',
             fromUserId: this.myUserId,
