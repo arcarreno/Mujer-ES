@@ -150,8 +150,20 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
     return () => clearTimeout(timer)
   }, [])
 
+  const cardRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  useEffect(() => {
+    cardRefs.current = cardRefs.current.slice(0, QUESTIONS.length)
+  }, [])
+
   const toggleCard = (idx: number) => {
-    setExpandedIdx((prev) => (prev === idx ? null : idx))
+    const next = expandedIdx === idx ? null : idx
+    setExpandedIdx(next)
+    if (next !== null) {
+      requestAnimationFrame(() => {
+        cardRefs.current[next]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    }
   }
 
   const updateValue = (id: string, val: string) => {
@@ -248,6 +260,7 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
                   <motion.div
                     key={q.id}
                     layout
+                    ref={(el) => { cardRefs.current[idx] = el }}
                     className={`haccordion-card ${isOpen ? 'open' : ''} ${fieldValid ? 'saved' : ''}`}
                     style={{ backgroundImage: `url(${CARD_IMAGES[idx]})` }}
                     onClick={() => {
