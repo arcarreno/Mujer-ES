@@ -367,21 +367,6 @@ export class SignalingManager {
     })
   }
 
-  private async sendToSignalChannel(targetUserId: string, event: SignalEvent): Promise<void> {
-    let chan = this.signalSendChannels.get(targetUserId)
-    if (!chan) {
-      console.log(`[Signaling] Creating send channel for ${targetUserId}`)
-      chan = supabase.channel(`call:signal:${targetUserId}`)
-      chan.subscribe()
-      this.signalSendChannels.set(targetUserId, chan)
-    }
-    await chan.send({
-      type: 'broadcast',
-      event: 'signal',
-      payload: event,
-    })
-  }
-
   async sendChatMessage(msg: { userId: string; username: string; text: string; time: number }): Promise<void> {
     if (!this.presenceChannel) {
       console.error('[Signaling] Cannot send chat: no presence channel')
