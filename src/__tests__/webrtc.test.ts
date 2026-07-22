@@ -15,6 +15,7 @@ import {
   getDisplayMediaMock,
   mockSupabase,
   mockPresenceChannel,
+  mockSignalChannel,
   MockMediaStreamTrack,
   MockMediaStream,
 } from './setup'
@@ -906,8 +907,8 @@ describe('SignalingManager', () => {
 
     await sm.join()
 
-    // Presence channel should be removed during cleanup
-    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(1)
+    // Both signal and presence channels should be removed during cleanup
+    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(2)
   })
 
   it('trackPresence sets epoch and calls channel.track', async () => {
@@ -1109,7 +1110,7 @@ describe('SignalingManager', () => {
     consoleSpy.mockRestore()
   })
 
-  it('leave untracks and removes channel', async () => {
+  it('leave untracks and removes channels', async () => {
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
       onAnswer: vi.fn(),
@@ -1130,7 +1131,7 @@ describe('SignalingManager', () => {
     expect(mockPresenceChannel.untrack).toHaveBeenCalled()
     expect(mockSupabase.removeChannel).toHaveBeenCalled()
     expect(sm.presenceChannel).toBeNull()
-    expect(sm.sessionId).toBeNull()
+    expect(sm.signalChannel).toBeNull()
   })
 
   it('leave handles null channel gracefully', async () => {
@@ -1151,18 +1152,17 @@ describe('SignalingManager', () => {
     // Never joined — channels are null
     await sm.leave()
     expect(sm.presenceChannel).toBeNull()
-    expect(sm.sessionId).toBeNull()
+    expect(sm.signalChannel).toBeNull()
   })
 })
 
 // =====================================================
-// SIGNALING — durable DB signaling (initDurableSignaling)
+// SIGNALING — broadcast signal channel
 // =====================================================
-describe('SignalingManager initDurableSignaling', () => {
-  it('joins call session and subscribes to signals', async () => {
-    const onOffer = vi.fn()
+describe('SignalingManager broadcast signal channel', () => {
+  it('sets up signal channel on join', async () => {
     const sm = new SignalingManager('course-1', 'user-1', {
-      onOffer,
+      onOffer: vi.fn(),
       onAnswer: vi.fn(),
       onIceCandidate: vi.fn(),
       onMuteAll: vi.fn(),
@@ -1175,12 +1175,12 @@ describe('SignalingManager initDurableSignaling', () => {
       onPresenceLeave: vi.fn(),
     })
 
-    await sm.initDurableSignaling('session-1')
+    await sm.join()
 
-    expect(sm.sessionId).toBe('session-1')
+    expect(sm.signalChannel).toBeTruthy()
   })
 
-  it('processes offers from other users', async () => {
+  it('processes offers from other users via broadcast', async () => {
     const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer,
@@ -1196,18 +1196,17 @@ describe('SignalingManager initDurableSignaling', () => {
       onPresenceLeave: vi.fn(),
     })
 
-    // Subscribe to signals and capture the callback
-    const { subscribeToSignals } = await import('../lib/call-api')
-    await sm.initDurableSignaling('session-1')
+    await sm.join()
 
-    // Get the callback that was registered with subscribeToSignals
-    const subscribeMock = subscribeToSignals as ReturnType<typeof vi.fn>
-    const callback = subscribeMock.mock.calls[0][2]
+    // Get the broadcast handler registered on signalChannel
+    const broadcastHandler = mockSignalChannel.on.mock.calls.find(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )?.[2]
+
+    expect(broadcastHandler).toBeDefined()
 
     // Simulate receiving an offer from another user
-    callback({
-      to_user_id: 'user-1',
-      from_user_id: 'user-2',
+    broadcastHandler({
       payload: {
         type: 'offer',
         fromUserId: 'user-2',
@@ -1219,7 +1218,7 @@ describe('SignalingManager initDurableSignaling', () => {
     expect(onOffer).toHaveBeenCalledWith('user-2', { type: 'offer', sdp: 'v=0\r\n' })
   })
 
-  it('filters self-messages', async () => {
+  it('filters self-messages in broadcast', async () => {
     const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer,
@@ -1235,16 +1234,13 @@ describe('SignalingManager initDurableSignaling', () => {
       onPresenceLeave: vi.fn(),
     })
 
-    const { subscribeToSignals } = await import('../lib/call-api')
-    await sm.initDurableSignaling('session-1')
+    await sm.join()
 
-    const subscribeMock = subscribeToSignals as ReturnType<typeof vi.fn>
-    const callback = subscribeMock.mock.calls[0][2]
+    const broadcastHandler = mockSignalChannel.on.mock.calls.find(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )?.[2]
 
-    // Signal from self — should be ignored
-    callback({
-      to_user_id: 'user-1',
-      from_user_id: 'user-1',
+    broadcastHandler({
       payload: {
         type: 'offer',
         fromUserId: 'user-1',

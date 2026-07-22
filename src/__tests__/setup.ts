@@ -257,15 +257,7 @@ vi.mock('../lib/supabase', () => ({
   supabase: mockSupabase,
 }))
 
-vi.mock('../lib/call-api', () => ({
-  sendSignal: vi.fn().mockResolvedValue(true),
-  pollSignals: vi.fn().mockResolvedValue([]),
-  subscribeToSignals: vi.fn().mockReturnValue(() => {}),
-  joinCallSession: vi.fn().mockResolvedValue(undefined),
-  leaveCallSession: vi.fn().mockResolvedValue(undefined),
-  endCallSession: vi.fn().mockResolvedValue(true),
-  createCallSession: vi.fn().mockResolvedValue('mock-session-id'),
-}))
+
 
 // =====================================================
 // Mock dependent modules

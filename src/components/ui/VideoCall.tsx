@@ -6,7 +6,6 @@ import {
   VideoCallManager,
   type ParticipantState,
 } from '../../lib/webrtc'
-import { createCallSession } from '../../lib/call-api'
 import VideoGrid from './VideoGrid'
 import CallControls from './CallControls'
 import ParticipantList from './ParticipantList'
@@ -38,7 +37,6 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const [sessionEnded, setSessionEnded] = useState(false)
   const [kicked, setKicked] = useState(false)
   const managerRef = useRef<VideoCallManager | null>(null)
-  const sessionIdRef = useRef<string | null>(null)
   const streamInitializedRef = useRef(false)
   const userIdRef = useRef('')
   const initRanRef = useRef(false)
@@ -118,24 +116,14 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       manager.setOnPresenceUpdate((state) => {
         const seen = new Set<string>()
         const list: ParticipantState[] = []
-        let sidFromPresence: string | null = null
         for (const [, presences] of Object.entries(state)) {
           for (const p of presences) {
-            const ps = p as ParticipantState & { sessionId?: string }
+            const ps = p as ParticipantState
             if (!seen.has(ps.userId)) {
               seen.add(ps.userId)
-              list.push(ps as ParticipantState)
-            }
-            // Detect sessionId for non-admin
-            if (!isAdmin && !sessionIdRef.current && ps.sessionId && typeof ps.sessionId === 'string') {
-              sidFromPresence = ps.sessionId
+              list.push(ps)
             }
           }
-        }
-        // If sessionId discovered from presence, init durable signaling
-        if (sidFromPresence) {
-          sessionIdRef.current = sidFromPresence
-          manager.signaling.initDurableSignaling(sidFromPresence).catch(console.error)
         }
         // Always include local participant with current state
         const myId = userIdRef.current
@@ -240,46 +228,13 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       await manager.join()
       console.log('[VideoCall] Signaling joined, tracking presence...')
 
-      // === DB-backed durable signaling ===
-      let sessionId: string | null = null
-      if (isAdmin) {
-        try {
-          sessionId = await createCallSession(courseId)
-          if (sessionId) {
-            console.log(`[VideoCall] Created DB session: ${sessionId}`)
-            sessionIdRef.current = sessionId
-            await manager.signaling.initDurableSignaling(sessionId)
-          }
-        } catch (e) {
-          console.error('[VideoCall] Failed to create session:', e)
-        }
-      } else {
-        // Non-admin: look for sessionId in existing presence data
-        const presence = manager.signaling.getPresenceState()
-        for (const [, presences] of Object.entries(presence)) {
-          for (const p of presences) {
-            const sid = (p as any)?.sessionId
-            if (sid && typeof sid === 'string') {
-              sessionId = sid
-              break
-            }
-          }
-          if (sessionId) break
-        }
-        if (sessionId) {
-          console.log(`[VideoCall] Found session in presence data: ${sessionId}`)
-          sessionIdRef.current = sessionId
-          await manager.signaling.initDurableSignaling(sessionId)
-        }
-      }
-
       // Track presence after joining — derive mic/video from actual stream tracks,
       // NOT from React state (which hasn't updated yet due to stale closures)
       const localStream = manager.peers.getLocalStreamRef()
       const localTracks = localStream?.getTracks() ?? []
       const hasMic = localTracks.some(t => t.kind === 'audio' && t.enabled)
       const hasCam = localTracks.some(t => t.kind === 'video' && t.enabled)
-      const presenceData: ParticipantState & { sessionId?: string } = {
+      const presenceData: ParticipantState = {
         userId: user.id,
         username: uname,
         avatarUrl: aUrl,
@@ -290,13 +245,10 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         joinedAt: Date.now(),
         epoch: 0,
       }
-      if (sessionId) {
-        presenceData.sessionId = sessionId
-      }
-      await manager.signaling.trackPresence(presenceData as ParticipantState)
+      await manager.signaling.trackPresence(presenceData)
       setMicActive(hasMic)
       setVideoActive(hasCam)
-      setParticipants([presenceData as ParticipantState])
+      setParticipants([presenceData])
       } catch (e) {
         console.error('[VideoCall] Init error:', e)
       }
