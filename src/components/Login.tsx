@@ -1,6 +1,8 @@
-import { useState, useEffect, Suspense, lazy } from 'react'
+import { useState, useEffect, useRef, Suspense, lazy } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { sileo } from 'sileo'
+import lottie from 'lottie-web'
+import womanAnimation from '../assets/lottie/woman.json'
 import { signInWithIdentifier } from '../lib/queries'
 import LoadingFallback from './ui/LoadingFallback'
 import SubmitButton from './ui/SubmitButton'
@@ -19,6 +21,19 @@ export default function Login({ onBack }: LoginProps) {
   const [loading, setLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<{identifier?: string; password?: string}>({})
   const [isMobile, setIsMobile] = useState(false)
+  const lottieRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = lottieRef.current
+    if (!el) return
+    const anim = lottie.loadAnimation({
+      container: el,
+      animationData: womanAnimation,
+      loop: true,
+      autoplay: true,
+    })
+    return () => anim.destroy()
+  }, [])
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 768)
@@ -188,11 +203,7 @@ export default function Login({ onBack }: LoginProps) {
       {/* Right side — Visual */}
       <div className="login-visual-side">
         <div className="login-visual-content">
-          <iframe
-            src="https://my.spline.design/roomgirlworkingcopy-nBHQyrouGG0A486OpeB5Hz9A/"
-            className="login-visual-spline"
-            title="Spline 3D"
-          />
+          <div className="login-visual-lottie" ref={lottieRef} />
           <p className="login-visual-text">TU LUZ SIGUE AHI</p>
         </div>
       </div>
