@@ -9050,6 +9050,35 @@ input[type="date"].onboarding-input {
   overflow-y: auto;
 }
 
+/* Cards 2, 4, 7: content panel on the LEFT, just below the header */
+.haccordion-card.haccordion-card-left.open .haccordion-card-content {
+  left: var(--space-2);
+  right: auto;
+  top: calc(var(--space-3) + 28px + var(--space-2));
+  bottom: var(--space-2);
+}
+
+/* Cards 2, 4, 7: background image shifted 1cm to the right */
+.haccordion-card.haccordion-card-left {
+  background-position: calc(50% + 1cm) center;
+}
+
+/* Cards 1, 3, 6: background image shifted 1cm to the left */
+.haccordion-card.haccordion-card-img-left {
+  background-position: calc(50% - 1cm) center;
+}
+
+/* Card 5: question title aligned to the right edge of the card */
+.haccordion-card.haccordion-card-question-right .haccordion-content-title,
+.haccordion-card.haccordion-card-question-right .haccordion-content-sub {
+  text-align: right;
+}
+
+/* Card 5: background image shifted 1.5cm to the left */
+.haccordion-card.haccordion-card-img-left-15 {
+  background-position: calc(50% - 1.5cm) center;
+}
+
 .haccordion-content-title {
   font-family: var(--font-display);
   font-weight: 600;

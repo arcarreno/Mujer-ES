@@ -17,6 +17,16 @@ import cardImg7 from '../../assets/imagenes-cards/woman7.jpg'
 
 const CARD_IMAGES = [cardImg1, cardImg2, cardImg3, cardImg4, cardImg5, cardImg6, cardImg7]
 
+const CARD_EXTRA_CLASSES: Record<string, string> = {
+  full_name: 'haccordion-card-img-left',
+  username: 'haccordion-card-left',
+  birthdate: 'haccordion-card-img-left',
+  occupation: 'haccordion-card-left',
+  location: 'haccordion-card-img-left-15 haccordion-card-question-right',
+  education: 'haccordion-card-img-left',
+  phone: 'haccordion-card-left',
+}
+
 interface WelcomeFormProps {
   userId: string
   username: string
@@ -261,11 +271,9 @@ export default function WelcomeForm({ userId, username, onComplete }: WelcomeFor
                     key={q.id}
                     layout
                     ref={(el) => { cardRefs.current[idx] = el }}
-                    className={`haccordion-card ${isOpen ? 'open' : ''} ${fieldValid ? 'saved' : ''}`}
+                    className={`haccordion-card ${isOpen ? 'open' : ''} ${fieldValid ? 'saved' : ''} ${CARD_EXTRA_CLASSES[q.id] ?? ''}`}
                     style={{ backgroundImage: `url(${CARD_IMAGES[idx]})` }}
-                    onClick={() => {
-                      if (!isOpen) toggleCard(idx)
-                    }}
+                    onClick={() => toggleCard(idx)}
                     transition={{ type: 'spring', stiffness: 400, damping: 30 }}
                   >
                     <div className="haccordion-card-overlay" />
