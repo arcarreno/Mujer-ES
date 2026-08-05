@@ -736,6 +736,12 @@ html, body {
     border-radius: 0;
     opacity: 1 !important;
     overflow: auto !important;
+    margin-top: 1cm;
+  }
+
+  .login-form-side .login-field input {
+    font-size: 1rem;
+    touch-action: manipulation;
   }
 
   .login-form-wrapper {
@@ -6978,6 +6984,84 @@ input[type="date"].form-input {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.chat-list-card-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-list-card-delete {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--color-muted, #9ca3af);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chat-list-card-delete:hover {
+  opacity: 1;
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+/* ====== Delete Chat Modal ====== */
+
+.delete-chat-modal {
+  background: var(--color-card, #F8F8FA);
+  border-radius: var(--radius-lg, 16px);
+  padding: var(--space-6);
+  max-width: 360px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.delete-chat-lottie {
+  width: 140px;
+  height: 140px;
+}
+
+.delete-chat-modal-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--color-text, #1a1c2e);
+  margin: 0;
+}
+
+.delete-chat-modal-desc {
+  font-size: var(--text-sm);
+  color: var(--color-muted, #6b7280);
+  margin: 0;
+}
+
+.delete-chat-modal-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
 }
 
 /* ====== Profile Modal ====== */

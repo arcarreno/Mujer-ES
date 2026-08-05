@@ -1095,12 +1095,13 @@ export async function getUserConversations(): Promise<ConversationListItem[]> {
   // 1. Get general chat separately (always present)
   const generalConv = await getGeneralChat().catch(() => null)
 
-  // 2. Get DMs where user participates
+  // 2. Get DMs where user participates (excluding the ones the user hid)
   const { data: dmConvs, error: dmError } = await supabase
     .from('conversations')
     .select('*')
     .eq('type', 'dm')
     .eq('state', 'open')
+    .not('hidden_for', 'ov', `{${user.id}}`)
     .or(`user_id.eq.${user.id},participants.cs.{${user.id}}`)
     .order('last_message_at', { ascending: false, nullsFirst: false })
 
@@ -1233,6 +1234,15 @@ export async function createDMConversation(targetUserId: string): Promise<Conver
     .single()
   if (error) throw error
   return data
+}
+
+// Hide a DM conversation for the current user (removes its card from the list)
+export async function hideConversation(conversationId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase.rpc('hide_conversation', { p_conversation_id: conversationId })
+  if (error) throw error
 }
 
 // =====================================================
