@@ -209,14 +209,6 @@ html, body {
     min-height: 20rem;
     max-height: 70dvh;
   }
-
-  .card-back-title {
-    font-size: 0.65rem;
-  }
-
-  .card-back-text {
-    font-size: 0.3rem;
-  }
 }
 
 /* ============================================
@@ -331,10 +323,20 @@ html, body {
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  padding: 1.25rem;
+  padding: calc(var(--_item-width) * 0.11);
   box-sizing: border-box;
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+/* Texto del reverso — escala proporcional a la card (evita desborde en móvil) */
+.carousel .card-back-title {
+  font-size: calc(var(--_item-width) * 0.075);
+  margin: 0 0 calc(var(--_item-width) * 0.05);
+}
+
+.carousel .card-back-text {
+  font-size: calc(var(--_item-width) * 0.055);
 }
 
 .card-back-title {
@@ -633,10 +635,11 @@ html, body {
 
 .login-visual-lottie {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: 0;
+  transform: translateY(-50%);
   width: 100%;
-  height: 100%;
+  aspect-ratio: 568 / 500;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -674,20 +677,70 @@ html, body {
     max-height: 100dvh;
     border-radius: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
   }
 
   .login-visual-side {
+    display: flex;
+    width: 100%;
+    height: 30dvh;
+    min-height: 10rem;
+    max-height: 45dvh;
+    flex-grow: 0;
+    flex-shrink: 0;
+    order: -1;
+    border-radius: 0;
+    clip-path: url(#wave-clip-bottom);
+  }
+
+  .login-visual-content {
+    height: 100%;
+  }
+
+  .login-visual-content::after {
     display: none;
+  }
+
+  .login-visual-lottie {
+    width: auto;
+    height: 100%;
+    left: auto;
+    right: 0;
+    aspect-ratio: 568 / 500;
+    overflow: hidden;
+  }
+
+  .login-visual-text {
+    top: 0;
+    bottom: 0;
+    height: 100%;
+    left: 0;
+    right: auto;
+    width: 45%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    background: transparent;
+    text-align: center;
   }
 
   .login-form-side {
     padding: 1.5rem 1.25rem;
     width: 100%;
-    max-width: 24rem;
+    max-width: none;
+    flex: 1;
+    min-height: 0;
+    border-radius: 0;
     opacity: 1 !important;
     overflow: auto !important;
+  }
+
+  .login-form-wrapper {
+    max-width: 24rem;
+    margin-inline: auto;
   }
 }
 

@@ -98,6 +98,17 @@ export default function Login({ onBack }: LoginProps) {
               L1,1 L1,0 Z
             " />
           </clipPath>
+          <clipPath id="wave-clip-bottom" clipPathUnits="objectBoundingBox">
+            <path d="
+              M0,0 L1,0 L1,0.94
+              C0.9,0.94 0.85,1 0.75,1
+              C0.65,1 0.6,0.9 0.5,0.9
+              C0.4,0.9 0.35,1 0.25,1
+              C0.15,1 0.1,0.94 0.05,0.94
+              C0.02,0.94 0,0.96 0,0.96
+              Z
+            " />
+          </clipPath>
         </defs>
       </svg>
 
@@ -110,7 +121,7 @@ export default function Login({ onBack }: LoginProps) {
       >
         <div className="login-form-wrapper">
           {onBack && (
-            <button onClick={onBack} className="volver-btn-sm" type="button">
+            <button onClick={onBack} className="volver-btn-sm volver-btn-sm-no-expand" type="button">
               <div className="volver-btn-sm-bg">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" height="16px" width="16px">
                   <path d="M224 480h640a32 32 0 1 1 0 64H224a32 32 0 0 1 0-64z" fill="#000000" />
