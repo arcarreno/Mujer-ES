@@ -6200,6 +6200,12 @@ input[type="date"].form-input {
   background: var(--color-surface-raised);
 }
 
+@media (max-width: 768px) {
+  .chat-input-bar {
+    padding-bottom: calc(var(--space-3) + 0.2cm);
+  }
+}
+
 .chat-input-bar input {
   flex: 1;
   font-family: var(--font-body);

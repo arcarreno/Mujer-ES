@@ -10,6 +10,7 @@ import {
 import ChatView from '../home/ChatView'
 import ProfileModal from '../home/ProfileModal'
 import ReportModal from '../home/ReportModal'
+import DeleteChatModal from '../home/DeleteChatModal'
 import Skeleton from '../ui/Skeleton'
 
 interface AdminChatsProps {
@@ -23,6 +24,7 @@ export default function AdminChats({ onChatStateChange }: AdminChatsProps) {
   const [activeChat, setActiveChat] = useState<string | null>(null)
   const [profileModalUser, setProfileModalUser] = useState<string | null>(null)
   const [reportModalUser, setReportModalUser] = useState<string | null>(null)
+  const [deleteConv, setDeleteConv] = useState<ConversationListItem | null>(null)
 
   const loadConversations = useCallback(async () => {
     try {
@@ -127,50 +129,84 @@ export default function AdminChats({ onChatStateChange }: AdminChatsProps) {
             const hasUnread = (conv.unread_count || 0) > 0
 
             return (
-              <button
+              <div
                 key={conv.id}
                 className={`chat-list-card ${hasUnread ? 'unread' : ''}`}
-                onClick={() => {
-                  setActiveChat(conv.id)
-                  onChatStateChange?.(true)
-                }}
-                type="button"
               >
-                <div className="chat-list-card-avatar">
-                  {other?.avatar_url ? (
-                    <img src={other.avatar_url} alt="" className="chat-list-card-avatar-img" />
-                  ) : (
-                    <span className="chat-list-card-avatar-initials">
-                      {isActive ? (
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                        </svg>
-                      ) : (
-                        getInitials(other?.full_name)
-                      )}
-                    </span>
-                  )}
-                  {hasUnread && <span className="chat-list-card-badge">{conv.unread_count}</span>}
-                </div>
-
-                <div className="chat-list-card-info">
-                  <div className="chat-list-card-top">
-                    <h3 className="chat-list-card-name">
-                      {isActive ? 'Chat General' : other?.full_name || '.usuario'}
-                    </h3>
-                    <span className="chat-list-card-time">
-                      {formatTime(conv.last_message_time)}
-                    </span>
+                <button
+                  className="chat-list-card-main"
+                  onClick={() => {
+                    setActiveChat(conv.id)
+                    onChatStateChange?.(true)
+                  }}
+                  type="button"
+                >
+                  <div className="chat-list-card-avatar">
+                    {other?.avatar_url ? (
+                      <img src={other.avatar_url} alt="" className="chat-list-card-avatar-img" />
+                    ) : (
+                      <span className="chat-list-card-avatar-initials">
+                        {isActive ? (
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                        ) : (
+                          getInitials(other?.full_name)
+                        )}
+                      </span>
+                    )}
+                    {hasUnread && <span className="chat-list-card-badge">{conv.unread_count}</span>}
                   </div>
-                  <p className="chat-list-card-preview">
-                    {conv.last_message || 'Sin mensajes aún'}
-                  </p>
-                </div>
-              </button>
+
+                  <div className="chat-list-card-info">
+                    <div className="chat-list-card-top">
+                      <h3 className="chat-list-card-name">
+                        {isActive ? 'Chat General' : other?.full_name || '.usuario'}
+                      </h3>
+                      <span className="chat-list-card-time">
+                        {formatTime(conv.last_message_time)}
+                      </span>
+                    </div>
+                    <p className="chat-list-card-preview">
+                      {conv.last_message || 'Sin mensajes aún'}
+                    </p>
+                  </div>
+                </button>
+
+                {!isActive && (
+                  <button
+                    className="chat-list-card-delete"
+                    onClick={() => setDeleteConv(conv)}
+                    type="button"
+                    aria-label={`Eliminar chat con ${other?.full_name || '.usuario'}`}
+                    title="Eliminar chat"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 6h18" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>
       )}
+
+      <AnimatePresence>
+        {deleteConv && (
+          <DeleteChatModal
+            conversationId={deleteConv.id}
+            conversationName={deleteConv.other_user?.full_name || '.usuario'}
+            onClose={() => setDeleteConv(null)}
+            onDeleted={() => {
+              setDeleteConv(null)
+              loadConversations()
+            }}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

@@ -38,8 +38,11 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
     if (!container) return
 
     function setHeight() {
-      const vh = window.visualViewport?.height || window.innerHeight
+      const vv = window.visualViewport
+      const vh = vv?.height || window.innerHeight
+      const top = vv?.offsetTop || 0
       container!.style.height = `${vh}px`
+      container!.style.transform = `translateY(${top}px)`
     }
 
     setHeight()
