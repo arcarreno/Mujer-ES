@@ -1506,7 +1506,7 @@ describe('VideoCallManager', () => {
 
     await vcm.muteAll()
 
-    expect(vcm.signaling.sendSignal).toHaveBeenCalledWith({ type: 'mute-all' })
+    expect(vcm.signaling.sendSignal).toHaveBeenCalledWith({ type: 'mute-all', fromUserId: 'user-1' })
   })
 
   it('muteAll does nothing if not admin', async () => {
@@ -1529,6 +1529,7 @@ describe('VideoCallManager', () => {
     expect(vcm.signaling.sendSignal).toHaveBeenCalledWith({
       type: 'kick',
       targetUserId: 'target-user',
+      fromUserId: 'user-1',
     })
   })
 
@@ -1539,7 +1540,7 @@ describe('VideoCallManager', () => {
 
     await vcm.endSession()
 
-    expect(vcm.signaling.sendSignal).toHaveBeenCalledWith({ type: 'end-session' })
+    expect(vcm.signaling.sendSignal).toHaveBeenCalledWith({ type: 'end-session', fromUserId: 'user-1' })
   })
 
   it('leave cleans up all resources', async () => {

@@ -26,6 +26,9 @@ export class ActiveSpeakerDetector {
   private lastSpeakingTime: Map<string, number> = new Map()
   private currentLevels: Map<string, SpeakerLevel> = new Map()
   private isRunning = false
+  private audioCtx: AudioContext | null = null
+  private audioSource: MediaStreamAudioSourceNode | null = null
+  private analyser: AnalyserNode | null = null
 
   setCallback(callback: ActiveSpeakerCallback): void {
     this.callback = callback
@@ -43,6 +46,43 @@ export class ActiveSpeakerDetector {
 
   setLocalStream(stream: MediaStream | null): void {
     this.localStream = stream
+    // Rebuild the cached audio-analysis graph every time the stream changes
+    // instead of creating a new AudioContext every ~200ms while polling.
+    this.teardownAudioNodes()
+    // Only build the audio-analysis graph when there is actually an audio
+    // track — avoids consuming an AudioContext slot (iOS ~6-context limit)
+    // for camera-only / muted streams.
+    if (!stream || !stream.getAudioTracks().length) return
+    try {
+      const ctx = new AudioContext()
+      const source = ctx.createMediaStreamSource(stream)
+      const analyser = ctx.createAnalyser()
+      analyser.fftSize = 256
+      source.connect(analyser)
+      this.audioCtx = ctx
+      this.audioSource = source
+      this.analyser = analyser
+    } catch {
+      this.audioCtx = null
+      this.audioSource = null
+      this.analyser = null
+    }
+  }
+
+  private teardownAudioNodes(): void {
+    try {
+      this.audioSource?.disconnect()
+    } catch {
+      // ignore
+    }
+    this.audioSource = null
+    this.analyser = null
+    try {
+      this.audioCtx?.close()
+    } catch {
+      // ignore
+    }
+    this.audioCtx = null
   }
 
   start(): void {
@@ -60,6 +100,7 @@ export class ActiveSpeakerDetector {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+    this.teardownAudioNodes()
   }
 
   private async detectSpeaking(): Promise<void> {
@@ -139,20 +180,23 @@ export class ActiveSpeakerDetector {
     }
   }
 
-  private async getLocalAudioLevel(): Promise<number> {
+  private getLocalAudioLevel(): number {
     if (!this.localStream) return 0
 
     const audioTrack = this.localStream.getAudioTracks()[0]
     if (!audioTrack || !audioTrack.enabled) return 0
 
-    try {
-      // Create offline audio context to measure level
-      const ctx = new AudioContext()
-      const source = ctx.createMediaStreamSource(this.localStream)
-      const analyser = ctx.createAnalyser()
-      analyser.fftSize = 256
+    const ctx = this.audioCtx
+    const analyser = this.analyser
+    if (!ctx || !analyser) return 0
 
-      source.connect(analyser)
+    try {
+      // AudioContexts may start suspended (iOS, non-user-gesture). Resume it so
+      // the analyser produces real data. On iOS resume() can reject when not
+      // tied to a gesture — swallow that; the level just stays 0.
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {})
+      }
 
       const dataArray = new Uint8Array(analyser.frequencyBinCount)
       analyser.getByteFrequencyData(dataArray)
@@ -163,11 +207,6 @@ export class ActiveSpeakerDetector {
         sum += dataArray[i] * dataArray[i]
       }
       const rms = Math.sqrt(sum / dataArray.length) / 255
-
-      // Clean up
-      source.disconnect()
-      analyser.disconnect()
-      ctx.close()
 
       return rms
     } catch {

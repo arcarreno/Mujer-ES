@@ -19,6 +19,7 @@ export interface ParticipantState {
   screenSharing: boolean
   joinedAt: number
   epoch: number // Monotonic epoch to prevent stale leave events
+  isAdmin?: boolean // Admin role flag, used to validate privileged control signals
 }
 
 export interface RemotePeer {
@@ -37,9 +38,9 @@ export type SignalEvent =
   | { type: 'offer'; fromUserId: string; targetUserId: string; sdp: RTCSessionDescriptionInit }
   | { type: 'answer'; fromUserId: string; targetUserId: string; sdp: RTCSessionDescriptionInit }
   | { type: 'ice-candidate'; fromUserId: string; targetUserId: string; candidate: RTCIceCandidateInit }
-  | { type: 'mute-all' }
-  | { type: 'kick'; targetUserId: string }
-  | { type: 'end-session' }
+  | { type: 'mute-all'; fromUserId?: string }
+  | { type: 'kick'; targetUserId: string; fromUserId?: string }
+  | { type: 'end-session'; fromUserId?: string }
   | { type: 'screen-share-started'; fromUserId: string }
   | { type: 'screen-share-stopped'; fromUserId: string }
 
@@ -122,9 +123,9 @@ export class SignalingManager {
     onOffer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
     onAnswer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
     onIceCandidate: (fromUserId: string, candidate: RTCIceCandidateInit) => void
-    onMuteAll: () => void
-    onKick: (targetUserId: string) => void
-    onEndSession: () => void
+    onMuteAll: (fromUserId?: string) => void
+    onKick: (targetUserId: string, fromUserId?: string) => void
+    onEndSession: (fromUserId?: string) => void
     onScreenShareStarted: (fromUserId: string) => void
     onScreenShareStopped: (fromUserId: string) => void
     onChatMessage?: (msg: { userId: string; username: string; text: string; time: number }) => void
@@ -172,16 +173,17 @@ export class SignalingManager {
     this.presenceChannel
       .on('broadcast', { event: 'signal' }, ({ payload }) => {
         const event = payload as SignalEvent
+        // Drop own broadcasts (admin must not re-process its own mute-all /
+        // end-session / screen-share events and trigger double teardown).
+        if (event.fromUserId === this.myUserId) return
         if (event.type === 'mute-all') {
-          this.handlers.onMuteAll()
+          this.handlers.onMuteAll(event.fromUserId)
         } else if (event.type === 'end-session') {
-          this.handlers.onEndSession()
+          this.handlers.onEndSession(event.fromUserId)
         } else if (event.type === 'screen-share-started') {
           this.handlers.onScreenShareStarted(event.fromUserId)
         } else if (event.type === 'screen-share-stopped') {
           this.handlers.onScreenShareStopped(event.fromUserId)
-        } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
-          this.handlers.onKick(event.targetUserId)
         }
       })
       .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
@@ -251,13 +253,7 @@ export class SignalingManager {
           console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
           this.handlers.onIceCandidate(event.fromUserId, event.candidate)
         } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
-          this.handlers.onKick(event.targetUserId)
-        } else if (event.type === 'end-session') {
-          console.log(`[WebRTC] Received end-session via signal channel`)
-          this.handlers.onEndSession()
-        } else if (event.type === 'mute-all') {
-          console.log(`[WebRTC] Received mute-all via signal channel`)
-          this.handlers.onMuteAll()
+          this.handlers.onKick(event.targetUserId, event.fromUserId)
         }
       })
       .subscribe((status) => {
@@ -670,6 +666,7 @@ export class PeerManager {
       if (this.makingOffer.get(remoteUserId)) return
       try {
         this.makingOffer.set(remoteUserId, true)
+        this.ensureOfferHasMSection(pc)
         const offer = await pc.createOffer()
         await pc.setLocalDescription(offer)
         await this.signaling.sendSignal({
@@ -796,6 +793,35 @@ export class PeerManager {
   // SDP EXCHANGE (Perfect Negotiation - W3C §10.7)
   // =====================================================
 
+  // Guarantee at least one media m-section on the offer.
+  // With bundlePolicy: 'max-bundle', an SDP with NO media sections (e.g. when
+  // the local stream is an empty MediaStream because no devices/permissions)
+  // has no BUNDLE group and setLocalDescription throws:
+  //   "Failed to set local offer sdp: max-bundle configured but session
+  //    description has no BUNDLE group"
+  // Adding real muted transceivers produces genuine media m-lines, so the
+  // offer stays valid AND audio/video can still flow from the remote side
+  // (recvonly). A dummy data channel would create a data-only call where
+  // ontrack never fires — no media reaches anyone.
+  private ensureOfferHasMSection(pc: RTCPeerConnection): void {
+    let hasMedia = false
+    if (typeof (pc as any).getTransceivers === 'function') {
+      hasMedia = pc.getTransceivers().length > 0
+    }
+    if (!hasMedia && typeof (pc as any).getSenders === 'function') {
+      hasMedia = (pc as any).getSenders().length > 0
+    }
+    if (hasMedia) return
+    if (pc.signalingState !== 'stable') return
+    if (typeof (pc as any).addTransceiver !== 'function') return
+    try {
+      pc.addTransceiver('audio', { direction: 'recvonly' })
+      pc.addTransceiver('video', { direction: 'recvonly' })
+    } catch (e) {
+      console.warn('[WebRTC] Failed to add media transceivers:', e)
+    }
+  }
+
   // Admin creates offer to new participant
   async createOffer(remoteUserId: string): Promise<void> {
     console.log(`[WebRTC] Creating offer for ${remoteUserId}`)
@@ -810,6 +836,7 @@ export class PeerManager {
     this.makingOffer.set(remoteUserId, true)
 
     try {
+      this.ensureOfferHasMSection(pc)
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
       await this.signaling.sendSignal({
@@ -1116,6 +1143,7 @@ export class VideoCallManager {
   reconnection: ReconnectionManager
   private myUserId: string
   private isAdmin: boolean
+  private adminUserId: string | null = null
   private presenceState: Record<string, any[]> = {}
   private onPresenceUpdate: ((state: Record<string, any[]>) => void) | null = null
   private onUserJoined: ((userId: string) => void) | null = null
@@ -1155,21 +1183,44 @@ export class VideoCallManager {
     })
 
     this.signaling = new SignalingManager(_courseId, myUserId, {
-      onOffer: (fromUserId, sdp) => this.peers.handleOffer(fromUserId, sdp),
+      onOffer: (fromUserId, sdp) => {
+        // The admin is the one who initiates offers to new participants, so
+        // its userId is captured from the first received offer and used to
+        // validate privileged control signals (mute-all / kick / end-session).
+        if (!this.adminUserId) {
+          this.adminUserId = fromUserId
+        }
+        this.peers.handleOffer(fromUserId, sdp)
+      },
       onAnswer: (fromUserId, sdp) => this.peers.handleAnswer(fromUserId, sdp),
       onIceCandidate: (fromUserId, candidate) => this.peers.handleIceCandidate(fromUserId, candidate),
-      onMuteAll: () => this._handleMuteAll?.(),
-      onKick: (targetUserId) => this._handleKick?.(targetUserId),
-      onEndSession: () => this._handleEndSession?.(),
+      onMuteAll: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleMuteAll?.() },
+      onKick: (targetUserId, fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleKick?.(targetUserId) },
+      onEndSession: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleEndSession?.() },
       onScreenShareStarted: (fromUserId) => this._handleScreenShareStarted?.(fromUserId),
       onScreenShareStopped: (fromUserId) => this._handleScreenShareStopped?.(fromUserId),
       onPresenceSync: () => {
         this.presenceState = this.signaling.getPresenceState()
         this.onPresenceUpdate?.(this.presenceState)
       },
-      onPresenceJoin: (key, _presence) => {
+      onPresenceJoin: (key, presence) => {
         // Skip self-join updates to prevent feedback loops
         if (key !== this.myUserId) {
+          // Record the remote user's latest epoch so the stale-leave guard
+          // (onPresenceLeave) can tell apart real leaves from presence flaps.
+          if (presence?.userId === key || presence?.epoch != null) {
+            const epoch = presence?.epoch ?? 0
+            const known = this.signaling.presenceEpochs.get(key) || 0
+            if (epoch > known) {
+              this.signaling.presenceEpochs.set(key, epoch)
+            }
+          }
+          // Derive the admin identity from the presence role flag. Only set it
+          // if not already known — never overwrite, so a late joiner claiming
+          // isAdmin can't steal the trust anchor (last-writer-wins regression).
+          if (presence?.isAdmin && !this.adminUserId) {
+            this.adminUserId = key
+          }
           // Update participants list so UI shows the new user
           this.onPresenceUpdate?.(this.signaling.getPresenceState())
         }
@@ -1355,33 +1406,35 @@ export class VideoCallManager {
     })
   }
 
+  // Best-effort validation of privileged control signals. The admin's userId is
+  // captured from the admin's presence join (isAdmin) or the first received
+  // offer, set-once. Fail-closed: privileged signals are rejected until an
+  // admin anchor is confirmed. Full server-side enforcement (RLS on realtime
+  // channels) is out of scope — this only raises the bar against spoofs.
+  private isTrustedSender(fromUserId?: string): boolean {
+    if (!this.adminUserId) return false
+    return !!fromUserId && fromUserId === this.adminUserId
+  }
+
   async muteAll(): Promise<void> {
     if (this.isAdmin) {
-      await this.signaling.sendSignal({ type: 'mute-all' })
+      await this.signaling.sendSignal({ type: 'mute-all', fromUserId: this.myUserId })
     }
   }
 
   async kickUser(targetUserId: string): Promise<void> {
     if (this.isAdmin) {
-      await this.signaling.sendSignal({ type: 'kick', targetUserId })
+      await this.signaling.sendSignal({ type: 'kick', targetUserId, fromUserId: this.myUserId })
     }
   }
 
   async endSession(): Promise<void> {
     if (this.isAdmin) {
-      // Send via presence broadcast (the primary channel)
-      this.signaling.sendSignal({ type: 'end-session' }).catch(() => {})
-
-      // ALSO send to every known peer's signal channel as fallback.
-      // If the presence channel is CLOSED/reconnecting, the broadcast won't reach
-      // anyone — but each peer's individual signal channel may still be live.
-      for (const userId of this.peers.getPeers().keys()) {
-        this.signaling.sendSignal({
-          type: 'end-session',
-          fromUserId: this.myUserId,
-          targetUserId: userId,
-        } as SignalEvent).catch(() => {})
-      }
+      // Single presence broadcast reaches every participant. The previous
+      // per-peer "fallback" loop was a no-op: sendSignal routes end-session
+      // through the presence channel regardless of targetUserId, so it emitted
+      // N identical broadcasts (N× cleanup/leave on every client).
+      await this.signaling.sendSignal({ type: 'end-session', fromUserId: this.myUserId })
     }
   }
 
@@ -1408,7 +1461,12 @@ export class VideoCallManager {
     return participants.sort((a, b) => a.joinedAt - b.joinedAt)
   }
 
+  private leaving = false
+
   async leave(): Promise<void> {
+    if (this.leaving) return
+    this.leaving = true
+
     // Stop all monitoring and suppression
     this.activeSpeaker.stop()
     this.connectionQuality.stop()

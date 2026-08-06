@@ -165,6 +165,8 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       manager.onMuteAll(async () => {
         await manager.toggleMic(false)
         setMicActive(false)
+        // Sync presence so other clients stop showing this user "on mic"
+        await manager.signaling.updatePresence({ micActive: false })
         sileo.info({ title: 'Silenciado', description: 'El administrador silenció tu micrófono' })
       })
 
@@ -173,9 +175,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           setKicked(true)
           sileo.error({ title: 'Expulsado', description: 'Fuiste expulsado de la sesión' })
           setTimeout(() => {
-            manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
-            manager.peers.cleanup()
-            manager.signaling.leave()
+            manager.leave().catch(() => {})
             onClose()
           }, 2000)
         }
@@ -185,9 +185,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         setSessionEnded(true)
         sileo.info({ title: 'Sesión finalizada', description: 'El administrador finalizó la sesión' })
         setTimeout(() => {
-          manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
-          manager.peers.cleanup()
-          manager.signaling.leave()
+          manager.leave().catch(() => {})
           onClose()
         }, 2000)
       })
@@ -216,6 +214,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           console.log('[VideoCall] Requesting local stream...')
           const stream = await manager.peers.ensureLocalStream()
           console.log(`[VideoCall] Local stream ready: ${stream.getTracks().length} tracks`)
+          // Feed the local stream into the active-speaker detector so it can
+          // build its (cached) audio-analysis graph and detect mic activity.
+          manager.activeSpeaker.setLocalStream(stream)
           setLocalStream(stream)
         } catch (e) {
           console.error('[VideoCall] Failed to get local stream:', e)
@@ -244,6 +245,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         screenSharing: false,
         joinedAt: Date.now(),
         epoch: 0,
+        isAdmin,
       }
       await manager.signaling.trackPresence(presenceData)
       setMicActive(hasMic)
@@ -263,8 +265,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       cancelled = true
       onFullscreenChangeRef.current?.(false)
       if (managerRef.current) {
-        managerRef.current.peers.cleanup()
-        managerRef.current.signaling.leave()
+        managerRef.current.leave().catch(() => {})
         managerRef.current = null
       }
       streamInitializedRef.current = false
@@ -366,22 +367,14 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     if (!manager || !isAdmin) return
     if (!confirm('¿Finalizar la sesión para todos?')) return
     await manager.endSession()
-    // Stop all tracks explicitly before cleanup
-    manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
-    manager.peers.getScreenStreamRef()?.getTracks().forEach(t => t.stop())
-    manager.peers.cleanup()
-    await manager.signaling.leave()
+    await manager.leave()
     onClose()
   }, [isAdmin, onClose])
 
   const handleLeave = useCallback(async () => {
     const manager = managerRef.current
     if (!manager) return
-    // Stop all tracks explicitly before cleanup
-    manager.peers.getLocalStreamRef()?.getTracks().forEach(t => t.stop())
-    manager.peers.getScreenStreamRef()?.getTracks().forEach(t => t.stop())
-    manager.peers.cleanup()
-    await manager.signaling.leave()
+    await manager.leave()
     onClose()
   }, [onClose])
 
