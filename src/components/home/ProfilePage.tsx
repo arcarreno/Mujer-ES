@@ -29,21 +29,32 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
       let p = await getProfile(user.id)
-      // If no profile exists (e.g. admin), create one from admins table
-      if (!p) {
+      // Admins live in `admins` (no profiles row) and getProfile fabricates a
+      // pseudo-profile for them. Without a real row, updateProfile() updates 0
+      // rows and pretends success. Make sure a real row exists so edits persist.
+      if (!p || p.created_at === '') {
         const { data: admin } = await supabase
           .from('admins')
-          .select('username, full_name')
+          .select('username, full_name, avatar_url')
           .eq('id', user.id)
           .maybeSingle()
-        if (admin) {
-          await supabase.from('profiles').insert({
-            id: user.id,
-            username: admin.username,
-            full_name: admin.full_name,
-          })
-          p = await getProfile(user.id)
+        const metaUsername = user.user_metadata?.username as string | undefined
+        const metaFullName = user.user_metadata?.full_name as string | undefined
+        const fallbackName =
+          user.email?.split('@')[0]?.replace(/[^a-z0-9_-]/gi, '') ||
+          `user_${user.id.slice(0, 8)}`
+        const seed = {
+          id: user.id,
+          username: admin?.username || metaUsername || fallbackName,
+          full_name: admin?.full_name || metaFullName || metaUsername || fallbackName,
+          avatar_url: admin?.avatar_url ?? null,
+          // Reaching this screen implies the user is already past the first-login
+          // gate (ProfilePage renders only from `home`), so keep first_login off.
+          first_login: false,
         }
+        const { error: insertErr } = await supabase.from('profiles').insert(seed)
+        if (insertErr) console.error('Failed to create profile row:', insertErr)
+        p = await getProfile(user.id)
       }
       if (p) {
         setProfile(p)

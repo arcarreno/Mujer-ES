@@ -73,11 +73,15 @@ export async function updateProfile(
   userId: string,
   updates: { bio?: string; hobbies?: string[]; avatar_url?: string }
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq('id', userId)
+    .select('id')
   if (error) throw error
+  if (!data || data.length === 0) {
+    throw new Error('No se encontró tu perfil para actualizar')
+  }
 }
 
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
