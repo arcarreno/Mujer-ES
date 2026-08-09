@@ -43,6 +43,7 @@ export type SignalEvent =
   | { type: 'end-session'; fromUserId?: string }
   | { type: 'screen-share-started'; fromUserId: string }
   | { type: 'screen-share-stopped'; fromUserId: string }
+  | { type: 'track-state'; fromUserId: string; micActive: boolean; videoActive: boolean }
 
 // =====================================================
 // LIMITS
@@ -50,6 +51,10 @@ export type SignalEvent =
 
 export const MAX_MIC_USERS = 6
 export const MAX_VIDEO_USERS = 6
+
+// Sender bitrate caps (bps) to keep encode/decode cheap and the call snappy
+const CAMERA_MAX_BITRATE = 1_500_000
+const SCREEN_MAX_BITRATE = 4_000_000
 
 // =====================================================
 // COORDINATION HELPERS
@@ -128,6 +133,7 @@ export class SignalingManager {
     onEndSession: (fromUserId?: string) => void
     onScreenShareStarted: (fromUserId: string) => void
     onScreenShareStopped: (fromUserId: string) => void
+    onTrackState?: (fromUserId: string, micActive: boolean, videoActive: boolean) => void
     onChatMessage?: (msg: { userId: string; username: string; text: string; time: number }) => void
     onPresenceSync: () => void
     onPresenceJoin: (key: string, presence: any) => void
@@ -184,6 +190,8 @@ export class SignalingManager {
           this.handlers.onScreenShareStarted(event.fromUserId)
         } else if (event.type === 'screen-share-stopped') {
           this.handlers.onScreenShareStopped(event.fromUserId)
+        } else if (event.type === 'track-state') {
+          this.handlers.onTrackState?.(event.fromUserId, event.micActive, event.videoActive)
         }
       })
       .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
@@ -322,7 +330,8 @@ export class SignalingManager {
       case 'mute-all':
       case 'end-session':
       case 'screen-share-started':
-      case 'screen-share-stopped': {
+      case 'screen-share-stopped':
+      case 'track-state': {
         if (!this.presenceChannel) {
           console.error('[Signaling] Cannot send broadcast: no presence channel')
           return
@@ -502,9 +511,11 @@ export class PeerManager {
   private signaling: SignalingManager
   private myUserId: string
   private onRemoteStream: ((userId: string, stream: MediaStream) => void)[] = []
+  private onRemoteScreenStream: ((userId: string, stream: MediaStream) => void)[] = []
   private onPeerRemoved: ((userId: string) => void) | null = null
   private onScreenShareEnded: (() => void) | null = null
   private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
+  private screenSenders: Map<string, RTCRtpSender> = new Map()
 
   // Perfect Negotiation state per peer
   private makingOffer: Map<string, boolean> = new Map()
@@ -518,6 +529,10 @@ export class PeerManager {
 
   setOnRemoteStream(callback: (userId: string, stream: MediaStream) => void): void {
     this.onRemoteStream.push(callback)
+  }
+
+  setOnRemoteScreenStream(callback: (userId: string, stream: MediaStream) => void): void {
+    this.onRemoteScreenStream.push(callback)
   }
 
   removeOnRemoteStream(callback: (userId: string, stream: MediaStream) => void): void {
@@ -541,7 +556,14 @@ export class PeerManager {
     if (!this.localStream) {
       console.log('[WebRTC] Requesting camera/mic access...')
       try {
-        this.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+        this.localStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: {
+            width: { ideal: 1280, max: 1280 },
+            height: { ideal: 720, max: 720 },
+            frameRate: { ideal: 30, max: 30 },
+          },
+        })
         console.log(`[WebRTC] Got stream: ${this.localStream.getTracks().length} tracks`)
         this.localStream.getTracks().forEach(t => {
           console.log(`[WebRTC]   Track: ${t.kind} - ${t.label} - enabled: ${t.enabled} - readyState: ${t.readyState}`)
@@ -570,7 +592,7 @@ export class PeerManager {
   async getScreenStream(): Promise<MediaStream | null> {
     try {
       this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'browser' } as any,
+        video: { displaySurface: 'browser', frameRate: { ideal: 30, max: 30 } } as any,
         audio: false,
       })
       this.screenStream.getVideoTracks()[0].onended = () => {
@@ -588,7 +610,7 @@ export class PeerManager {
   async getFullScreenStream(): Promise<MediaStream | null> {
     try {
       this.screenStream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'monitor' } as any,
+        video: { displaySurface: 'monitor', frameRate: { ideal: 30, max: 30 } } as any,
         audio: false,
       })
       this.screenStream.getVideoTracks()[0].onended = () => {
@@ -635,16 +657,22 @@ export class PeerManager {
       for (const track of this.localStream.getTracks()) {
         pc.addTrack(track, this.localStream!)
       }
+      // Cap camera bitrate so encodes stay cheap and the call feels snappy
+      this.applySenderConstraints(
+        pc.getSenders().find(s => s.track?.kind === 'video'),
+        'camera'
+      )
     }
 
-    // If screen sharing is active, replace video track
+    // If screen sharing is active, add the screen track as a SEPARATE sender.
+    // Never replace the camera sender — the camera keeps transmitting while
+    // sharing, so the admin's own video tile never goes gray.
     if (this.screenStream) {
       const screenTrack = this.screenStream.getVideoTracks()[0]
       if (screenTrack) {
-        const videoSender = pc.getSenders().find(s => s.track?.kind === 'video')
-        if (videoSender) {
-          videoSender.replaceTrack(screenTrack)
-        }
+        const sender = pc.addTrack(screenTrack, this.screenStream)
+        this.screenSenders.set(remoteUserId, sender)
+        this.applySenderConstraints(sender, 'screen')
       }
     }
 
@@ -691,13 +719,40 @@ export class PeerManager {
         if (streams[0]) {
           const existing = this.peers.get(remoteUserId)
           if (existing) {
-            existing.stream = streams[0]
+            const incoming = streams[0]
+            // Screen share arrives as its own MediaStream (different msid than
+            // the camera/audio stream) because the sender adds it separately.
+            // Route it to the screenshare handler so the camera stream stays
+            // untouched in the participant tile.
+            if (
+              track.kind === 'video' &&
+              existing.stream &&
+              existing.stream.id !== incoming.id &&
+              incoming.getVideoTracks().length > 0
+            ) {
+              console.log(`[WebRTC] Detected screen stream for ${remoteUserId}`)
+              for (const cb of this.onRemoteScreenStream) {
+                cb(remoteUserId, incoming)
+              }
+              return
+            }
+            existing.stream = incoming
             console.log(`[WebRTC] Setting remote stream for ${remoteUserId} (kind=${track.kind})`)
             for (const cb of this.onRemoteStream) {
-              cb(remoteUserId, streams[0])
+              cb(remoteUserId, incoming)
             }
           }
         }
+      }
+
+      // Screen share ended on the remote: the removed track arrives ended.
+      // Clear the stored screen stream so the grid falls back to camera tiles.
+      if (track.kind === 'video' && track.readyState === 'ended') {
+        console.log(`[WebRTC] Remote screen track ended for ${remoteUserId}`)
+        for (const cb of this.onRemoteScreenStream) {
+          cb(remoteUserId, null as unknown as MediaStream)
+        }
+        return
       }
 
       // Process immediately — onunmute doesn't fire for tracks that arrive already unmuted
@@ -1019,62 +1074,87 @@ export class PeerManager {
     }
   }
 
-  // Add screen stream to all peer connections + trigger renegotiation
+  // Add screen stream to all peer connections + trigger renegotiation.
+  // Adds the screen track as its OWN sender (own m-line + msid) so the camera
+  // sender keeps transmitting side by side. Remote peers then receive two
+  // streams: the camera stream (tile) and the screen stream (main view).
   async addScreenStreamToPeers(): Promise<void> {
     if (!this.screenStream) return
     const videoTrack = this.screenStream.getVideoTracks()[0]
     if (!videoTrack) return
 
     const operations = Array.from(this.peers.entries()).map(async ([userId, peer]) => {
-      const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
-      if (sender) {
-        await sender.replaceTrack(videoTrack)
-        // Trigger renegotiation so remote peer's ontrack fires with new track
-        try {
-          const offer = await peer.connection.createOffer()
-          await peer.connection.setLocalDescription(offer)
-          await this.signaling.sendSignal({
-            type: 'offer',
-            fromUserId: this.myUserId,
-            targetUserId: userId,
-            sdp: peer.connection.localDescription!.toJSON(),
-          })
-        } catch (e) {
-          console.warn('[WebRTC] renegotiation after screen share failed:', e)
-        }
+      // Skip peers that already have the screen sender (idempotent)
+      if (this.screenSenders.has(userId)) return
+      const sender = peer.connection.addTrack(videoTrack, this.screenStream!)
+      this.screenSenders.set(userId, sender)
+      await this.applySenderConstraints(sender, 'screen')
+      // Trigger renegotiation so remote peer's ontrack fires with new track
+      try {
+        const offer = await peer.connection.createOffer()
+        await peer.connection.setLocalDescription(offer)
+        await this.signaling.sendSignal({
+          type: 'offer',
+          fromUserId: this.myUserId,
+          targetUserId: userId,
+          sdp: peer.connection.localDescription!.toJSON(),
+        })
+      } catch (e) {
+        console.warn('[WebRTC] renegotiation after screen share failed:', e)
       }
     })
 
     await Promise.allSettled(operations)
   }
 
-  // Restore camera to all peer connections after screen share
-  async restoreCameraToPeers(): Promise<void> {
-    if (!this.localStream) return
-    const videoTrack = this.localStream.getVideoTracks()[0]
-    if (!videoTrack) return
-
+  // Remove screen sender from all peer connections after screen share ends.
+  // The camera sender was never replaced, so it just resumes normal video.
+  async removeScreenStreamFromPeers(): Promise<void> {
     const operations = Array.from(this.peers.entries()).map(async ([userId, peer]) => {
-      const sender = peer.connection.getSenders().find(s => s.track?.kind === 'video')
-      if (sender) {
-        await sender.replaceTrack(videoTrack)
-        // Trigger renegotiation so remote peer's ontrack fires with camera track
-        try {
-          const offer = await peer.connection.createOffer()
-          await peer.connection.setLocalDescription(offer)
-          await this.signaling.sendSignal({
-            type: 'offer',
-            fromUserId: this.myUserId,
-            targetUserId: userId,
-            sdp: peer.connection.localDescription!.toJSON(),
-          })
-        } catch (e) {
-          console.warn('[WebRTC] renegotiation after camera restore failed:', e)
-        }
+      const sender = this.screenSenders.get(userId)
+      if (!sender) return
+      try {
+        peer.connection.removeTrack(sender)
+      } catch (e) {
+        console.warn('[WebRTC] removeTrack failed:', e)
+      }
+      this.screenSenders.delete(userId)
+      // Trigger renegotiation so remote peer's ontrack drops the screen track
+      try {
+        const offer = await peer.connection.createOffer()
+        await peer.connection.setLocalDescription(offer)
+        await this.signaling.sendSignal({
+          type: 'offer',
+          fromUserId: this.myUserId,
+          targetUserId: userId,
+          sdp: peer.connection.localDescription!.toJSON(),
+        })
+      } catch (e) {
+        console.warn('[WebRTC] renegotiation after camera restore failed:', e)
       }
     })
 
     await Promise.allSettled(operations)
+  }
+
+  // Cap bitrate/framerate on senders so encodes stay cheap (less lag/voice delay)
+  private async applySenderConstraints(sender: RTCRtpSender | undefined, kind: 'camera' | 'screen'): Promise<void> {
+    if (!sender) return
+    try {
+      const params = sender.getParameters() as RTCRtpSendParameters
+      if (!params.encodings || params.encodings.length === 0) {
+        params.encodings = [{}]
+      }
+      params.encodings[0] = {
+        ...params.encodings[0],
+        maxBitrate: kind === 'screen' ? SCREEN_MAX_BITRATE : CAMERA_MAX_BITRATE,
+        maxFramerate: 30,
+      }
+      params.degradationPreference = kind === 'screen' ? 'maintain-resolution' : 'maintain-framerate'
+      await sender.setParameters(params)
+    } catch (e) {
+      console.warn(`[WebRTC] setParameters failed (${kind} sender):`, e)
+    }
   }
 
   // Toggle mic — just enable/disable track (W3C §5.2)
@@ -1108,6 +1188,7 @@ export class PeerManager {
       this.makingOffer.delete(userId)
       this.ignoreOffer.delete(userId)
       this.isSettingRemoteAnswerPending.delete(userId)
+      this.screenSenders.delete(userId)
       this.onPeerRemoved?.(userId)
     }
   }
@@ -1123,6 +1204,7 @@ export class PeerManager {
     this.makingOffer.clear()
     this.ignoreOffer.clear()
     this.isSettingRemoteAnswerPending.clear()
+    this.screenSenders.clear()
     this.localStream?.getTracks().forEach((t) => t.stop())
     this.screenStream?.getTracks().forEach((t) => t.stop())
     this.localStream = null
@@ -1156,6 +1238,7 @@ export class VideoCallManager {
   private _handleEndSession: (() => void) | null = null
   private _handleScreenShareStarted: ((fromUserId: string) => void) | null = null
   private _handleScreenShareStopped: ((fromUserId: string) => void) | null = null
+  private _handleTrackState: ((fromUserId: string, micActive: boolean, videoActive: boolean) => void) | null = null
 
   constructor(_courseId: string, myUserId: string, isAdmin: boolean) {
     this.myUserId = myUserId
@@ -1199,6 +1282,7 @@ export class VideoCallManager {
       onEndSession: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleEndSession?.() },
       onScreenShareStarted: (fromUserId) => this._handleScreenShareStarted?.(fromUserId),
       onScreenShareStopped: (fromUserId) => this._handleScreenShareStopped?.(fromUserId),
+      onTrackState: (fromUserId, micActive, videoActive) => this._handleTrackState?.(fromUserId, micActive, videoActive),
       onPresenceSync: () => {
         this.presenceState = this.signaling.getPresenceState()
         this.onPresenceUpdate?.(this.presenceState)
@@ -1276,9 +1360,9 @@ export class VideoCallManager {
 
     this.peers = new PeerManager(this.signaling, myUserId, isAdmin)
 
-    // Wire up screen share ended callback to restore camera + signal peers
+    // Wire up screen share ended callback to remove screen sender + signal peers
     this.peers.setOnScreenShareEnded(async () => {
-      await this.peers.restoreCameraToPeers()
+      await this.peers.removeScreenStreamFromPeers()
       this.signaling.sendSignal({
         type: 'screen-share-stopped',
         fromUserId: this.myUserId,
@@ -1361,6 +1445,21 @@ export class VideoCallManager {
     this._handleScreenShareStopped = callback
   }
 
+  onTrackState(callback: (fromUserId: string, micActive: boolean, videoActive: boolean) => void): void {
+    this._handleTrackState = callback
+  }
+
+  // Broadcast own mic/cam state so everyone's counters update instantly
+  // (presence sync also carries it, but slower — broadcast wins for snappiness)
+  async broadcastTrackState(micActive: boolean, videoActive: boolean): Promise<void> {
+    await this.signaling.sendSignal({
+      type: 'track-state',
+      fromUserId: this.myUserId,
+      micActive,
+      videoActive,
+    })
+  }
+
   onChatMessage(callback: (msg: { userId: string; username: string; text: string; time: number }) => void): void {
     this.signaling.onChatMessage(callback)
   }
@@ -1399,7 +1498,7 @@ export class VideoCallManager {
 
   async stopScreenShare(): Promise<void> {
     this.peers.stopScreenShare()
-    await this.peers.restoreCameraToPeers()
+    await this.peers.removeScreenStreamFromPeers()
     this.signaling.sendSignal({
       type: 'screen-share-stopped',
       fromUserId: this.myUserId,

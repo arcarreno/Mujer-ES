@@ -5,6 +5,7 @@ interface VideoGridProps {
   localStream: MediaStream | null
   screenStream: MediaStream | null
   remoteStreams: Map<string, MediaStream>
+  remoteScreenStreams?: Map<string, MediaStream>
   participants: ParticipantState[]
   userId: string
   isScreenSharing: boolean
@@ -16,6 +17,7 @@ export default function VideoGrid({
   localStream,
   screenStream,
   remoteStreams,
+  remoteScreenStreams = new Map(),
   participants,
   userId,
   isScreenSharing,
@@ -33,7 +35,8 @@ export default function VideoGrid({
   }, [localStream])
 
   // Determine which stream to show as the main screen share
-  const activeScreenStream = screenStream || (screenShareUserId ? remoteStreams.get(screenShareUserId) ?? null : null)
+  const activeScreenStream = screenStream
+    || (screenShareUserId ? remoteScreenStreams.get(screenShareUserId) ?? remoteStreams.get(screenShareUserId) ?? null : null)
 
   useEffect(() => {
     if (screenMainRef.current) {

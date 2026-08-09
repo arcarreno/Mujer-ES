@@ -103,6 +103,12 @@ class MockRTCRtpSender {
   async replaceTrack(newTrack: any) {
     this.track = newTrack
   }
+  getParameters() {
+    return { encodings: [{}], degradationPreference: 'balanced' }
+  }
+  async setParameters(_params: any) {
+    // no-op in mock
+  }
 }
 
 // =====================================================
@@ -128,6 +134,10 @@ class MockRTCPeerConnection {
     const sender = new MockRTCRtpSender(track)
     this._senders.push(sender)
     return sender as any
+  }
+
+  removeTrack(sender: any) {
+    this._senders = this._senders.filter((s) => s !== sender)
   }
 
   getSenders() {

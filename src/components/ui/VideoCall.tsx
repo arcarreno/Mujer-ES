@@ -25,6 +25,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null)
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map())
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState<Map<string, MediaStream>>(new Map())
   const [participants, setParticipants] = useState<ParticipantState[]>([])
   const [micActive, setMicActive] = useState(false)
   const [videoActive, setVideoActive] = useState(false)
@@ -103,6 +104,20 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         })
       })
 
+      // Separate handler for the remote screen-share stream (own msid). A null
+      // stream means the screen share ended — drop it from the grid.
+      manager.peers.setOnRemoteScreenStream((peerUserId, stream) => {
+        setRemoteScreenStreams((prev) => {
+          const next = new Map(prev)
+          if (stream) {
+            next.set(peerUserId, stream)
+          } else {
+            next.delete(peerUserId)
+          }
+          return next
+        })
+      })
+
       // Set up peer removed handler
       manager.peers.setOnPeerRemoved((peerUserId) => {
         setRemoteStreams((prev) => {
@@ -167,6 +182,10 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         setMicActive(false)
         // Sync presence so other clients stop showing this user "on mic"
         await manager.signaling.updatePresence({ micActive: false })
+        // Instant broadcast so counters update everywhere right away.
+        // Read the live video state from presence (closure videoActive is stale).
+        const selfPresence = (manager.getPresenceState()?.[user.id] as any[] | undefined)?.[0] as ParticipantState | undefined
+        await manager.broadcastTrackState(false, selfPresence?.videoActive ?? false)
         sileo.info({ title: 'Silenciado', description: 'El administrador silenció tu micrófono' })
       })
 
@@ -201,9 +220,16 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         setRemoteScreenShareUserId(fromUserId)
       })
 
-      manager.onScreenShareStopped(() => {
-        console.log(`[VideoCall] Remote screen share stopped`)
+      manager.onScreenShareStopped((fromUserId) => {
+        console.log(`[VideoCall] Remote screen share stopped by ${fromUserId}`)
         setRemoteScreenShareUserId(null)
+      })
+
+      // Instant mic/cam state updates from any participant (counters, tiles)
+      manager.onTrackState((fromUserId, micActive, videoActive) => {
+        setParticipants(prev => prev.map((p) =>
+          p.userId === fromUserId ? { ...p, micActive, videoActive } : p
+        ))
       })
 
       // IMPORTANT: Get local stream BEFORE joining signaling
@@ -287,6 +313,8 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         micActive: newState, videoActive, isSpeaking: false,
         screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
+      // Instant broadcast so everyone's Mic count/icons update immediately
+      await manager.broadcastTrackState(newState, videoActive)
     } catch (e) {
       console.error('Toggle mic error:', e)
     }
@@ -306,6 +334,8 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
         micActive, videoActive: newState, isSpeaking: false,
         screenSharing: isScreenSharing, joinedAt: Date.now(),
       })
+      // Instant broadcast so everyone's Cam count/icons update immediately
+      await manager.broadcastTrackState(micActive, newState)
     } catch (e) {
       console.error('Toggle video error:', e)
     }
@@ -432,6 +462,7 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
             localStream={localStream}
             screenStream={screenStream}
             remoteStreams={remoteStreams}
+            remoteScreenStreams={remoteScreenStreams}
             participants={uniqueParticipants}
             userId={userId}
             isScreenSharing={isScreenSharing || remoteScreenShareUserId !== null}

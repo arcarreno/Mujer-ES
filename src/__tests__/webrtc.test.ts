@@ -163,7 +163,14 @@ describe('PeerManager.ensureLocalStream', () => {
     const result = await pm.ensureLocalStream()
 
     expect(result.getTracks()).toHaveLength(2)
-    expect(getUserMediaMock).toHaveBeenCalledWith({ audio: true, video: true })
+    expect(getUserMediaMock).toHaveBeenCalledWith({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      video: {
+        width: { ideal: 1280, max: 1280 },
+        height: { ideal: 720, max: 720 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+    })
   })
 
   it('creates empty stream on NotFoundError (no hang)', async () => {
@@ -723,7 +730,7 @@ describe('PeerManager.replaceTrack', () => {
 // PEER MANAGER — addScreenStreamToPeers
 // =====================================================
 describe('PeerManager.addScreenStreamToPeers', () => {
-  it('replaces video track with screen track and sends offer', async () => {
+  it('adds screen track as separate sender and sends offer (camera keeps transmitting)', async () => {
     const videoTrack = new MockMediaStreamTrack('video', 'camera')
     const audioTrack = new MockMediaStreamTrack('audio')
     const camStream = new MockMediaStream([videoTrack, audioTrack])
@@ -741,8 +748,13 @@ describe('PeerManager.addScreenStreamToPeers', () => {
     await pm.addScreenStreamToPeers()
 
     const pc = pm.getPeers().get('peer-1')!.connection as any
-    const sender = pc.getSenders().find((s: any) => s.track?.kind === 'video')
-    expect(sender.track).toBe(screenTrack)
+    const senders = pc.getSenders()
+    const screenSender = senders.find((s: any) => s.track?.label === 'screen')
+    const cameraSender = senders.find((s: any) => s.track?.label === 'camera')
+    // Screen is a brand-new sender — camera sender still holds the camera track
+    expect(screenSender).toBeDefined()
+    expect(screenSender.track).toBe(screenTrack)
+    expect(cameraSender.track).toBe(videoTrack)
   })
 
   it('does nothing without screen stream', async () => {
@@ -754,10 +766,10 @@ describe('PeerManager.addScreenStreamToPeers', () => {
 })
 
 // =====================================================
-// PEER MANAGER — restoreCameraToPeers
+// PEER MANAGER — removeScreenStreamFromPeers
 // =====================================================
-describe('PeerManager.restoreCameraToPeers', () => {
-  it('restores camera track after screen share', async () => {
+describe('PeerManager.removeScreenStreamFromPeers', () => {
+  it('removes the screen sender and keeps camera track', async () => {
     const videoTrack = new MockMediaStreamTrack('video', 'camera')
     const audioTrack = new MockMediaStreamTrack('audio')
     const camStream = new MockMediaStream([videoTrack, audioTrack])
@@ -767,16 +779,25 @@ describe('PeerManager.restoreCameraToPeers', () => {
     await pm.ensureLocalStream()
     await pm.handleOffer('peer-1', { type: 'offer', sdp: 'v=0\r\n' })
 
-    await pm.restoreCameraToPeers()
+    // Share screen first
+    const screenTrack = new MockMediaStreamTrack('video', 'screen')
+    const screenStream = new MockMediaStream([screenTrack])
+    ;(pm as any).screenStream = screenStream
+    await pm.addScreenStreamToPeers()
+
+    // Stop sharing
+    await pm.removeScreenStreamFromPeers()
 
     const pc = pm.getPeers().get('peer-1')!.connection as any
-    const sender = pc.getSenders().find((s: any) => s.track?.kind === 'video')
-    expect(sender.track).toBe(videoTrack)
+    const senders = pc.getSenders()
+    expect(senders.find((s: any) => s.track?.label === 'screen')).toBeUndefined()
+    const cameraSender = senders.find((s: any) => s.track?.kind === 'video')
+    expect(cameraSender.track).toBe(videoTrack)
   })
 
-  it('does nothing without local stream', async () => {
+  it('does nothing without screen senders', async () => {
     const { pm } = createRealPeerManager()
-    await pm.restoreCameraToPeers()
+    await pm.removeScreenStreamFromPeers()
     // Should not throw
   })
 })
