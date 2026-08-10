@@ -2424,9 +2424,21 @@ input[type="date"].form-input {
 }
 
 .admin-cursos-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .admin-cursos-list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-cursos-list {
+    grid-template-columns: 1fr;
+  }
 }
 
 .admin-curso-card {
@@ -2440,6 +2452,8 @@ input[type="date"].form-input {
   background-size: cover;
   background-position: center;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Variante con portada: gradiente traslúcido en los costados para que el
@@ -2558,6 +2572,7 @@ input[type="date"].form-input {
 
 .admin-curso-card-badges {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   flex-shrink: 0;
 }
@@ -2624,7 +2639,7 @@ input[type="date"].form-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.85rem;
+  margin-top: auto;
   padding-top: 0.75rem;
   border-top: 1px solid #f0f0f0;
 }
