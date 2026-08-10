@@ -1132,7 +1132,10 @@ export class PeerManager {
           await this.applySenderConstraints(sender, 'screen')
         }
       }
-      // Trigger renegotiation so remote peer's ontrack fires with new track
+      // Renegociación MANUAL: bloquear onnegotiationneeded durante la creación
+      // de esta oferta para que no genere una oferta duplicada (glare) que
+      // pueda romper la conexión en una dirección
+      this.makingOffer.set(userId, true)
       try {
         const offer = await peer.connection.createOffer()
         await peer.connection.setLocalDescription(offer)
@@ -1144,6 +1147,8 @@ export class PeerManager {
         })
       } catch (e) {
         console.warn('[WebRTC] renegotiation after screen share failed:', e)
+      } finally {
+        this.makingOffer.set(userId, false)
       }
     })
 
@@ -1170,7 +1175,8 @@ export class PeerManager {
         }
       }
       this.screenSenders.delete(userId)
-      // Trigger renegotiation so remote peer's ontrack drops the screen track
+      // Renegociación MANUAL: bloquear onnegotiationneeded (ver addScreenStreamToPeers)
+      this.makingOffer.set(userId, true)
       try {
         const offer = await peer.connection.createOffer()
         await peer.connection.setLocalDescription(offer)
@@ -1182,6 +1188,8 @@ export class PeerManager {
         })
       } catch (e) {
         console.warn('[WebRTC] renegotiation after camera restore failed:', e)
+      } finally {
+        this.makingOffer.set(userId, false)
       }
     })
 

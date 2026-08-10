@@ -41,15 +41,8 @@ export default function VideoGrid({
   isAdmin: _isAdmin,
   screenShareUserId,
 }: VideoGridProps) {
-  const localVideoRef = useRef<HTMLVideoElement>(null)
   const screenMainRef = useRef<HTMLVideoElement>(null)
   const [showMobileUsers, setShowMobileUsers] = useState(false)
-
-  useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream
-    }
-  }, [localStream])
 
   // Determine which stream to show as the main screen share
   const activeScreenStream = screenStream
@@ -88,36 +81,11 @@ export default function VideoGrid({
   })
 
   const localTile = (
-    <div className={`video-tile video-tile--${isScreenSharing ? 'thumb-col' : 'grid'} video-tile--local`}>
-      {hasLocalVideo ? (
-        <video ref={localVideoRef} autoPlay playsInline muted className="video-tile-stream" />
-      ) : myParticipant ? (
-        <div className="video-tile-avatar">
-          {myParticipant.avatarUrl ? (
-            <img src={myParticipant.avatarUrl} alt="" />
-          ) : (
-            <span>{myParticipant.username?.charAt(0).toUpperCase() || '?'}</span>
-          )}
-        </div>
-      ) : (
-        <div className="video-tile-avatar">
-          <span>?</span>
-        </div>
-      )}
-      <div className="video-tile-overlay">
-        <span className="video-tile-name">{myParticipant?.username || 'Tú'}</span>
-        {myParticipant?.micActive && (
-          <span className="video-tile-speaking">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="23" />
-              <line x1="8" y1="23" x2="16" y2="23" />
-            </svg>
-          </span>
-        )}
-      </div>
-    </div>
+    <LocalVideoTile
+      participant={myParticipant}
+      localStream={localStream}
+      compact={isScreenSharing}
+    />
   )
 
   if (isScreenSharing && activeScreenStream) {
@@ -198,6 +166,64 @@ export default function VideoGrid({
             </svg>
             <p>Esperando participantes con cámara activa...</p>
           </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function LocalVideoTile({
+  participant,
+  localStream,
+  compact,
+}: {
+  participant: ParticipantState | undefined
+  localStream: MediaStream | null
+  compact?: boolean
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  // El <video> local se DESMONTA/REMONTA al cambiar de layout (grid normal ↔
+  // pantalla compartida), porque vive en posiciones distintas del árbol. Este
+  // efecto corre en cada montaje y re-asigna srcObject: sin esto, la preview
+  // propia quedaba NEGRA tras dejar de compartir pantalla (el ref compartido
+  // apuntaba al nodo viejo y el efecto viejo solo dependía de [localStream]).
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = localStream || null
+    }
+  }, [localStream])
+
+  const hasVideo = localStream !== null && localStream.getVideoTracks().length > 0
+
+  return (
+    <div className={`video-tile video-tile--${compact ? 'thumb-col' : 'grid'} video-tile--local`}>
+      {hasVideo ? (
+        <video ref={videoRef} autoPlay playsInline muted className="video-tile-stream" />
+      ) : participant ? (
+        <div className="video-tile-avatar">
+          {participant.avatarUrl ? (
+            <img src={participant.avatarUrl} alt="" />
+          ) : (
+            <span>{participant.username?.charAt(0).toUpperCase() || '?'}</span>
+          )}
+        </div>
+      ) : (
+        <div className="video-tile-avatar">
+          <span>?</span>
+        </div>
+      )}
+      <div className="video-tile-overlay">
+        <span className="video-tile-name">{participant?.username || 'Tú'}</span>
+        {participant?.micActive && (
+          <span className="video-tile-speaking">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+              <line x1="8" y1="23" x2="16" y2="23" />
+            </svg>
+          </span>
         )}
       </div>
     </div>
