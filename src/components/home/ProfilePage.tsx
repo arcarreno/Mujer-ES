@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { sileo } from 'sileo'
 import { supabase } from '../../lib/supabase'
 import { getProfile, updateProfile, uploadAvatar, signOut, type Profile } from '../../lib/queries'
+import AvatarCropModal from '../ui/AvatarCropModal'
 
 const SUGGESTED_HOBBIES = [
   'Lectura', 'Yoga', 'Cocina', 'Arte', 'Música',
@@ -17,8 +18,16 @@ export default function ProfilePage() {
   const [hobbies, setHobbies] = useState<string[]>([])
   const [hobbyInput, setHobbyInput] = useState('')
   const [avatarPreview, setAvatarPreview] = useState<string>('')
-  const [uploading, setUploading] = useState(false)
+  const [pendingAvatar, setPendingAvatar] = useState<Blob | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const objectUrlsRef = useRef<string[]>([])
+
+  useEffect(() => {
+    return () => {
+      objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
+    }
+  }, [])
 
   useEffect(() => {
     getProfileFromDB()
@@ -71,30 +80,34 @@ export default function ProfilePage() {
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      sileo.error({ title: 'Foto muy grande', description: 'Máximo 2MB' })
+    if (!file.type.startsWith('image/')) {
+      sileo.error({ title: 'Archivo inválido', description: 'Elegí una imagen' })
       return
     }
-    // Preview
-    const reader = new FileReader()
-    reader.onload = () => setAvatarPreview(reader.result as string)
-    reader.readAsDataURL(file)
-
-    // Upload
-    setUploading(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const url = await uploadAvatar(user.id, file)
-      setAvatarPreview(url)
-      sileo.success({ title: 'Foto actualizada', description: 'Tu foto de perfil se guardó' })
-    } catch (e: any) {
-      sileo.error({ title: 'Error al subir', description: e.message || 'Intentá de nuevo' })
-      setAvatarPreview(profile?.avatar_url || '')
-    } finally {
-      setUploading(false)
+    if (file.size > 8 * 1024 * 1024) {
+      sileo.error({ title: 'Foto muy grande', description: 'Máximo 8MB antes de recortar' })
+      return
     }
+    // Mostrar el recorte: la foto NO se sube ni se guarda hasta "Guardar perfil"
+    const url = URL.createObjectURL(file)
+    objectUrlsRef.current.push(url)
+    setCropSrc(url)
+  }
+
+  function handleCropCancel() {
+    if (cropSrc) {
+      setCropSrc(null)
+    }
+  }
+
+  function handleCropConfirm(blob: Blob) {
+    const url = URL.createObjectURL(blob)
+    objectUrlsRef.current.push(url)
+    setAvatarPreview(url)
+    setPendingAvatar(blob)
+    setCropSrc(null)
   }
 
   function addHobby(hobby: string) {
@@ -120,11 +133,21 @@ export default function ProfilePage() {
     if (!profile) return
     setSaving(true)
     try {
+      let avatarUrl: string | undefined
+      if (pendingAvatar) {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Sesión no disponible')
+        const file = new File([pendingAvatar], 'avatar.webp', {
+          type: pendingAvatar.type || 'image/webp',
+        })
+        avatarUrl = await uploadAvatar(user.id, file)
+      }
       await updateProfile(profile.id, {
         bio: bio.trim() || undefined,
         hobbies: hobbies.length > 0 ? hobbies : undefined,
-        avatar_url: avatarPreview || undefined,
+        avatar_url: avatarUrl || avatarPreview || undefined,
       })
+      setPendingAvatar(null)
       sileo.success({ title: 'Perfil guardado', description: 'Tus datos se actualizaron' })
     } catch (e: any) {
       sileo.error({ title: 'Error', description: e.message || 'No se pudo guardar' })
@@ -166,7 +189,7 @@ export default function ProfilePage() {
           <button
             className="profile-avatar-btn"
             onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
+            disabled={saving}
             aria-label="Cambiar foto de perfil"
           >
             {avatarPreview ? (
@@ -175,7 +198,7 @@ export default function ProfilePage() {
               <span className="profile-avatar-initials">{getInitials()}</span>
             )}
             <div className="profile-avatar-overlay">
-              {uploading ? (
+              {saving ? (
                 <div className="profile-avatar-spinner" />
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -285,7 +308,7 @@ export default function ProfilePage() {
         <button
           className="profile-save-btn"
           onClick={handleSave}
-          disabled={saving || uploading}
+          disabled={saving}
         >
           {saving ? 'Guardando...' : 'Guardar perfil'}
         </button>
@@ -295,6 +318,14 @@ export default function ProfilePage() {
           Cerrar sesión
         </button>
       </div>
+
+      {cropSrc && (
+        <AvatarCropModal
+          imageSrc={cropSrc}
+          onCancel={handleCropCancel}
+          onConfirm={handleCropConfirm}
+        />
+      )}
     </div>
   )
 }
