@@ -241,35 +241,37 @@ function App() {
                 transition={{ duration: 0.7, ease: [0.4, 0, 0.2, 1] }}
                 className="absolute inset-0 z-10"
               >
-                <div className="site-header absolute left-0 w-full text-center z-10">
-                  <h1 className="inline-flex items-baseline m-0">
-                    <BlurText
-                      text="Mujer"
-                      animateBy="letters"
-                      direction="top"
-                      delay={150}
-                      stepDuration={0.4}
-                      className="site-title"
-                    />
-                    <BlurText
-                      text="-ES"
-                      animateBy="letters"
-                      direction="top"
-                      delay={150}
-                      stepDuration={0.4}
-                      className="site-title-italic"
-                    />
-                  </h1>
-                  <motion.button
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 1.2, duration: 0.5 }}
-                    onClick={() => setPhase('welcome-form')}
-                    className="comenzar-btn"
-                  >
-                    Comenzar
-                  </motion.button>
-                </div>
+                {!showLandingOverlay && (
+                  <div className="site-header absolute left-0 w-full text-center z-10">
+                    <h1 className="inline-flex items-baseline m-0">
+                      <BlurText
+                        text="Mujer"
+                        animateBy="letters"
+                        direction="top"
+                        delay={150}
+                        stepDuration={0.4}
+                        className="site-title"
+                      />
+                      <BlurText
+                        text="-ES"
+                        animateBy="letters"
+                        direction="top"
+                        delay={150}
+                        stepDuration={0.4}
+                        className="site-title-italic"
+                      />
+                    </h1>
+                    <motion.button
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 1.2, duration: 0.5 }}
+                      onClick={() => setPhase('welcome-form')}
+                      className="comenzar-btn"
+                    >
+                      Comenzar
+                    </motion.button>
+                  </div>
+                )}
                 <div
                   className="absolute inset-0 flex items-center justify-center z-0"
                   style={{
