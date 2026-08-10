@@ -297,7 +297,14 @@ function App() {
               transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
               className="absolute inset-0 flex items-center justify-center z-20"
             >
-              <Login onBack={() => setPhase('landing')} />
+              <Login
+                onBack={() => {
+                  // Volver al landing siempre reproduce la animación Lottie de
+                  // bienvenida; el carrusel ya está renderizado debajo.
+                  setShowLandingOverlay(true)
+                  setPhase('landing')
+                }}
+              />
             </motion.div>
           )}
 
