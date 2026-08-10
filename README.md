@@ -6,40 +6,40 @@ Plataforma integral para la comunidad **Mujer-ES**: cursos, chats, videollamadas
 
 ---
 
-## ✨ Características
+##  Características
 
-### 🎨 Diseño minimalista
+### Diseño minimalista
 - Landing con animación de bienvenida (Lottie), texto animado tipo *BlurText* y **carrusel de imágenes** optimizado para móvil (webp ≤ 900 px, compresión early via Sharp).
 - Estética sobria: tipografía **Playfair Display**, acento violeta `#581C87` sobre fondo alabastro.
 - **Perfil personalizable**: foto de perfil con **modal de recorte 1:1** (arrastre + zoom, respeta orientación EXIF, exporta 512×512 webp), biografía y hobbies.
 
-### 🔒 Entorno cerrado
+### Entorno cerrado
 - Sin auto-registro: los usuarios se crean por un **administrador** (edge function `admin-create-user`) o directamente sobre la base de Supabase Auth.
 - Autenticación por email + contraseña, recuperación por **código enviado por email/WhatsApp**, recaptcha (Turnstile) y bloqueo temporal de usuarios.
 - Backend protegido con **Row Level Security (RLS)** y edge functions en **Deno** para las operaciones sensibles del panel de administración.
 
-### 💬 Comunicación en tiempo real
+### Comunicación en tiempo real
 - Chat general y **mensajes directos** con **WebSockets** (Supabase Realtime): los mensajes llegan al instante, con indicador de no leídos por conversación.
 - **WebRTC (P2P)**: videollamadas y audio entre usuarias, con *signaling* a través de RPC en tiempo real (`send_call_signal`), y configuración de **servidor TURN** opcional para atravesar NAT/firewalls.
 - Reportes de mensajes con **auto-bloqueo** tras umbral de reportes (`dm-reports-autoblock`).
 
-### 📚 Cursos
+### Cursos
 - **Cursos en vivo** con horarios, ubicación (presencial) y **vacantes**.
 - Inscripción con límite de cupo, registro de **asistencia**, estado *concluido* y eventos con imágenes.
 - Panel admin con grilla adaptable (4/2/1 columnas), cobertura de eventos y edición completa de cursos.
 
-### 📍 Asistencia con QR
+### Asistencia con QR
 - **Presencial**: las alumnas presentan un **código QR** que el admin escanea con la cámara (`html5-qrcode`) para marcar llegada.
 - **Videollamada**: la asistencia se registra ingresando un **código numérico** generado por la sesión.
 
-### 🛠️ Panel de administración
+### Panel de administración
 - Gestión completa de usuarios: detalles, teléfono, contraseña, **bloqueos** con vencimiento, y **borrado con cascada** en mensajes (FK `ON DELETE CASCADE`).
 - Protección de la cuenta principal (`wafflenub12`): la edge function `admin-delete-user` la rechaza.
 - Sincronización automática de perfiles (usuarios y admins comparten la misma vista de perfil).
 
 ---
 
-## 🧱 Stack tecnológico
+## Stack tecnológico
 
 | Capa | Tecnología |
 |---|---|
@@ -55,7 +55,7 @@ Plataforma integral para la comunidad **Mujer-ES**: cursos, chats, videollamadas
 
 ---
 
-## 🏗️ Arquitectura
+## Arquitectura
 
 ```mermaid
 flowchart LR
@@ -76,7 +76,7 @@ flowchart LR
 
 ---
 
-## 🚀 Desarrollo local
+## Desarrollo local
 
 ```bash
 npm install
@@ -104,7 +104,7 @@ npm run dev
 
 ---
 
-## ✍️ Notas técnicas
+## Notas técnicas
 
 - **Recorte de avatar**: `croppedAreaPixels` de `react-easy-crop` se aplican **directamente sobre la imagen original** (el paquete los entrega en coordenadas naturales), garantizando que el encuadre coincida 1:1 con lo seleccionado.
 - **Caché de avatares**: la URL pública del avatar incluye un parámetro `?v=<timestamp>` para invalidar cachés de navegador/CDN tras cada subida (upsert sobre el mismo path).
