@@ -111,7 +111,10 @@ export async function uploadAvatar(userId: string, file: File): Promise<string> 
   if (uploadError) throw uploadError
 
   const { data } = supabase.storage.from('avatars').getPublicUrl(path)
-  return data.publicUrl
+  // Cache-busting: el path es siempre el mismo (`<userId>/avatar.webp`) y upsert
+  // lo reemplaza — sin un parámetro único el navegador/CDN sigue sirviendo los
+  // bytes viejos y el avatar parece "no guardar".
+  return `${data.publicUrl}?v=${Date.now()}`
 }
 
 export async function isUserAdmin(userId: string): Promise<boolean> {
