@@ -1,6 +1,23 @@
 import { useRef, useEffect, useState } from 'react'
 import type { ParticipantState } from '../../lib/webrtc'
 
+// Los streams remotos con AUDIO (p.ej. pantalla compartida con sonido) NO pueden
+// reproducirse por autoplay desmutado: la política del navegador lo bloquea.
+// Truco estándar: arrancar muted y desmutear apenas este reproduciendo (ya no
+// requiere gesto, el elemento ya está "playing").
+function playWithUnmute(el: HTMLVideoElement): void {
+  el.muted = true
+  el.play()
+    .then(() => {
+      el.muted = false
+    })
+    .catch((e) => {
+      if (e && e.name !== 'AbortError') {
+        console.warn('[VideoGrid] play() failed:', e.message)
+      }
+    })
+}
+
 interface VideoGridProps {
   localStream: MediaStream | null
   screenStream: MediaStream | null
@@ -41,6 +58,9 @@ export default function VideoGrid({
   useEffect(() => {
     if (screenMainRef.current) {
       screenMainRef.current.srcObject = activeScreenStream || null
+      if (activeScreenStream) {
+        playWithUnmute(screenMainRef.current)
+      }
     }
   }, [activeScreenStream])
 
@@ -199,12 +219,10 @@ function RemoteVideoTile({
     if (videoRef.current) {
       videoRef.current.srcObject = stream || null
       if (stream) {
-        videoRef.current.play().catch((e) => {
-          // Audio tracks in remote video may block autoplay — log but don't crash
-          if (e.name !== 'AbortError') {
-            console.warn(`[VideoGrid] play() failed for ${participant.username}:`, e.message)
-          }
-        })
+        // Los streams remotos pueden traer audio (pantalla/tab) y el autoplay
+        // desmutado es bloqueado por la política del navegador: play muted +
+        // unmute al reproducir es el patrón seguro.
+        playWithUnmute(videoRef.current)
       }
     }
   }, [stream, participant.username])

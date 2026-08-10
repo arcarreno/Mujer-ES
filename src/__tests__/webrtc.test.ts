@@ -1652,3 +1652,272 @@ describe('VideoCallManager', () => {
     expect(list).toHaveLength(1)
   })
 })
+
+// =====================================================
+// TWO-USER CALL SIMULATION (admin + participant)
+// =====================================================
+describe('Two-user call — admin sees participant camera', () => {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+  // El canal presence mock es un singleton compartido: los handlers de A y B
+  // se registran en el mismo objeto, exactamente como un broadcast real de
+  // Supabase. Cada SignalingManager filtra su propio eco (fromUserId === me)
+  // y los mensajes dirigidos a otros (targetUserId), así que entregar a TODOS
+  // los handlers reproduce fielmente el bus de señalización.
+  const signalHandlers = (): ((args: any) => void)[] =>
+    mockPresenceChannel.on.mock.calls
+      .filter((c: any[]) => c[0] === 'broadcast' && c[1]?.event === 'signal')
+      .map((c: any[]) => c[2])
+
+  const syncHandlers = (): ((args?: any) => void)[] =>
+    mockPresenceChannel.on.mock.calls
+      .filter((c: any[]) => c[0] === 'presence' && c[1]?.event === 'sync')
+      .map((c: any[]) => c[2])
+
+  async function setupTwoUserCall() {
+    getUserMediaMock.mockImplementation(() =>
+      Promise.resolve(
+        new MockMediaStream([
+          new MockMediaStreamTrack('audio', 'cam-audio'),
+          new MockMediaStreamTrack('video', 'cam-video'),
+        ])
+      )
+    )
+    mockPresenceChannel.presenceState.mockReturnValue({})
+
+    const admin = new VideoCallManager('course-2u', 'admin-1', true)
+    const participant = new VideoCallManager('course-2u', 'user-2', false)
+
+    // Igual que VideoCall.tsx al montar: cada cliente crea su stream local
+    // (cámara + micrófono) antes de negociar
+    await admin.setupLocalStreamWithSuppression()
+    await participant.setupLocalStreamWithSuppression()
+
+    // Bridge: cada sendSignal se entrega a todos los handlers (self-filter dentro)
+    for (const c of [admin, participant]) {
+      vi.spyOn(c.signaling, 'sendSignal').mockImplementation(async (ev: any) => {
+        for (const h of signalHandlers()) h({ payload: ev })
+      })
+    }
+    return { admin, participant }
+  }
+
+  const setRoomPresence = () => {
+    mockPresenceChannel.presenceState.mockReturnValue({
+      'admin-1': [{ userId: 'admin-1', isAdmin: true }],
+      'user-2': [{ userId: 'user-2' }],
+    })
+  }
+
+  it('admin offers to pre-existing participants on presence sync (fix)', async () => {
+    const { admin, participant } = await setupTwoUserCall()
+    await admin.join()
+    await participant.join()
+    setRoomPresence()
+
+    const offered: string[] = []
+    admin.setOnUserJoined(async (key) => {
+      offered.push(key)
+      await admin.peers.createOffer(key)
+    })
+
+    // El participante YA estaba en la sala cuando el admin entró: el único
+    // evento que lo lista es el presence sync (su 'join' ocurrió antes de que
+    // el admin se suscribiera). Sin el sweep del sync, el admin jamás ofrece.
+    syncHandlers()[0]()
+
+    await sleep(400)
+
+    expect(offered).toContain('user-2')
+    expect(offered).not.toContain('admin-1')
+    // La negociación completa recorrió el bus: ambos lados quedaron conectados
+    expect(admin.peers.getPeers().has('user-2')).toBe(true)
+    expect(participant.peers.getPeers().has('admin-1')).toBe(true)
+  })
+
+  it('participant never sweeps offers (only admin offers)', async () => {
+    const { admin, participant } = await setupTwoUserCall()
+    await admin.join()
+    await participant.join()
+    setRoomPresence()
+
+    const participantOffers: string[] = []
+    participant.setOnUserJoined(async (key) => {
+      participantOffers.push(key)
+      await participant.peers.createOffer(key)
+    })
+
+    // Sync dispara el sweep solo en el admin (isAdmin === false en participante)
+    for (const h of syncHandlers()) h()
+    await sleep(400)
+
+    expect(participantOffers).toHaveLength(0)
+    expect(participant.peers.getPeers().has('admin-1')).toBe(false)
+  })
+
+  it('participant camera stream reaches admin onRemoteStream after negotiation', async () => {
+    const { admin, participant } = await setupTwoUserCall()
+    await admin.join()
+    await participant.join()
+    setRoomPresence()
+
+    const adminRemote: Array<{ user: string; stream: any }> = []
+    // Mismo wiring que VideoCall.tsx: los streams remotos se registran en peers
+    admin.peers.setOnRemoteStream((userId: string, stream: any) => adminRemote.push({ user: userId, stream }))
+
+    admin.setOnUserJoined(async (key) => {
+      await admin.peers.createOffer(key)
+    })
+    syncHandlers()[0]()
+    await sleep(400)
+
+    // Negociación completada por el bus
+    const adminPc = admin.peers.getPeers().get('user-2')!.connection as any
+    const participantPc = participant.peers.getPeers().get('admin-1')!.connection as any
+    expect(adminPc.remoteDescription).toBeDefined()
+    expect(participantPc.remoteDescription).toBeDefined()
+
+    // El navegador de la participante envía SU cámara; llega al admin vía ontrack
+    const camVideo = participantPc.getSenders().find((s: any) => s.track?.label === 'cam-video')
+    const camAudio = participantPc.getSenders().find((s: any) => s.track?.label === 'cam-audio')
+    expect(camVideo).toBeDefined()
+    expect(camAudio).toBeDefined()
+    const camStream = new MockMediaStream([camAudio.track, camVideo.track])
+
+    adminPc.ontrack({ track: camVideo.track, streams: [camStream] })
+
+    expect(adminRemote).toHaveLength(1)
+    expect(adminRemote[0].user).toBe('user-2')
+    expect(adminRemote[0].stream.getVideoTracks()[0].label).toBe('cam-video')
+  })
+})
+
+// =====================================================
+// SCREEN SHARE — AUDIO TRACKS + ONTRACK ROUTING GUARDS
+// =====================================================
+describe('Screen share audio + ontrack guards', () => {
+  it('adds BOTH video and audio screen senders and keeps camera senders', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    await pm.ensureLocalStream()
+    await pm.handleOffer('peer-1', { type: 'offer', sdp: 'v=0\r\n' })
+
+    const screenStream = new MockMediaStream([
+      new MockMediaStreamTrack('video', 'screen-video'),
+      new MockMediaStreamTrack('audio', 'screen-audio'),
+    ])
+    ;(pm as any).screenStream = screenStream
+
+    await pm.addScreenStreamToPeers()
+
+    const pc = pm.getPeers().get('peer-1')!.connection as any
+    const senders = pc.getSenders()
+    // Pantalla: video + audio como senders propios
+    expect(senders.some((s: any) => s.track?.label === 'screen-video')).toBe(true)
+    expect(senders.some((s: any) => s.track?.label === 'screen-audio')).toBe(true)
+    // Cámara intacta (nunca se reemplaza el sender)
+    expect(senders.some((s: any) => s.track?.label === 'cam-video')).toBe(true)
+    expect(senders.some((s: any) => s.track?.label === 'cam-audio')).toBe(true)
+  })
+
+  it('removes screen senders by track match (video+audio) and keeps camera', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    await pm.ensureLocalStream()
+    await pm.handleOffer('peer-1', { type: 'offer', sdp: 'v=0\r\n' })
+
+    const screenStream = new MockMediaStream([
+      new MockMediaStreamTrack('video', 'screen-video'),
+      new MockMediaStreamTrack('audio', 'screen-audio'),
+    ])
+    ;(pm as any).screenStream = screenStream
+    await pm.addScreenStreamToPeers()
+
+    await pm.removeScreenStreamFromPeers()
+
+    const pc = pm.getPeers().get('peer-1')!.connection as any
+    const senders = pc.getSenders()
+    expect(senders.some((s: any) => s.track?.label === 'screen-video')).toBe(false)
+    expect(senders.some((s: any) => s.track?.label === 'screen-audio')).toBe(false)
+    expect(senders.some((s: any) => s.track?.label === 'cam-video')).toBe(true)
+    expect(senders.some((s: any) => s.track?.label === 'cam-audio')).toBe(true)
+  })
+
+  it('routes different-msid video stream to onRemoteScreenStream (camera tile untouched)', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const remoteCb = vi.fn()
+    const screenCb = vi.fn()
+    pm.setOnRemoteStream(remoteCb)
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    // 1) La cámara remota llega primero (stream normal)
+    const remoteCam = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-mic'),
+      new MockMediaStreamTrack('video', 'remote-cam-video'),
+    ])
+    pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+
+    // 2) Llega un stream de pantalla (otro msid, con video) → pantalla principal
+    const screenStream = new MockMediaStream([new MockMediaStreamTrack('video', 'remote-screen-video')])
+    pc.ontrack({ track: screenStream.getVideoTracks()[0], streams: [screenStream] })
+    expect(screenCb).toHaveBeenCalledWith('remote-peer', screenStream)
+    // El tile de cámara NO se reemplaza
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+    expect(pm.getPeers().get('remote-peer')!.stream).toBe(remoteCam)
+  })
+
+  it('ignores audio-only stream with different msid (screen audio) — camera kept', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const remoteCb = vi.fn()
+    const screenCb = vi.fn()
+    pm.setOnRemoteStream(remoteCb)
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    const remoteCam = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-mic'),
+      new MockMediaStreamTrack('video', 'remote-cam-video'),
+    ])
+    pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+
+    // El audio de la pantalla compartida llega SOLO (sin video, otro msid):
+    // jamás debe reemplazar el stream de cámara del tile
+    const screenAudio = new MockMediaStream([new MockMediaStreamTrack('audio', 'remote-screen-audio')])
+    pc.ontrack({ track: screenAudio.getAudioTracks()[0], streams: [screenAudio] })
+
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+    expect(screenCb).not.toHaveBeenCalled()
+    expect(pm.getPeers().get('remote-peer')!.stream).toBe(remoteCam)
+  })
+})

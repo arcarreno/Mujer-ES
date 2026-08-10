@@ -540,7 +540,9 @@ export class PeerManager {
     try {
       this.screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'browser', frameRate: { ideal: 30, max: 30 } } as any,
-        audio: false,
+        // audio: true comparte el audio de la pestaña (solo aplica al compartir
+        // una pestaña, no ventana/pantalla completa)
+        audio: true,
       })
       this.screenStream.getVideoTracks()[0].onended = () => {
         this.screenStream = null
@@ -558,7 +560,7 @@ export class PeerManager {
     try {
       this.screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: { displaySurface: 'monitor', frameRate: { ideal: 30, max: 30 } } as any,
-        audio: false,
+        audio: true,
       })
       this.screenStream.getVideoTracks()[0].onended = () => {
         this.screenStream = null
@@ -611,15 +613,17 @@ export class PeerManager {
       )
     }
 
-    // If screen sharing is active, add the screen track as a SEPARATE sender.
-    // Never replace the camera sender — the camera keeps transmitting while
-    // sharing, so the admin's own video tile never goes gray.
+    // If screen sharing is active, add the screen tracks (video + audio) as a
+    // SEPARATE sender set with their own msid. Never replace the camera sender —
+    // the camera keeps transmitting while sharing, so the admin's own video
+    // tile never goes gray.
     if (this.screenStream) {
-      const screenTrack = this.screenStream.getVideoTracks()[0]
-      if (screenTrack) {
-        const sender = pc.addTrack(screenTrack, this.screenStream)
-        this.screenSenders.set(remoteUserId, sender)
-        this.applySenderConstraints(sender, 'screen')
+      for (const track of this.screenStream.getTracks()) {
+        const sender = pc.addTrack(track, this.screenStream)
+        if (track.kind === 'video') {
+          this.screenSenders.set(remoteUserId, sender)
+          this.applySenderConstraints(sender, 'screen')
+        }
       }
     }
 
@@ -670,7 +674,8 @@ export class PeerManager {
             // Screen share arrives as its own MediaStream (different msid than
             // the camera/audio stream) because the sender adds it separately.
             // Route it to the screenshare handler so the camera stream stays
-            // untouched in the participant tile.
+            // untouched in the participant tile. The screen stream may carry
+            // audio (tab audio) — it all flows to the main screen view.
             if (
               track.kind === 'video' &&
               existing.stream &&
@@ -681,6 +686,20 @@ export class PeerManager {
               for (const cb of this.onRemoteScreenStream) {
                 cb(remoteUserId, incoming)
               }
+              return
+            }
+            // Audio tracks from a DIFFERENT stream (p.ej. el audio de la
+            // pantalla compartida) llegan solos. Nunca deben reemplazar el
+            // stream de cámara del tile — de lo contrario el video del
+            // participante desaparece (queda el avatar).
+            if (
+              existing.stream &&
+              existing.stream.id !== incoming.id &&
+              incoming.getVideoTracks().length === 0
+            ) {
+              console.warn(
+                `[WebRTC] Ignoring audio-only stream ${incoming.id} for ${remoteUserId} (camera stream kept)`
+              )
               return
             }
             existing.stream = incoming
@@ -1042,20 +1061,25 @@ export class PeerManager {
   }
 
   // Add screen stream to all peer connections + trigger renegotiation.
-  // Adds the screen track as its OWN sender (own m-line + msid) so the camera
-  // sender keeps transmitting side by side. Remote peers then receive two
-  // streams: the camera stream (tile) and the screen stream (main view).
+  // Adds the screen tracks (video + audio, own msid) as their OWN senders so
+  // the camera sender keeps transmitting side by side. Remote peers then
+  // receive two streams: the camera stream (tile) and the screen stream
+  // (main view, including tab audio when the browser grants it).
   async addScreenStreamToPeers(): Promise<void> {
     if (!this.screenStream) return
-    const videoTrack = this.screenStream.getVideoTracks()[0]
-    if (!videoTrack) return
+    const tracks = this.screenStream.getTracks()
+    if (tracks.length === 0) return
 
     const operations = Array.from(this.peers.entries()).map(async ([userId, peer]) => {
       // Skip peers that already have the screen sender (idempotent)
       if (this.screenSenders.has(userId)) return
-      const sender = peer.connection.addTrack(videoTrack, this.screenStream!)
-      this.screenSenders.set(userId, sender)
-      await this.applySenderConstraints(sender, 'screen')
+      for (const track of tracks) {
+        const sender = peer.connection.addTrack(track, this.screenStream!)
+        if (track.kind === 'video') {
+          this.screenSenders.set(userId, sender)
+          await this.applySenderConstraints(sender, 'screen')
+        }
+      }
       // Trigger renegotiation so remote peer's ontrack fires with new track
       try {
         const offer = await peer.connection.createOffer()
@@ -1074,16 +1098,24 @@ export class PeerManager {
     await Promise.allSettled(operations)
   }
 
-  // Remove screen sender from all peer connections after screen share ends.
+  // Remove screen senders from all peer connections after screen share ends.
   // The camera sender was never replaced, so it just resumes normal video.
   async removeScreenStreamFromPeers(): Promise<void> {
+    const screenTrackIds = new Set<string>(
+      (this.screenStream?.getTracks() ?? []).map((t) => t.id)
+    )
     const operations = Array.from(this.peers.entries()).map(async ([userId, peer]) => {
-      const sender = this.screenSenders.get(userId)
-      if (!sender) return
-      try {
-        peer.connection.removeTrack(sender)
-      } catch (e) {
-        console.warn('[WebRTC] removeTrack failed:', e)
+      // Remove every sender whose track belongs to the screen stream (covers
+      // video + audio), even if the stream reference was already cleared.
+      const toRemove = peer.connection
+        .getSenders()
+        .filter((s) => s.track && screenTrackIds.has(s.track.id))
+      for (const sender of toRemove) {
+        try {
+          peer.connection.removeTrack(sender)
+        } catch (e) {
+          console.warn('[WebRTC] removeTrack failed:', e)
+        }
       }
       this.screenSenders.delete(userId)
       // Trigger renegotiation so remote peer's ontrack drops the screen track
@@ -1255,6 +1287,19 @@ export class VideoCallManager {
       onPresenceSync: () => {
         this.presenceState = this.signaling.getPresenceState()
         this.onPresenceUpdate?.(this.presenceState)
+        // El admin debe ofrecer conexión también a quienes ya estaban en la sala
+        // cuando él entró: el presence 'sync' es el ÚNICO evento que los lista
+        // (su 'join' ya pasó antes de que el admin se suscribiera). Sin esto, el
+        // admin ve solo el avatar de los participantes preexistentes.
+        // La deduplicación la hace onUserJoined (set offeredUsers en VideoCall).
+        if (this.isAdmin) {
+          const keys = Object.keys(this.presenceState)
+          for (const key of keys) {
+            if (key === this.myUserId) continue
+            // Pequeño delay para que el trackPresence propio aterrice primero
+            setTimeout(() => void this.onUserJoined?.(key), 300)
+          }
+        }
       },
       onPresenceJoin: (key, presence) => {
         // Skip self-join updates to prevent feedback loops
