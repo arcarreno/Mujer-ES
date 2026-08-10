@@ -49,6 +49,22 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SERVICE_ROLE_KEY')!
     )
 
+    // La cuenta principal (wafflenub12) es indestructible: nadie puede eliminarla
+    const { data: targetAdmin } = await adminClient
+      .from('admins')
+      .select('username')
+      .eq('id', user_id)
+      .maybeSingle()
+    const { data: targetProfile } = await adminClient
+      .from('profiles')
+      .select('username')
+      .eq('id', user_id)
+      .maybeSingle()
+    const targetUsername = (targetAdmin?.username ?? targetProfile?.username ?? '').toLowerCase()
+    if (targetUsername === 'wafflenub12') {
+      return new Response('La cuenta principal no se puede eliminar', { status: 400, headers: corsHeaders })
+    }
+
     // Clean up WebRTC data manually before auth delete
     // (belt-and-suspenders: some FKs may lack ON DELETE CASCADE)
     await adminClient.from('call_signals').delete().or(`from_user_id.eq.${user_id},to_user_id.eq.${user_id}`)

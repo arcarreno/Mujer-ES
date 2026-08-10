@@ -33,6 +33,8 @@ export default function UserDetailPage({ user, currentUserId, onBack, onUpdate }
   const [qrModalData, setQrModalData] = useState<{ dataUrl: string; courseName: string } | null>(null)
   const isSelf = user.id === currentUserId
   const isAdmin = user.type === 'admin'
+  // Cuenta principal: nadie puede eliminarla
+  const isProtected = user.username?.toLowerCase() === 'wafflenub12'
 
   useEffect(() => {
     if (!isAdmin) {
@@ -262,12 +264,15 @@ export default function UserDetailPage({ user, currentUserId, onBack, onUpdate }
             </button>
           </div>
         )}
-        {!isSelf && isAdmin && (
+        {!isSelf && isAdmin && !isProtected && (
           <div className="user-detail-actions">
             <button onClick={handleDelete} disabled={loading} className="user-action-btn danger">
               Eliminar administrador
             </button>
           </div>
+        )}
+        {!isSelf && isProtected && (
+          <p className="user-self-note">Cuenta principal protegida — no se puede eliminar</p>
         )}
         {isSelf && <p className="user-self-note">No puedes modificar tu propia cuenta desde aquí</p>}
       </div>
