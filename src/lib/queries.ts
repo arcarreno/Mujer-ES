@@ -82,6 +82,23 @@ export async function updateProfile(
   if (!data || data.length === 0) {
     throw new Error('No se encontró tu perfil para actualizar')
   }
+  // Los admins tienen su foto en `admins` (la lee la pestaña Usuarios).
+  // Sincronización no destructiva: para usuarios normales el UPDATE iguala
+  // 0 filas y no pasa nada.
+  if (updates.avatar_url) {
+    try {
+      const { error: adminErr } = await supabase
+        .from('admins')
+        .update({
+          avatar_url: updates.avatar_url,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', userId)
+      if (adminErr) console.error('Failed to sync admin avatar:', adminErr)
+    } catch (e) {
+      console.error('Failed to sync admin avatar:', e)
+    }
+  }
 }
 
 export async function uploadAvatar(userId: string, file: File): Promise<string> {
@@ -148,7 +165,20 @@ export async function saveInitialForm(
   if (error) throw error
 }
 
+// Un sign-out explícito del usuario emite SIGNED_OUT, pero un refresh fallido
+// también. App.tsx consulta este flag para no confundir ambos casos.
+let intentionalSignOut = false
+export function markIntentionalSignOut(): void {
+  intentionalSignOut = true
+}
+export function consumeIntentionalSignOut(): boolean {
+  const v = intentionalSignOut
+  intentionalSignOut = false
+  return v
+}
+
 export async function signOut(): Promise<void> {
+  markIntentionalSignOut()
   await supabase.auth.signOut()
 }
 
@@ -177,17 +207,49 @@ export async function saveOnboardingForm(
 ): Promise<void> {
   const fullName = responses.full_name?.trim()
   const username = responses.username?.trim()
+  const phone = responses.phone?.trim()
 
   const profileUpdate: Record<string, string> = {}
   if (fullName) profileUpdate.full_name = fullName
   if (username) profileUpdate.username = username
 
   if (Object.keys(profileUpdate).length > 0) {
-    const { error: profileErr } = await supabase
+    // Actualizar profiles; si la fila no existe (p.ej. admin sin backfill),
+    // crearla — un UPDATE de 0 filas "tiene éxito" y pierde los datos.
+    const { data, error: profileErr } = await supabase
       .from('profiles')
-      .update(profileUpdate)
+      .update({ ...profileUpdate, updated_at: new Date().toISOString() })
       .eq('id', userId)
+      .select('id')
     if (profileErr) throw profileErr
+    if (!data || data.length === 0) {
+      const { error: insertErr } = await supabase
+        .from('profiles')
+        .insert({ id: userId, ...profileUpdate, first_login: false })
+      if (insertErr) throw insertErr
+    }
+  }
+
+  // Los admins tienen su fila en `admins` (la que lee la pestaña Usuarios, el
+  // detalle de usuario y la cabecera). Sincronizar username / nombre completo /
+  // teléfono allá también, si el usuario actual es admin.
+  try {
+    const { data: isAdmin } = await supabase.rpc('is_admin')
+    if (isAdmin) {
+      const adminUpdate: Record<string, string> = {}
+      if (fullName) adminUpdate.full_name = fullName
+      if (username) adminUpdate.username = username
+      if (phone) adminUpdate.phone = phone
+      if (Object.keys(adminUpdate).length > 0) {
+        const { error: adminErr } = await supabase
+          .from('admins')
+          .update({ ...adminUpdate, updated_at: new Date().toISOString() })
+          .eq('id', userId)
+        if (adminErr) throw adminErr
+      }
+    }
+  } catch (e) {
+    console.error('Failed to sync admin profile:', e)
   }
 
   const { error } = await supabase

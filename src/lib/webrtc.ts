@@ -56,6 +56,10 @@ export const MAX_VIDEO_USERS = 6
 const CAMERA_MAX_BITRATE = 1_500_000
 const SCREEN_MAX_BITRATE = 4_000_000
 
+// ICE restarts por peer antes de rendirse (evita loops de restart cuando el
+// par de candidatos realmente no puede establecerse, p.ej. TURN roto)
+const MAX_ICE_RESTARTS = 3
+
 // =====================================================
 // COORDINATION HELPERS
 // =====================================================
@@ -91,29 +95,29 @@ const STUN_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun2.l.google.com:19302' },
 ]
 
-// Privacy mode: force all traffic through TURN relay to hide client IPs
-// For a gender violence awareness app, this is a safety-critical option
-const RTC_CONFIG_PRIVACY: RTCConfiguration = {
+// Optional TURN relay via environment:
+//   VITE_TURN_URLS="turn:relay1.expressturn.com:3478?transport=udp,turn:relay1.expressturn.com:3478?transport=tcp,turns:relay1.expressturn.com:443?transport=tcp"
+//   VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL (ExpressTURN free: 1 TB/mo, signup at https://www.expressturn.com)
+// Empty = STUN-only, which works for most home networks (same LAN or normal NAT).
+const TURN_URLS: string[] =
+  ((import.meta.env.VITE_TURN_URLS as string | undefined) ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean) ?? []
+const TURN_USERNAME = (import.meta.env.VITE_TURN_USERNAME as string | undefined) ?? ''
+const TURN_CREDENTIAL = (import.meta.env.VITE_TURN_CREDENTIAL as string | undefined) ?? ''
+
+const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     ...STUN_SERVERS,
-    {
-      urls: 'turn:openrelay.metered.ca:80',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-    {
-      urls: 'turn:openrelay.metered.ca:443',
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
+    ...(TURN_URLS.length > 0
+      ? [{ urls: TURN_URLS, username: TURN_USERNAME, credential: TURN_CREDENTIAL }]
+      : []),
   ],
   iceCandidatePoolSize: 4,
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
 }
-
-// Default to privacy mode for safety
-const RTC_CONFIG = RTC_CONFIG_PRIVACY
 
 // =====================================================
 // SIGNALING MANAGER (Dual-Channel: Presence + Per-User Signal)
@@ -121,8 +125,6 @@ const RTC_CONFIG = RTC_CONFIG_PRIVACY
 
 export class SignalingManager {
   presenceChannel: RealtimeChannel | null = null
-  signalChannel: RealtimeChannel | null = null
-  private signalSendChannels: Map<string, RealtimeChannel> = new Map()
   private courseId: string
   private handlers: {
     onOffer: (fromUserId: string, sdp: RTCSessionDescriptionInit) => void
@@ -143,13 +145,13 @@ export class SignalingManager {
   private lastPresenceState: ParticipantState | null = null
   presenceEpochs: Map<string, number> = new Map()
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
-  private reconnectTimerSignal: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
-  private reconnectAttemptsSignal = 0
   private maxReconnectAttempts = 10
   private lastPresenceData: ParticipantState | null = null
   private stableConnectionTimer: ReturnType<typeof setTimeout> | null = null
-  private stableConnectionTimerSignal: ReturnType<typeof setTimeout> | null = null
+  // Signals que no pudieron enviarse porque el canal no estaba 'joined'
+  // (se envían apenas el canal vuelve a conectarse)
+  private pendingSignals: SignalEvent[] = []
 
   constructor(
     courseId: string,
@@ -163,26 +165,72 @@ export class SignalingManager {
 
   async join(): Promise<void> {
     this.cancelReconnects()
-    if (this.presenceChannel || this.signalChannel) {
-      console.warn('[Signaling] Already joined, cleaning up previous channels')
+    this.reconnectAttempts = 0
+    if (this.presenceChannel) {
+      console.warn('[Signaling] Already joined, cleaning up previous channel')
       await this.leave()
+      this.reconnectAttempts = 0
     }
-    await this.setupPresenceChannel()
-    await this.setupSignalChannel()
+    // Esperar SUBSCRIBED antes de continuar: si el canal no está listo y aun así
+    // se envía, Realtime cae al REST fallback y el ICE se pierde.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const ok = await this.setupPresenceChannel()
+      if (ok) return
+      console.warn(`[Signaling] join() not SUBSCRIBED (attempt ${attempt}/3), recreating channel`)
+      if (this.presenceChannel) {
+        await supabase.removeChannel(this.presenceChannel)
+        this.presenceChannel = null
+      }
+    }
+    console.error('[Signaling] join() failed after 3 attempts')
   }
 
-  private async setupPresenceChannel(): Promise<void> {
+  private async setupPresenceChannel(): Promise<boolean> {
     this.presenceChannel = supabase.channel(`call:presence:${this.courseId}`, {
-      config: { presence: { key: this.myUserId } },
+      config: {
+        presence: { key: this.myUserId },
+        // ack: esperar confirmación del servidor (nunca enviar a ciegas)
+        // self: false → no recibir eco de los propios broadcasts
+        broadcast: { ack: true, self: false },
+      },
+    })
+
+    // Resolver para que join() espere el estado 'joined' real
+    let resolveJoined: ((ok: boolean) => void) | null = null
+    const joined = new Promise<boolean>((resolve) => {
+      resolveJoined = resolve
     })
 
     this.presenceChannel
       .on('broadcast', { event: 'signal' }, ({ payload }) => {
         const event = payload as SignalEvent
-        // Drop own broadcasts (admin must not re-process its own mute-all /
-        // end-session / screen-share events and trigger double teardown).
+        // Ignorar eco propio (self:false ya lo evita; doble defensa)
         if (event.fromUserId === this.myUserId) return
-        if (event.type === 'mute-all') {
+        // Canal único: los mensajes p2p (offer/answer/ice/kick) llevan
+        // targetUserId — filtrar los dirigidos a otros usuarios
+        switch (event.type) {
+          case 'offer':
+          case 'answer':
+          case 'kick':
+            if (event.targetUserId !== this.myUserId) return
+            break
+          case 'ice-candidate':
+            if (event.targetUserId && event.targetUserId !== this.myUserId) return
+            break
+        }
+        if (event.type === 'offer') {
+          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
+          this.handlers.onOffer(event.fromUserId, event.sdp)
+        } else if (event.type === 'answer') {
+          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
+          this.handlers.onAnswer(event.fromUserId, event.sdp)
+        } else if (event.type === 'ice-candidate') {
+          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
+          this.handlers.onIceCandidate(event.fromUserId, event.candidate)
+        } else if (event.type === 'kick') {
+          console.log(`[WebRTC] Kick received for ${event.targetUserId} from ${event.fromUserId}`)
+          this.handlers.onKick(event.targetUserId, event.fromUserId)
+        } else if (event.type === 'mute-all') {
           this.handlers.onMuteAll(event.fromUserId)
         } else if (event.type === 'end-session') {
           this.handlers.onEndSession(event.fromUserId)
@@ -214,6 +262,12 @@ export class SignalingManager {
       .subscribe((status) => {
         console.log(`[Signaling] Presence subscribe status: ${status}`)
         if (status === 'SUBSCRIBED') {
+          // Despachar señales encoladas mientras el canal no estaba listo
+          const pending = this.pendingSignals.splice(0)
+          for (const ev of pending) {
+            void this.sendSignal(ev)
+          }
+
           // Start stability timer: only reset reconnectAttempts if the channel
           // stays connected for 10s. Without this, a rapid SUBSCRIBED → CLOSED
           // loop keeps resetting attempts to 0, so backoff never accumulates.
@@ -230,6 +284,8 @@ export class SignalingManager {
           if (this.lastPresenceData) {
             this.trackPresence(this.lastPresenceData)
           }
+          resolveJoined?.(true)
+          resolveJoined = null
         } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           // Cancel stability timer since channel is down
           if (this.stableConnectionTimer) {
@@ -237,53 +293,21 @@ export class SignalingManager {
             this.stableConnectionTimer = null
           }
           console.warn(`[Signaling] Presence channel lost (${status}), scheduling reconnect...`)
+          resolveJoined?.(false)
+          resolveJoined = null
           this.scheduleReconnect()
         }
       })
-  }
 
-  private async setupSignalChannel(): Promise<void> {
-    this.signalChannel = supabase.channel(`call:signal:${this.myUserId}`)
-
-    this.signalChannel
-      .on('broadcast', { event: 'signal' }, ({ payload }) => {
-        const event = payload as SignalEvent
-
-        if ('fromUserId' in event && event.fromUserId === this.myUserId) return
-
-        if (event.type === 'offer') {
-          console.log(`[WebRTC] Received offer from ${event.fromUserId}`)
-          this.handlers.onOffer(event.fromUserId, event.sdp)
-        } else if (event.type === 'answer') {
-          console.log(`[WebRTC] Received answer from ${event.fromUserId}`)
-          this.handlers.onAnswer(event.fromUserId, event.sdp)
-        } else if (event.type === 'ice-candidate') {
-          console.log(`[WebRTC] Received ICE candidate from ${event.fromUserId}`)
-          this.handlers.onIceCandidate(event.fromUserId, event.candidate)
-        } else if (event.type === 'kick' && event.targetUserId === this.myUserId) {
-          this.handlers.onKick(event.targetUserId, event.fromUserId)
-        }
-      })
-      .subscribe((status) => {
-        console.log(`[Signaling] Signal subscribe status: ${status}`)
-        if (status === 'SUBSCRIBED') {
-          if (this.stableConnectionTimerSignal) {
-            clearTimeout(this.stableConnectionTimerSignal)
-          }
-          this.stableConnectionTimerSignal = setTimeout(() => {
-            this.stableConnectionTimerSignal = null
-            this.reconnectAttemptsSignal = 0
-            console.log('[Signaling] Signal channel stable, reset reconnect attempts')
-          }, 10000)
-        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          if (this.stableConnectionTimerSignal) {
-            clearTimeout(this.stableConnectionTimerSignal)
-            this.stableConnectionTimerSignal = null
-          }
-          console.warn(`[Signaling] Signal channel lost (${status}), scheduling reconnect...`)
-          this.scheduleReconnectSignal()
-        }
-      })
+    // Esperar hasta 12s por SUBSCRIBED (websocket + auth). Si el callback nunca
+    // llega, join() recrea el canal — jamás seguir sin un canal 'joined'.
+    const timeout = new Promise<boolean>((resolve) => {
+      setTimeout(() => {
+        resolveJoined = null
+        resolve(false)
+      }, 12000)
+    })
+    return Promise.race([joined, timeout])
   }
 
   async trackPresence(state: ParticipantState): Promise<void> {
@@ -314,67 +338,38 @@ export class SignalingManager {
   }
 
   async sendSignal(event: SignalEvent): Promise<void> {
-    switch (event.type) {
-      case 'offer':
-      case 'answer':
-      case 'ice-candidate': {
-        const targetUserId = event.targetUserId
-        if (!targetUserId) {
-          console.error('[Signaling] Cannot send peer-to-peer signal without targetUserId')
-          return
-        }
-        console.log(`[Signaling] Sending ${event.type} to ${targetUserId} via signal channel`)
-        await this.sendToSignalChannel(targetUserId, event)
-        break
-      }
-      case 'mute-all':
-      case 'end-session':
-      case 'screen-share-started':
-      case 'screen-share-stopped':
-      case 'track-state': {
-        if (!this.presenceChannel) {
-          console.error('[Signaling] Cannot send broadcast: no presence channel')
-          return
-        }
-        console.log(`[Signaling] Sending ${event.type} via presence broadcast`)
-        await this.presenceChannel.send({
-          type: 'broadcast',
-          event: 'signal',
-          payload: event,
-        })
-        break
-      }
-      case 'kick': {
-        const targetUserId = event.targetUserId
-        if (!targetUserId) {
-          console.error('[Signaling] Cannot send kick without targetUserId')
-          return
-        }
-        console.log(`[Signaling] Sending kick to ${targetUserId}`)
-        await this.sendToSignalChannel(targetUserId, event)
-        break
-      }
+    if (!this.presenceChannel) {
+      console.error('[Signaling] Cannot send signal: no presence channel')
+      return
     }
-  }
-
-  private async sendToSignalChannel(targetUserId: string, event: SignalEvent): Promise<void> {
-    let chan = this.signalSendChannels.get(targetUserId)
-    if (!chan) {
-      console.log(`[Signaling] Creating send channel for ${targetUserId}`)
-      chan = supabase.channel(`call:signal:${targetUserId}`)
-      chan.subscribe()
-      this.signalSendChannels.set(targetUserId, chan)
+    const chan = this.presenceChannel
+    if (chan.state !== 'joined') {
+      // Canal no listo (aún uniéndose o recién reconectado): encolar en vez de
+      // enviar — un send() sobre canal no-joined dispara el REST API fallback
+      // de Realtime, que pierde candidatos ICE y rompe la negociación.
+      console.warn(`[Signaling] Queueing ${event.type} — channel not joined (${chan.state})`)
+      if (this.pendingSignals.length < 50) this.pendingSignals.push(event)
+      return
     }
-    await chan.send({
-      type: 'broadcast',
-      event: 'signal',
-      payload: event,
-    })
+    try {
+      await chan.send({
+        type: 'broadcast',
+        event: 'signal',
+        payload: event,
+      })
+    } catch (e) {
+      console.error(`[Signaling] send failed for ${event.type}, queueing:`, e)
+      if (this.pendingSignals.length < 50) this.pendingSignals.push(event)
+    }
   }
 
   async sendChatMessage(msg: { userId: string; username: string; text: string; time: number }): Promise<void> {
     if (!this.presenceChannel) {
       console.error('[Signaling] Cannot send chat: no presence channel')
+      return
+    }
+    if (this.presenceChannel.state !== 'joined') {
+      console.warn('[Signaling] Chat dropped: channel not joined')
       return
     }
     await this.presenceChannel.send({
@@ -387,19 +382,7 @@ export class SignalingManager {
   async leave(): Promise<void> {
     this.cancelReconnects()
     this.reconnectAttempts = this.maxReconnectAttempts
-    this.reconnectAttemptsSignal = this.maxReconnectAttempts
-
-    for (const [, chan] of this.signalSendChannels) {
-      await supabase.removeChannel(chan)
-    }
-    this.signalSendChannels.clear()
-
-    if (this.signalChannel) {
-      console.log('[Signaling] Leaving signal channel...')
-      await supabase.removeChannel(this.signalChannel)
-      this.signalChannel = null
-      console.log('[Signaling] Signal channel removed')
-    }
+    this.pendingSignals = []
 
     if (this.presenceChannel) {
       console.log('[Signaling] Leaving presence channel...')
@@ -412,35 +395,6 @@ export class SignalingManager {
 
   savePresenceData(data: ParticipantState): void {
     this.lastPresenceData = data
-  }
-
-  private scheduleReconnectSignal(): void {
-    if (this.reconnectAttemptsSignal >= this.maxReconnectAttempts) {
-      console.error('[Signaling] Max signal reconnect attempts reached, giving up')
-      return
-    }
-    if (this.reconnectTimerSignal) return
-
-    const baseDelay = Math.min(1000 * Math.pow(2, this.reconnectAttemptsSignal), 15000)
-    const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1)
-    const delay = Math.round(baseDelay + jitter)
-    this.reconnectAttemptsSignal++
-    console.log(`[Signaling] Reconnecting signal in ${delay}ms (attempt ${this.reconnectAttemptsSignal})`)
-
-    this.reconnectTimerSignal = setTimeout(async () => {
-      this.reconnectTimerSignal = null
-      try {
-        console.log('[Signaling] Attempting signal reconnect...')
-        if (this.signalChannel) {
-          await supabase.removeChannel(this.signalChannel)
-          this.signalChannel = null
-        }
-        await this.setupSignalChannel()
-      } catch (e) {
-        console.error('[Signaling] Signal reconnect failed:', e)
-        this.scheduleReconnectSignal()
-      }
-    }, delay)
   }
 
   private scheduleReconnect(): void {
@@ -481,17 +435,9 @@ export class SignalingManager {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
-    if (this.reconnectTimerSignal) {
-      clearTimeout(this.reconnectTimerSignal)
-      this.reconnectTimerSignal = null
-    }
     if (this.stableConnectionTimer) {
       clearTimeout(this.stableConnectionTimer)
       this.stableConnectionTimer = null
-    }
-    if (this.stableConnectionTimerSignal) {
-      clearTimeout(this.stableConnectionTimerSignal)
-      this.stableConnectionTimerSignal = null
     }
   }
 
@@ -516,6 +462,7 @@ export class PeerManager {
   private onScreenShareEnded: (() => void) | null = null
   private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
   private screenSenders: Map<string, RTCRtpSender> = new Map()
+  private iceRestartCounts: Map<string, number> = new Map()
 
   // Perfect Negotiation state per peer
   private makingOffer: Map<string, boolean> = new Map()
@@ -762,6 +709,14 @@ export class PeerManager {
       track.onunmute = processStream
     }
 
+    // Log ICE candidate gathering failures (STUN/TURN unreachable) — clave
+    // para diagnosticar por qué una conexión no se establece
+    pc.onicecandidateerror = (ev) => {
+      console.warn(
+        `[WebRTC] ICE candidate error for ${remoteUserId}: code=${ev.errorCode} text=${ev.errorText}${ev.url ? ` url=${ev.url}` : ''}`
+      )
+    }
+
     // ICE connection state → monitor for failure/disconnect and restart
     let iceDisconnectTimer: ReturnType<typeof setTimeout> | null = null
     pc.oniceconnectionstatechange = () => {
@@ -787,6 +742,8 @@ export class PeerManager {
           clearTimeout(iceDisconnectTimer)
           iceDisconnectTimer = null
         }
+        // Conexión estable: reiniciar el contador de restarts
+        this.iceRestartCounts.delete(remoteUserId)
       }
     }
 
@@ -818,14 +775,14 @@ export class PeerManager {
           newConnectionTimer = null
         }
         // Don't removePeer immediately — iceConnectionState handler already
-        // calls restartIce(). Give it 5s to recover before giving up.
+        // calls restartIce(). Give it 15s (grace) to recover before giving up.
         newConnectionTimer = setTimeout(() => {
           newConnectionTimer = null
           if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-            console.warn(`[WebRTC] Connection still failed after 5s, removing peer ${remoteUserId}`)
+            console.warn(`[WebRTC] Connection still failed after 15s, removing peer ${remoteUserId}`)
             this.removePeer(remoteUserId)
           }
-        }, 5000)
+        }, 15000)
       }
     }
 
@@ -1040,8 +997,18 @@ export class PeerManager {
     }
   }
 
-  // ICE restart (W3C §4.2.6)
+  // ICE restart (W3C §4.2.6) — con límite de intentos por peer
   private async restartIce(remoteUserId: string, pc: RTCPeerConnection): Promise<void> {
+    const attempts = (this.iceRestartCounts.get(remoteUserId) ?? 0) + 1
+    this.iceRestartCounts.set(remoteUserId, attempts)
+    if (attempts > MAX_ICE_RESTARTS) {
+      console.error(
+        `[WebRTC] ICE restart limit reached (${MAX_ICE_RESTARTS}) for ${remoteUserId}, removing peer`
+      )
+      this.removePeer(remoteUserId)
+      return
+    }
+    console.log(`[WebRTC] ICE restart (${attempts}/${MAX_ICE_RESTARTS}) for ${remoteUserId}`)
     try {
       const offer = await pc.createOffer({ iceRestart: true })
       await pc.setLocalDescription(offer)
@@ -1189,6 +1156,7 @@ export class PeerManager {
       this.ignoreOffer.delete(userId)
       this.isSettingRemoteAnswerPending.delete(userId)
       this.screenSenders.delete(userId)
+      this.iceRestartCounts.delete(userId)
       this.onPeerRemoved?.(userId)
     }
   }
@@ -1205,6 +1173,7 @@ export class PeerManager {
     this.ignoreOffer.clear()
     this.isSettingRemoteAnswerPending.clear()
     this.screenSenders.clear()
+    this.iceRestartCounts.clear()
     this.localStream?.getTracks().forEach((t) => t.stop())
     this.screenStream?.getTracks().forEach((t) => t.stop())
     this.localStream = null

@@ -7,6 +7,8 @@ import {
   hasCompletedInitialForm,
   isUserAdmin,
   checkFirstLogin,
+  markIntentionalSignOut,
+  consumeIntentionalSignOut,
   type Profile,
 } from './lib/queries'
 import useNetworkStatus from './hooks/useNetworkStatus'
@@ -50,16 +52,72 @@ function App() {
   const wasOffline = useRef(!navigator.onLine)
 
   useEffect(() => {
+    // Cargar sesión persistida al montar (además del evento INITIAL_SESSION)
     supabase.auth.getSession().then(({ data: { session } }) => {
       handleSession(session?.user ?? null)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // Registramos TODOS los eventos de auth para poder diagnosticar
+      // expiraciones de sesión (Refresh Token Not Found / rotación multi-pestaña)
+      console.log(`[Auth] Event: ${event}`, session?.user?.id ?? '(sin usuario)')
+      if (event === 'SIGNED_OUT') {
+        void handleUnexpectedSignOut()
+        return
+      }
+      if (session?.user) {
+        // Un login exitoso descarta cualquier sign-out pendiente de marcar
+        consumeIntentionalSignOut()
+      }
       handleSession(session?.user ?? null)
     })
 
     return () => subscription.unsubscribe()
   }, [])
+
+  const userRef = useRef<SessionUser | null>(null)
+  useEffect(() => {
+    userRef.current = user
+  }, [user])
+
+  const clearStoredAuthToken = () => {
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+          localStorage.removeItem(key)
+        }
+      }
+    } catch {
+      // Storage puede no estar disponible (modo privado)
+    }
+  }
+
+  /** SIGNED_OUT sin pedido del usuario: intentar recuperar la sesión con un
+   * refresh; si el servidor la revocó (Refresh Token Not Found), limpiar el
+   * token local y volver al landing para evitar el loop de cierre/re-apertura. */
+  const handleUnexpectedSignOut = async () => {
+    if (consumeIntentionalSignOut()) {
+      console.log('[Auth] Sign-out explícito del usuario, ignorando SIGNED_OUT')
+      handleSession(null)
+      return
+    }
+    console.warn('[Auth] SIGNED_OUT inesperado — intentando recuperar sesión...')
+    const { data, error } = await supabase.auth.refreshSession()
+    if (data.session?.user) {
+      console.log('[Auth] Sesión recuperada vía refreshSession()')
+      handleSession(data.session.user)
+      return
+    }
+    console.error('[Auth] Recuperación de sesión fallida:', error?.message ?? 'sin sesión')
+    clearStoredAuthToken()
+    handleSession(null)
+    if (userRef.current) {
+      sileo.error({
+        title: 'Tu sesión expiró',
+        description: 'Hubo un problema con tu sesión. Volvé a iniciar sesión para continuar.',
+      })
+    }
+  }
 
   useEffect(() => {
     if (isOnline && wasOffline.current) {
@@ -103,6 +161,7 @@ function App() {
         title: 'Cuenta bloqueada',
         description: `Tu cuenta está bloqueada hasta el ${until}. Esperá a que se cumpla el tiempo para volver a entrar.`,
       })
+      markIntentionalSignOut()
       await supabase.auth.signOut()
       setUser(null)
       setSessionData({ profile: null, isAdmin: false })
@@ -142,6 +201,7 @@ function App() {
     ])
     if (p) setSessionData((s) => ({ ...s, profile: p }))
     if (p?.blocked_until && new Date(p.blocked_until) > new Date()) {
+      markIntentionalSignOut()
       await supabase.auth.signOut()
       setUser(null)
       setSessionData({ profile: null, isAdmin: false })

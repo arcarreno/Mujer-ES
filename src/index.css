@@ -1860,6 +1860,42 @@ input[type="date"].form-input {
   font-style: italic;
 }
 
+/* Píldoras de filtro Activos / Concluidos junto al título de Cursos */
+.cursos-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.admin-cursos-pills {
+  display: flex;
+  gap: 0.2rem;
+  background: #f5f3ff;
+  padding: 0.2rem;
+  border-radius: 999px;
+}
+
+.admin-cursos-pill {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  padding: 0.3rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: #7c6a95;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.admin-cursos-pill.active,
+.admin-cursos-pill-active {
+  background: #581C87;
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(88, 28, 135, 0.35);
+}
+
 .cursos-list {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2400,6 +2436,98 @@ input[type="date"].form-input {
   padding: 1.25rem;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   animation: cardFadeIn 0.5s ease both;
+  /* Portada del curso como fondo (si existe) */
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+/* Variante con portada: gradiente traslúcido en los costados para que el
+   texto de la card se lea sobre la imagen */
+.admin-curso-card-photo {
+  border-color: rgba(255, 255, 255, 0.14);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.admin-curso-card-photo::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    rgba(0, 0, 0, 0.6) 0%,
+    rgba(0, 0, 0, 0.28) 28%,
+    rgba(0, 0, 0, 0.28) 72%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  pointer-events: none;
+}
+
+.admin-curso-card-photo > * {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-curso-card-photo .admin-curso-card-title {
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45);
+}
+
+.admin-curso-card-photo .admin-curso-card-subtitle {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.admin-curso-card-photo .admin-curso-card-desc {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.admin-curso-card-photo .admin-curso-card-location {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.admin-curso-card-photo .admin-curso-card-vacancies {
+  color: #fff;
+}
+
+.admin-curso-card-photo .admin-curso-card-date {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.admin-curso-card-photo .admin-curso-card-footer {
+  border-top-color: rgba(255, 255, 255, 0.18);
+}
+
+.admin-curso-card-photo .admin-curso-badge {
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  backdrop-filter: blur(2px);
+}
+
+.admin-curso-card-photo .admin-curso-badge-published {
+  background: rgba(6, 95, 70, 0.78);
+}
+
+.admin-curso-card-photo .admin-curso-badge-draft {
+  background: rgba(146, 64, 14, 0.78);
+}
+
+.admin-curso-card-photo .admin-curso-badge-modality {
+  background: rgba(88, 28, 135, 0.78);
+}
+
+.admin-curso-card-photo .admin-curso-badge-full {
+  background: rgba(185, 28, 28, 0.8);
+}
+
+.admin-curso-card-photo .admin-curso-badge-concluded {
+  background: rgba(55, 55, 55, 0.78);
+}
+
+.admin-curso-card-photo .admin-curso-action-btn {
+  background: rgba(0, 0, 0, 0.4);
+  color: #fff;
+  backdrop-filter: blur(2px);
 }
 
 .admin-curso-card-header {
@@ -2466,10 +2594,6 @@ input[type="date"].form-input {
 .admin-curso-badge-concluded {
   background: #f3f4f6;
   color: #6b7280;
-}
-
-.admin-curso-card-concluded {
-  opacity: 0.7;
 }
 
 .admin-curso-card-vacancies {
@@ -6130,6 +6254,19 @@ input[type="date"].form-input {
 
 .chat-bubble-me .chat-time {
   text-align: right;
+}
+
+.chat-bubble-me .chat-sender {
+  flex-direction: row-reverse;
+}
+
+.chat-bubble-me .chat-username {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.chat-bubble-me .chat-admin-badge {
+  color: var(--color-accent);
+  background: #fff;
 }
 
 .chat-bubble-other {

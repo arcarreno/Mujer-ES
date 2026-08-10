@@ -32,12 +32,6 @@ export async function listUsers(): Promise<UserRow[]> {
   const result: UserRow[] = []
   const adminIds = new Set((admins ?? []).map((a) => a.id))
 
-  // Build a map of admin profiles for avatar_url (use admins.avatar_url directly)
-  const adminProfileMap = new Map<string, string | null>()
-  for (const a of admins ?? []) {
-    adminProfileMap.set(a.id, a.avatar_url ?? null)
-  }
-
   for (const p of profiles ?? []) {
     if (adminIds.has(p.id)) continue
     const { data: fr } = await supabase
@@ -51,14 +45,30 @@ export async function listUsers(): Promise<UserRow[]> {
   }
 
   for (const a of admins ?? []) {
-    const { data: fr } = await supabase
-      .from('form_responses')
-      .select('responses')
-      .eq('user_id', a.id)
-      .eq('form_type', 'initial_profile')
-      .maybeSingle()
+    const [{ data: fr }, { data: p }] = await Promise.all([
+      supabase
+        .from('form_responses')
+        .select('responses')
+        .eq('user_id', a.id)
+        .eq('form_type', 'initial_profile')
+        .maybeSingle(),
+      // Los admins también tienen una fila espejo en `profiles` (backfill +
+      // encuesta/perfil). Preferirla revierte el desfase histórico: antes de la
+      // sincronización, la encuesta solo escribía en profiles.
+      supabase
+        .from('profiles')
+        .select('username, full_name, avatar_url')
+        .eq('id', a.id)
+        .maybeSingle(),
+    ])
 
-    result.push(adminToRow(a, fr?.responses as Record<string, unknown> | null, adminProfileMap.get(a.id) ?? null))
+    result.push(
+      adminToRow(
+        a,
+        fr?.responses as Record<string, unknown> | null,
+        p as Pick<Profile, 'username' | 'full_name' | 'avatar_url'> | null
+      )
+    )
   }
 
   result.sort((x, y) => (y.created_at > x.created_at ? 1 : -1))
@@ -83,20 +93,25 @@ function profileToRow(p: Profile, formResponses: Record<string, unknown> | null)
   }
 }
 
-function adminToRow(a: Admin, formResponses: Record<string, unknown> | null, avatarUrl: string | null): UserRow {
+function adminToRow(
+  a: Admin,
+  formResponses: Record<string, unknown> | null,
+  p: Pick<Profile, 'username' | 'full_name' | 'avatar_url'> | null
+): UserRow {
   return {
     id: a.id,
-    username: a.username,
-    full_name: a.full_name,
+    username: p?.username || a.username,
+    full_name: p?.full_name || a.full_name,
     type: 'admin',
     email: null,
+    // El teléfono solo vive en `admins`, así que siempre proviene de ahí
     phone: a.phone,
     password: a.password,
     blocked: false,
     blocked_until: null,
     form_completed: !!formResponses,
     form_responses: formResponses,
-    avatar_url: avatarUrl,
+    avatar_url: p?.avatar_url ?? a.avatar_url ?? null,
     created_at: a.created_at,
   }
 }

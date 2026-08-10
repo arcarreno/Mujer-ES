@@ -14,6 +14,11 @@ export default function AdminCursos({ onCreateCourse, onSelectCourse }: AdminCur
   const [loading, setLoading] = useState(true)
   const [enrollmentCounts, setEnrollmentCounts] = useState<Record<string, number>>({})
   const [editingCourse, setEditingCourse] = useState<Course | null>(null)
+  const [tab, setTab] = useState<'activos' | 'concluidos'>('activos')
+
+  const activeCourses = courses.filter((c) => !c.concluded)
+  const concludedCourses = courses.filter((c) => c.concluded)
+  const visibleCourses = tab === 'activos' ? activeCourses : concludedCourses
 
   const load = async () => {
     try {
@@ -73,8 +78,34 @@ export default function AdminCursos({ onCreateCourse, onSelectCourse }: AdminCur
       <>
       <div className="admin-cursos-header">
         <div>
-          <h2 className="cursos-title">Cursos</h2>
-          <p className="cursos-subtitle">{courses.length} curso{courses.length !== 1 ? 's' : ''}</p>
+          <div className="cursos-title-row">
+            <h2 className="cursos-title">Cursos</h2>
+            <div className="admin-cursos-pills" role="tablist" aria-label="Filtrar cursos">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'activos'}
+                className={`admin-cursos-pill ${tab === 'activos' ? 'admin-cursos-pill-active' : ''}`}
+                onClick={() => setTab('activos')}
+              >
+                Activos
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={tab === 'concluidos'}
+                className={`admin-cursos-pill ${tab === 'concluidos' ? 'admin-cursos-pill-active' : ''}`}
+                onClick={() => setTab('concluidos')}
+              >
+                Concluidos
+              </button>
+            </div>
+          </div>
+          <p className="cursos-subtitle">
+            {tab === 'activos'
+              ? `${activeCourses.length} curso${activeCourses.length !== 1 ? 's' : ''} activo${activeCourses.length !== 1 ? 's' : ''}`
+              : `${concludedCourses.length} curso${concludedCourses.length !== 1 ? 's' : ''} concluido${concludedCourses.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
         <button
           className="admin-create-btn"
@@ -93,22 +124,35 @@ export default function AdminCursos({ onCreateCourse, onSelectCourse }: AdminCur
         <div className="admin-cursos-empty">
           <Skeleton lines={3} />
         </div>
-      ) : courses.length === 0 ? (
+      ) : visibleCourses.length === 0 ? (
         <div className="admin-cursos-empty">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z" />
             <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
           </svg>
-          <p>No hay cursos creados</p>
-          <span>Creá el primer curso con el botón de arriba</span>
+          <p>
+            {tab === 'activos'
+              ? 'No hay cursos activos'
+              : 'No hay cursos concluidos'}
+          </p>
+          <span>
+            {tab === 'activos'
+              ? 'Creá el primer curso con el botón de arriba'
+              : 'Los cursos que concluyas aparecerán acá'}
+          </span>
         </div>
       ) : (
         <div className="admin-cursos-list">
-          {courses.map((course, i) => (
+          {visibleCourses.map((course, i) => (
             <div
               key={course.id}
-              className={`admin-curso-card ${course.concluded ? 'admin-curso-card-concluded' : ''}`}
-              style={{ animationDelay: `${i * 60}ms` }}
+              className={`admin-curso-card ${course.cover_image_url ? 'admin-curso-card-photo' : ''}`}
+              style={{
+                backgroundImage: course.cover_image_url
+                  ? `url("${course.cover_image_url}")`
+                  : undefined,
+                animationDelay: `${i * 60}ms`,
+              }}
               onClick={() => onSelectCourse(course)}
               role="button"
               tabIndex={0}

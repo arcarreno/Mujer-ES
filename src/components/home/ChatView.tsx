@@ -6,6 +6,7 @@ import {
   markMessagesRead,
   subscribeToMessages,
   unsubscribeFromMessages,
+  getProfile,
   type Message,
 } from '../../lib/queries'
 import { supabase } from '../../lib/supabase'
@@ -22,13 +23,24 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [myId, setMyId] = useState<string>('')
+  const [myProfile, setMyProfile] = useState<{ username?: string; avatar_url?: string } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setMyId(data.user.id)
+      if (data.user) {
+        setMyId(data.user.id)
+        // Datos propios para la cabecera del lado derecho (los msg propios
+        // recién enviados vuelven sin username/avatar; el evento realtime los
+        // completa después)
+        getProfile(data.user.id)
+          .then((p) => {
+            if (p) setMyProfile({ username: p.username, avatar_url: p.avatar_url ?? undefined })
+          })
+          .catch(() => {})
+      }
     })
   }, [])
 
@@ -95,7 +107,14 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
       const msg = await sendMessage(conversationId, text)
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev
-        return [...prev, msg]
+        return [
+          ...prev,
+          {
+            ...msg,
+            username: msg.username ?? myProfile?.username,
+            avatar_url: msg.avatar_url ?? myProfile?.avatar_url,
+          },
+        ]
       })
       inputRef.current?.focus()
     } catch {
@@ -193,6 +212,23 @@ export default function ChatView({ conversationId, onBack, onOpenProfile }: Chat
                   {!isMe && (
                     <div
                       className="chat-sender"
+                      onClick={() => onOpenProfile?.(msg.sender_id)}
+                      style={{ cursor: onOpenProfile ? 'pointer' : undefined }}
+                    >
+                      <div className={`chat-avatar ${isAdmin ? 'chat-avatar-admin' : ''}`}>
+                        {msg.avatar_url ? (
+                          <img src={msg.avatar_url} alt="" className="chat-avatar-img" />
+                        ) : (
+                          getInitials(msg.full_name || msg.username)
+                        )}
+                      </div>
+                      <span className="chat-username">{msg.username || '.usuario'}</span>
+                      {isAdmin && <span className="chat-admin-badge">Admin</span>}
+                    </div>
+                  )}
+                  {isMe && (
+                    <div
+                      className="chat-sender chat-sender-me"
                       onClick={() => onOpenProfile?.(msg.sender_id)}
                       style={{ cursor: onOpenProfile ? 'pointer' : undefined }}
                     >

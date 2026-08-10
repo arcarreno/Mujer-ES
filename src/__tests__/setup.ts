@@ -232,11 +232,20 @@ setupMediaDevices()
 // =====================================================
 const mockPresenceChannel = {
   on: vi.fn().mockReturnThis(),
-  subscribe: vi.fn().mockReturnThis(),
+  subscribe: vi.fn((cb?: (status: string) => void) => {
+    // Emulate the real async join: emit SUBSCRIBED on a microtask so join()
+    // (which now awaits the real 'joined' state) can proceed
+    queueMicrotask(() => {
+      mockPresenceChannel.state = 'joined'
+      cb?.('SUBSCRIBED')
+    })
+    return mockPresenceChannel
+  }),
   track: vi.fn().mockResolvedValue('ok'),
   send: vi.fn().mockResolvedValue('ok'),
   untrack: vi.fn().mockResolvedValue('ok'),
   presenceState: vi.fn().mockReturnValue({}),
+  state: 'joined',
 }
 
 const mockSignalChannel = {
@@ -246,6 +255,7 @@ const mockSignalChannel = {
   send: vi.fn().mockResolvedValue('ok'),
   untrack: vi.fn().mockResolvedValue('ok'),
   presenceState: vi.fn().mockReturnValue({}),
+  state: 'joined',
 }
 
 const mockSupabase = {

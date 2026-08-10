@@ -15,7 +15,6 @@ import {
   getDisplayMediaMock,
   mockSupabase,
   mockPresenceChannel,
-  mockSignalChannel,
   MockMediaStreamTrack,
   MockMediaStream,
 } from './setup'
@@ -902,7 +901,10 @@ describe('SignalingManager', () => {
     expect(mockSupabase.channel).toHaveBeenCalledWith(
       'call:presence:course-1',
       expect.objectContaining({
-        config: { presence: { key: 'user-1' } },
+        config: {
+          presence: { key: 'user-1' },
+          broadcast: { ack: true, self: false },
+        },
       })
     )
   })
@@ -928,8 +930,8 @@ describe('SignalingManager', () => {
 
     await sm.join()
 
-    // Both signal and presence channels should be removed during cleanup
-    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(2)
+    // The previous presence channel is removed before creating the new one
+    expect(mockSupabase.removeChannel).toHaveBeenCalledTimes(1)
   })
 
   it('trackPresence sets epoch and calls channel.track', async () => {
@@ -1152,7 +1154,6 @@ describe('SignalingManager', () => {
     expect(mockPresenceChannel.untrack).toHaveBeenCalled()
     expect(mockSupabase.removeChannel).toHaveBeenCalled()
     expect(sm.presenceChannel).toBeNull()
-    expect(sm.signalChannel).toBeNull()
   })
 
   it('leave handles null channel gracefully', async () => {
@@ -1170,18 +1171,24 @@ describe('SignalingManager', () => {
       onPresenceLeave: vi.fn(),
     })
 
-    // Never joined — channels are null
+    // Never joined — channel is null
     await sm.leave()
     expect(sm.presenceChannel).toBeNull()
-    expect(sm.signalChannel).toBeNull()
   })
 })
 
 // =====================================================
-// SIGNALING — broadcast signal channel
+// SIGNALING — unified channel (presence carries all signal types)
 // =====================================================
-describe('SignalingManager broadcast signal channel', () => {
-  it('sets up signal channel on join', async () => {
+describe('SignalingManager unified signal channel', () => {
+  const getSignalBroadcastHandler = (): ((args: any) => void) => {
+    const call = mockPresenceChannel.on.mock.calls.find(
+      (c: any[]) => c[0] === 'broadcast' && c[1]?.event === 'signal'
+    )
+    return call?.[2]
+  }
+
+  it('registers a single broadcast handler (no per-target signal channels)', async () => {
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
       onAnswer: vi.fn(),
@@ -1198,10 +1205,14 @@ describe('SignalingManager broadcast signal channel', () => {
 
     await sm.join()
 
-    expect(sm.signalChannel).toBeTruthy()
+    const signalHandlers = mockPresenceChannel.on.mock.calls.filter(
+      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
+    )
+    expect(signalHandlers).toHaveLength(1)
+    expect(getSignalBroadcastHandler()).toBeDefined()
   })
 
-  it('processes offers from other users via broadcast', async () => {
+  it('processes offers addressed to me via the presence broadcast', async () => {
     const onOffer = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer,
@@ -1219,15 +1230,8 @@ describe('SignalingManager broadcast signal channel', () => {
 
     await sm.join()
 
-    // Get the broadcast handler registered on signalChannel
-    const broadcastHandler = mockSignalChannel.on.mock.calls.find(
-      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
-    )?.[2]
-
-    expect(broadcastHandler).toBeDefined()
-
-    // Simulate receiving an offer from another user
-    broadcastHandler({
+    // Simulate receiving an offer from another user (targetUserId = me)
+    getSignalBroadcastHandler()({
       payload: {
         type: 'offer',
         fromUserId: 'user-2',
@@ -1237,6 +1241,48 @@ describe('SignalingManager broadcast signal channel', () => {
     })
 
     expect(onOffer).toHaveBeenCalledWith('user-2', { type: 'offer', sdp: 'v=0\r\n' })
+  })
+
+  it('ignores p2p signals addressed to other users', async () => {
+    const onOffer = vi.fn()
+    const onAnswer = vi.fn()
+    const onIceCandidate = vi.fn()
+    const onKick = vi.fn()
+    const sm = new SignalingManager('course-1', 'user-1', {
+      onOffer,
+      onAnswer,
+      onIceCandidate,
+      onMuteAll: vi.fn(),
+      onKick,
+      onEndSession: vi.fn(),
+      onScreenShareStarted: vi.fn(),
+      onScreenShareStopped: vi.fn(),
+      onPresenceSync: vi.fn(),
+      onPresenceJoin: vi.fn(),
+      onPresenceLeave: vi.fn(),
+    })
+
+    await sm.join()
+
+    const handler = getSignalBroadcastHandler()
+    handler({
+      payload: {
+        type: 'offer',
+        fromUserId: 'user-2',
+        targetUserId: 'user-3',
+        sdp: { type: 'offer', sdp: 'v=0\r\n' },
+      },
+    })
+    handler({
+      payload: {
+        type: 'kick',
+        fromUserId: 'user-2',
+        targetUserId: 'user-3',
+      },
+    })
+
+    expect(onOffer).not.toHaveBeenCalled()
+    expect(onKick).not.toHaveBeenCalled()
   })
 
   it('filters self-messages in broadcast', async () => {
@@ -1257,11 +1303,7 @@ describe('SignalingManager broadcast signal channel', () => {
 
     await sm.join()
 
-    const broadcastHandler = mockSignalChannel.on.mock.calls.find(
-      (call: any[]) => call[0] === 'broadcast' && call[1]?.event === 'signal'
-    )?.[2]
-
-    broadcastHandler({
+    getSignalBroadcastHandler()({
       payload: {
         type: 'offer',
         fromUserId: 'user-1',
