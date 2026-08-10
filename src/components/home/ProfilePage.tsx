@@ -108,6 +108,10 @@ export default function ProfilePage() {
     setAvatarPreview(url)
     setPendingAvatar(blob)
     setCropSrc(null)
+    sileo.info({
+      title: 'Recorte listo',
+      description: 'Tu foto de perfil se guardará cuando toques "Guardar perfil"',
+    })
   }
 
   function addHobby(hobby: string) {

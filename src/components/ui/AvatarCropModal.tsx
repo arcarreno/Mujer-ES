@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import Cropper, { type Area, type Point } from 'react-easy-crop'
 import 'react-easy-crop/react-easy-crop.css'
 import { sileo } from 'sileo'
@@ -11,11 +11,28 @@ interface AvatarCropModalProps {
 
 const CROP_SIZE = 512
 
-async function getCroppedAvatarBlob(imageSrc: string, crop: Area): Promise<Blob> {
+async function getCroppedAvatarBlob(
+  imageSrc: string,
+  crop: Area,
+  viewport: { width: number; height: number }
+): Promise<Blob> {
   const response = await fetch(imageSrc)
   const image = await createImageBitmap(await response.blob(), {
     imageOrientation: 'from-image',
   })
+  // croppedAreaPixels viven en el espacio del MEDIA MOSTRADO (cover-fit dentro
+  // del viewport). Hay que convertir píxeles mostrados -> píxeles originales:
+  const coverScale = Math.max(
+    viewport.width / image.width,
+    viewport.height / image.height
+  )
+  const displayedW = image.width * coverScale
+  const displayedH = image.height * coverScale
+  const sx = (crop.x / displayedW) * image.width
+  const sy = (crop.y / displayedH) * image.height
+  const sw = (crop.width / displayedW) * image.width
+  const sh = (crop.height / displayedH) * image.height
+
   const canvas = document.createElement('canvas')
   canvas.width = CROP_SIZE
   canvas.height = CROP_SIZE
@@ -23,10 +40,6 @@ async function getCroppedAvatarBlob(imageSrc: string, crop: Area): Promise<Blob>
   if (!ctx) throw new Error('No se pudo procesar la imagen')
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  const sx = (crop.x / 100) * image.width
-  const sy = (crop.y / 100) * image.height
-  const sw = (crop.width / 100) * image.width
-  const sh = (crop.height / 100) * image.height
   ctx.drawImage(image, sx, sy, sw, sh, 0, 0, CROP_SIZE, CROP_SIZE)
   image.close()
   const blob = await new Promise<Blob | null>((resolve) =>
@@ -41,6 +54,7 @@ export default function AvatarCropModal({ imageSrc, onCancel, onConfirm }: Avata
   const [zoom, setZoom] = useState(1)
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null)
   const [processing, setProcessing] = useState(false)
+  const viewportRef = useRef<HTMLDivElement>(null)
 
   const onCropComplete = useCallback((_: Area, pixels: Area) => {
     setCroppedAreaPixels(pixels)
@@ -48,9 +62,15 @@ export default function AvatarCropModal({ imageSrc, onCancel, onConfirm }: Avata
 
   const handleConfirm = async () => {
     if (!croppedAreaPixels || processing) return
+    const viewport = viewportRef.current
+    if (!viewport || viewport.clientWidth === 0 || viewport.clientHeight === 0) return
     setProcessing(true)
     try {
-      const blob = await getCroppedAvatarBlob(imageSrc, croppedAreaPixels)
+      const blob = await getCroppedAvatarBlob(
+        imageSrc,
+        croppedAreaPixels,
+        { width: viewport.clientWidth, height: viewport.clientHeight }
+      )
       onConfirm(blob)
     } catch (e) {
       sileo.error({
@@ -67,7 +87,7 @@ export default function AvatarCropModal({ imageSrc, onCancel, onConfirm }: Avata
         <h3 className="avatar-crop-title">Ajustá tu foto</h3>
         <p className="avatar-crop-subtitle">Movela y hacé zoom para elegir el encuadre</p>
 
-        <div className="avatar-crop-viewport">
+        <div className="avatar-crop-viewport" ref={viewportRef}>
           <Cropper
             image={imageSrc}
             crop={crop}
