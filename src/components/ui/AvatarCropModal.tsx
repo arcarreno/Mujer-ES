@@ -16,22 +16,25 @@ async function getCroppedAvatarBlob(
   crop: Area,
   viewport: { width: number; height: number }
 ): Promise<Blob> {
-  const response = await fetch(imageSrc)
-  const image = await createImageBitmap(await response.blob(), {
-    imageOrientation: 'from-image',
-  })
-  // croppedAreaPixels viven en el espacio del MEDIA MOSTRADO (cover-fit dentro
-  // del viewport). Hay que convertir píxeles mostrados -> píxeles originales:
+  const img = new Image()
+  img.src = imageSrc
+  await img.decode()
+  // croppedAreaPixels viven en el espacio del MEDIA MOSTRADO (el <img> del
+  // cropper, cover-fit dentro del viewport, en px CSS). Reproducimos ese mismo
+  // espacio con un canvas del tamaño mostrado y muestreamos el crop DIRECTAMENTE
+  // (mismos píxeles, sin conversión) para que el encuadre coincida 1:1.
   const coverScale = Math.max(
-    viewport.width / image.width,
-    viewport.height / image.height
+    viewport.width / img.naturalWidth,
+    viewport.height / img.naturalHeight
   )
-  const displayedW = image.width * coverScale
-  const displayedH = image.height * coverScale
-  const sx = (crop.x / displayedW) * image.width
-  const sy = (crop.y / displayedH) * image.height
-  const sw = (crop.width / displayedW) * image.width
-  const sh = (crop.height / displayedH) * image.height
+  const dispW = Math.max(1, Math.round(img.naturalWidth * coverScale))
+  const dispH = Math.max(1, Math.round(img.naturalHeight * coverScale))
+  const shown = document.createElement('canvas')
+  shown.width = dispW
+  shown.height = dispH
+  const shownCtx = shown.getContext('2d')
+  if (!shownCtx) throw new Error('No se pudo procesar la imagen')
+  shownCtx.drawImage(img, 0, 0, dispW, dispH)
 
   const canvas = document.createElement('canvas')
   canvas.width = CROP_SIZE
@@ -40,8 +43,7 @@ async function getCroppedAvatarBlob(
   if (!ctx) throw new Error('No se pudo procesar la imagen')
   ctx.imageSmoothingEnabled = true
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(image, sx, sy, sw, sh, 0, 0, CROP_SIZE, CROP_SIZE)
-  image.close()
+  ctx.drawImage(shown, crop.x, crop.y, crop.width, crop.height, 0, 0, CROP_SIZE, CROP_SIZE)
   const blob = await new Promise<Blob | null>((resolve) =>
     canvas.toBlob(resolve, 'image/webp', 0.85)
   )

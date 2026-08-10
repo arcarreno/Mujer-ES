@@ -146,11 +146,16 @@ export default function ProfilePage() {
         })
         avatarUrl = await uploadAvatar(user.id, file)
       }
-      await updateProfile(profile.id, {
+      const updates: { bio?: string; hobbies?: string[]; avatar_url?: string } = {
         bio: bio.trim() || undefined,
         hobbies: hobbies.length > 0 ? hobbies : undefined,
-        avatar_url: avatarUrl || avatarPreview || undefined,
-      })
+      }
+      if (avatarUrl) {
+        updates.avatar_url = avatarUrl
+        // El círculo del perfil muestra la URL real (no el blob local)
+        setAvatarPreview(avatarUrl)
+      }
+      await updateProfile(profile.id, updates)
       setPendingAvatar(null)
       sileo.success({ title: 'Perfil guardado', description: 'Tus datos se actualizaron' })
     } catch (e: any) {
