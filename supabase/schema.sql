@@ -90,7 +90,7 @@ create table if not exists public.conversations (
   participants uuid[] not null default '{}',
   type text not null default 'user_admin' check (type in ('user_admin', 'admin_admin')),
   state text not null default 'bot' check (state in ('bot', 'waiting_human', 'human', 'admin_to_admin', 'closed')),
-  assigned_admin_id uuid references auth.users,
+  assigned_admin_id uuid references auth.users on delete set null,
   bot_step int not null default 0,
   last_message_at timestamptz default now(),
   unread_for_admin int not null default 0,
@@ -166,7 +166,7 @@ create policy "admins create admin convs" on public.conversations
 create table if not exists public.messages (
   id bigserial primary key,
   conversation_id uuid references public.conversations(id) on delete cascade not null,
-  sender_id uuid references auth.users not null,
+  sender_id uuid references auth.users on delete cascade not null,
   sender_role text not null check (sender_role in ('user', 'admin', 'bot', 'system')),
   content text not null check (length(content) between 1 and 500),
   read boolean not null default false,
