@@ -826,7 +826,10 @@ describe('PeerManager ontrack', () => {
       streams: [remoteStream],
     })
 
-    expect(remoteStreamCb).toHaveBeenCalledWith('remote-peer', remoteStream)
+    // The callback receives the per-peer persistent sink containing that track
+    expect(remoteStreamCb).toHaveBeenCalledTimes(1)
+    const sink = remoteStreamCb.mock.calls[0][1]
+    expect(sink.getVideoTracks()[0]).toBe(remoteStream.getVideoTracks()[0])
   })
 })
 
@@ -1853,7 +1856,7 @@ describe('Screen share audio + ontrack guards', () => {
     expect(senders.some((s: any) => s.track?.label === 'cam-audio')).toBe(true)
   })
 
-  it('routes different-msid video stream to onRemoteScreenStream (camera tile untouched)', async () => {
+  it('routes screen video ONLY when the screen-share signal is active (signal, not msid)', async () => {
     const camStream = new MockMediaStream([
       new MockMediaStreamTrack('audio', 'cam-audio'),
       new MockMediaStreamTrack('video', 'cam-video'),
@@ -1870,7 +1873,6 @@ describe('Screen share audio + ontrack guards', () => {
     await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
     const pc = pm.getPeers().get('remote-peer')!.connection as any
 
-    // 1) La cámara remota llega primero (stream normal)
     const remoteCam = new MockMediaStream([
       new MockMediaStreamTrack('audio', 'remote-mic'),
       new MockMediaStreamTrack('video', 'remote-cam-video'),
@@ -1878,16 +1880,142 @@ describe('Screen share audio + ontrack guards', () => {
     pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
     expect(remoteCb).toHaveBeenCalledTimes(1)
 
-    // 2) Llega un stream de pantalla (otro msid, con video) → pantalla principal
-    const screenStream = new MockMediaStream([new MockMediaStreamTrack('video', 'remote-screen-video')])
-    pc.ontrack({ track: screenStream.getVideoTracks()[0], streams: [screenStream] })
-    expect(screenCb).toHaveBeenCalledWith('remote-peer', screenStream)
-    // El tile de cámara NO se reemplaza
-    expect(remoteCb).toHaveBeenCalledTimes(1)
-    expect(pm.getPeers().get('remote-peer')!.stream).toBe(remoteCam)
+    // SIN señal de pantalla, un video de OTRO msid es cámara (Safari splitea
+    // audio/video en streams distintos): jamás debe ir a la vista principal
+    const extraCamVideo = new MockMediaStream([new MockMediaStreamTrack('video', 'remote-cam-video-2')])
+    pc.ontrack({ track: extraCamVideo.getVideoTracks()[0], streams: [extraCamVideo] })
+    expect(screenCb).not.toHaveBeenCalled()
+    expect(remoteCb).toHaveBeenCalledTimes(2)
+    expect(pm.getPeers().get('remote-peer')!.stream!.getVideoTracks()).toHaveLength(2)
   })
 
-  it('ignores audio-only stream with different msid (screen audio) — camera kept', async () => {
+  it('screen-share signal active: incoming video goes to screen composite (Chrome same-stream audio absorbed)', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const remoteCb = vi.fn()
+    const screenCb = vi.fn()
+    pm.setOnRemoteStream(remoteCb)
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    // La cámara llega primero
+    const remoteCam = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-mic'),
+      new MockMediaStreamTrack('video', 'remote-cam-video'),
+    ])
+    pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+
+    // El admin anuncia compartir pantalla → la SIGUIENTE señal rutea el video
+    pm.setRemoteScreenShareActive('remote-peer', true)
+    const screenStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-screen-audio'),
+      new MockMediaStreamTrack('video', 'remote-screen-video'),
+    ])
+    pc.ontrack({ track: screenStream.getVideoTracks()[0], streams: [screenStream] })
+
+    expect(screenCb).toHaveBeenCalledTimes(1)
+    const comp = screenCb.mock.calls[0][1]
+    // Chrome entrega el audio de pestaña en el MISMO stream que el video
+    expect(comp.getVideoTracks()[0].label).toBe('remote-screen-video')
+    expect(comp.getAudioTracks()[0].label).toBe('remote-screen-audio')
+    // El tile de cámara NO se toca (ni video ni audio de pantalla)
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+    const sink = pm.getPeers().get('remote-peer')!.stream!
+    expect(sink.getVideoTracks()[0].label).toBe('remote-cam-video')
+    expect(sink.getAudioTracks()[0].label).toBe('remote-mic')
+  })
+
+  it('Safari split streams: audio-only mic arriving after video is added to the camera sink', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const remoteCb = vi.fn()
+    const screenCb = vi.fn()
+    pm.setOnRemoteStream(remoteCb)
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    // Safari: video de cámara SOLO (stream sin audio, msid propio)
+    const videoOnly = new MockMediaStream([new MockMediaStreamTrack('video', 'remote-cam-video')])
+    pc.ontrack({ track: videoOnly.getVideoTracks()[0], streams: [videoOnly] })
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+
+    // Luego el audio del mic llega SOLO (otro stream, otro msid) — antes
+    // este caso se DESCARTABA (silencio del usuario) o reemplazaba el tile
+    const audioOnly = new MockMediaStream([new MockMediaStreamTrack('audio', 'remote-mic')])
+    pc.ontrack({ track: audioOnly.getAudioTracks()[0], streams: [audioOnly] })
+
+    expect(remoteCb).toHaveBeenCalledTimes(2)
+    const sink = pm.getPeers().get('remote-peer')!.stream!
+    expect(sink.getVideoTracks()[0].label).toBe('remote-cam-video')
+    expect(sink.getAudioTracks()[0].label).toBe('remote-mic')
+    expect(screenCb).not.toHaveBeenCalled()
+  })
+
+  it('tab audio arriving alone goes to the screen composite, never the camera tile', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const remoteCb = vi.fn()
+    const screenCb = vi.fn()
+    pm.setOnRemoteStream(remoteCb)
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    // Cámara + mic primero
+    const remoteCam = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-mic'),
+      new MockMediaStreamTrack('video', 'remote-cam-video'),
+    ])
+    pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
+
+    // Compartiendo pantalla
+    pm.setRemoteScreenShareActive('remote-peer', true)
+    const screenStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-screen-audio'),
+      new MockMediaStreamTrack('video', 'remote-screen-video'),
+    ])
+    pc.ontrack({ track: screenStream.getVideoTracks()[0], streams: [screenStream] })
+
+    // Safari: el audio de pestaña llega después, SOLO
+    const tabAudio = new MockMediaStream([new MockMediaStreamTrack('audio', 'tab-audio')])
+    pc.ontrack({ track: tabAudio.getAudioTracks()[0], streams: [tabAudio] })
+
+    // El sink de cámara queda intacto (el mic sigue: sin tab-audio)
+    const sink = pm.getPeers().get('remote-peer')!.stream!
+    expect(sink.getAudioTracks().some((t: any) => t.label === 'tab-audio')).toBe(false)
+    expect(sink.getAudioTracks()[0].label).toBe('remote-mic')
+    // El composite de pantalla recibe el audio de pestaña y se re-emite
+    expect(screenCb).toHaveBeenCalledTimes(2)
+    const comp = screenCb.mock.calls[1][1]
+    expect(comp.getVideoTracks()[0].label).toBe('remote-screen-video')
+    expect(comp.getAudioTracks().some((t: any) => t.label === 'tab-audio')).toBe(true)
+  })
+
+  it('audio-only screen composite is not delivered until it has video (no black main view)', async () => {
     const camStream = new MockMediaStream([
       new MockMediaStreamTrack('audio', 'cam-audio'),
       new MockMediaStreamTrack('video', 'cam-video'),
@@ -1909,15 +2037,62 @@ describe('Screen share audio + ontrack guards', () => {
       new MockMediaStreamTrack('video', 'remote-cam-video'),
     ])
     pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
-    expect(remoteCb).toHaveBeenCalledTimes(1)
 
-    // El audio de la pantalla compartida llega SOLO (sin video, otro msid):
-    // jamás debe reemplazar el stream de cámara del tile
-    const screenAudio = new MockMediaStream([new MockMediaStreamTrack('audio', 'remote-screen-audio')])
-    pc.ontrack({ track: screenAudio.getAudioTracks()[0], streams: [screenAudio] })
-
-    expect(remoteCb).toHaveBeenCalledTimes(1)
+    pm.setRemoteScreenShareActive('remote-peer', true)
+    // Safari: el audio de pestaña llega ANTES que el video de pantalla
+    const tabAudio = new MockMediaStream([new MockMediaStreamTrack('audio', 'tab-audio')])
+    pc.ontrack({ track: tabAudio.getAudioTracks()[0], streams: [tabAudio] })
+    // Nada entregado todavía: un main view solo-audio renderiza negro
     expect(screenCb).not.toHaveBeenCalled()
-    expect(pm.getPeers().get('remote-peer')!.stream).toBe(remoteCam)
+
+    const screenVideo = new MockMediaStream([new MockMediaStreamTrack('video', 'remote-screen-video')])
+    pc.ontrack({ track: screenVideo.getVideoTracks()[0], streams: [screenVideo] })
+    expect(screenCb).toHaveBeenCalledTimes(1)
+    const comp = screenCb.mock.calls[0][1]
+    expect(comp.getVideoTracks()[0].label).toBe('remote-screen-video')
+    expect(comp.getAudioTracks()[0].label).toBe('tab-audio')
+  })
+
+  it('screen share stopped: composite cleared, tile camera kept, ended track emits null', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const remoteCb = vi.fn()
+    const screenCb = vi.fn()
+    pm.setOnRemoteStream(remoteCb)
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    const remoteCam = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'remote-mic'),
+      new MockMediaStreamTrack('video', 'remote-cam-video'),
+    ])
+    pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
+
+    pm.setRemoteScreenShareActive('remote-peer', true)
+    const screenStream = new MockMediaStream([new MockMediaStreamTrack('video', 'remote-screen-video')])
+    pc.ontrack({ track: screenStream.getVideoTracks()[0], streams: [screenStream] })
+    expect(screenCb).toHaveBeenCalledTimes(1)
+
+    // Señal 'screen-share-stopped' → el composite se limpia
+    pm.setRemoteScreenShareActive('remote-peer', false)
+
+    // El track de pantalla termina → VideoGrid limpia la vista principal
+    const ended = new MockMediaStreamTrack('video', 'remote-screen-video')
+    ended.readyState = 'ended'
+    pc.ontrack({ track: ended, streams: [new MockMediaStream([ended])] })
+    expect(screenCb).toHaveBeenLastCalledWith('remote-peer', null)
+
+    // La cámara del tile permanece
+    expect(remoteCb).toHaveBeenCalledTimes(1)
+    const sink = pm.getPeers().get('remote-peer')!.stream!
+    expect(sink.getVideoTracks()[0].label).toBe('remote-cam-video')
   })
 })

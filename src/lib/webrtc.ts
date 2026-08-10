@@ -119,6 +119,12 @@ const RTC_CONFIG: RTCConfiguration = {
   rtcpMuxPolicy: 'require',
 }
 
+if (TURN_URLS.length === 0 && import.meta.env.MODE !== 'test') {
+  console.warn(
+    '[WebRTC] Sin TURN relay (solo STUN). Llamadas entre redes distintas (celular ↔ PC, NAT estricto) pueden quedar en NEGRO: configurá VITE_TURN_URLS / VITE_TURN_USERNAME / VITE_TURN_CREDENTIAL (ver .env.example, ExpressTURN free).'
+  )
+}
+
 // =====================================================
 // SIGNALING MANAGER (Dual-Channel: Presence + Per-User Signal)
 // =====================================================
@@ -463,6 +469,12 @@ export class PeerManager {
   private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
   private screenSenders: Map<string, RTCRtpSender> = new Map()
   private iceRestartCounts: Map<string, number> = new Map()
+  // Screen share routing por SEÑAL EXPLÍCITA (no por msid): el admin anuncia
+  // 'screen-share-started/stopped' por broadcast; acá guardamos qué peers están
+  // compartiendo y el composite de su stream de pantalla (video + audio de
+  // pestaña) que se muestra en la vista principal.
+  private remoteScreenActive: Map<string, boolean> = new Map()
+  private remoteScreenStreams: Map<string, MediaStream> = new Map()
 
   // Perfect Negotiation state per peer
   private makingOffer: Map<string, boolean> = new Map()
@@ -493,6 +505,18 @@ export class PeerManager {
 
   setOnScreenShareEnded(callback: () => void): void {
     this.onScreenShareEnded = callback
+  }
+
+  // The remote user started/stopped sharing their screen (explicit signal).
+  // This — NOT msid heuristics — decides whether an incoming video track goes
+  // to the camera tile sink or to the main screen view.
+  setRemoteScreenShareActive(userId: string, active: boolean): void {
+    if (active) {
+      this.remoteScreenActive.set(userId, true)
+    } else {
+      this.remoteScreenActive.delete(userId)
+      this.remoteScreenStreams.delete(userId)
+    }
   }
 
   // =====================================================
@@ -661,71 +685,99 @@ export class PeerManager {
       }
     }
 
-    // ontrack → receive remote stream (W3C §10.1 pattern)
-    // FIX: Process track immediately + also handle onunmute for tracks that arrive muted
+    // ontrack → receive remote tracks.
+    // PATRÓN DEL CODELAB OFICIAL DE WEBRTC (firebase-rtc-codelab): acumular
+    // TODAS las tracks entrantes en un MediaStream persistente por peer, SIN
+    // heurísticas de msid. Safari/iOS reparte audio y video en streams con
+    // msids distintos para el mismo origen: deducir "pantalla" o "cámara" por
+    // el id del stream hacía que el audio del micrófono se descartara (silencio)
+    // o que el VIDEO de la cámara se enrutara como pantalla (tile negro/avatar).
+    // El routing de la vista principal lo decide la SEÑAL EXPLÍCITA
+    // 'screen-share-started/stopped' (setRemoteScreenShareActive).
     pc.ontrack = ({ track, streams }) => {
+      const existing = this.peers.get(remoteUserId)
+      if (!existing) return
       console.log(`[WebRTC] ontrack from ${remoteUserId}: kind=${track.kind}, readyState=${track.readyState}`)
-      
-      const processStream = () => {
-        if (streams[0]) {
-          const existing = this.peers.get(remoteUserId)
-          if (existing) {
-            const incoming = streams[0]
-            // Screen share arrives as its own MediaStream (different msid than
-            // the camera/audio stream) because the sender adds it separately.
-            // Route it to the screenshare handler so the camera stream stays
-            // untouched in the participant tile. The screen stream may carry
-            // audio (tab audio) — it all flows to the main screen view.
-            if (
-              track.kind === 'video' &&
-              existing.stream &&
-              existing.stream.id !== incoming.id &&
-              incoming.getVideoTracks().length > 0
-            ) {
-              console.log(`[WebRTC] Detected screen stream for ${remoteUserId}`)
-              for (const cb of this.onRemoteScreenStream) {
-                cb(remoteUserId, incoming)
-              }
-              return
-            }
-            // Audio tracks from a DIFFERENT stream (p.ej. el audio de la
-            // pantalla compartida) llegan solos. Nunca deben reemplazar el
-            // stream de cámara del tile — de lo contrario el video del
-            // participante desaparece (queda el avatar).
-            if (
-              existing.stream &&
-              existing.stream.id !== incoming.id &&
-              incoming.getVideoTracks().length === 0
-            ) {
-              console.warn(
-                `[WebRTC] Ignoring audio-only stream ${incoming.id} for ${remoteUserId} (camera stream kept)`
-              )
-              return
-            }
-            existing.stream = incoming
-            console.log(`[WebRTC] Setting remote stream for ${remoteUserId} (kind=${track.kind})`)
-            for (const cb of this.onRemoteStream) {
-              cb(remoteUserId, incoming)
-            }
-          }
-        }
-      }
 
       // Screen share ended on the remote: the removed track arrives ended.
       // Clear the stored screen stream so the grid falls back to camera tiles.
       if (track.kind === 'video' && track.readyState === 'ended') {
         console.log(`[WebRTC] Remote screen track ended for ${remoteUserId}`)
+        this.remoteScreenStreams.delete(remoteUserId)
+        this.remoteScreenActive.delete(remoteUserId)
         for (const cb of this.onRemoteScreenStream) {
           cb(remoteUserId, null as unknown as MediaStream)
         }
         return
       }
 
-      // Process immediately — onunmute doesn't fire for tracks that arrive already unmuted
-      processStream()
+      const incoming = streams[0] ?? null
+      const screenActive = this.remoteScreenActive.get(remoteUserId) === true
+      const sinkHas = (sink: MediaStream | null | undefined, t: MediaStreamTrack): boolean =>
+        !!sink && sink.getTracks().some((x) => x.id === t.id)
 
-      // Also handle unmute events for tracks that arrive muted
-      track.onunmute = processStream
+      // --- SCREEN SHARE ROUTING (solo por señal explícita) ---
+      if (screenActive && track.kind === 'video') {
+        // Un video nuevo mientras el peer está compartiendo = su pantalla.
+        let screenComp = this.remoteScreenStreams.get(remoteUserId)
+        if (!screenComp) {
+          screenComp = new MediaStream()
+          this.remoteScreenStreams.set(remoteUserId, screenComp)
+        }
+        if (!sinkHas(screenComp, track)) screenComp.addTrack(track)
+        // Chrome entrega el audio de la pestaña dentro del MISMO objeto stream
+        // que el video de pantalla — absorberlo en el composite.
+        if (incoming) {
+          for (const t of incoming.getTracks()) {
+            if (t.kind === 'audio' && !sinkHas(screenComp, t)) screenComp.addTrack(t)
+          }
+        }
+        console.log(`[WebRTC] Screen stream for ${remoteUserId}: ${screenComp.getTracks().length} tracks`)
+        for (const cb of this.onRemoteScreenStream) {
+          cb(remoteUserId, screenComp)
+        }
+        return
+      }
+
+      // --- CAMERA SINK (MediaStream persistente por peer) ---
+      if (!existing.stream) {
+        existing.stream = new MediaStream()
+      }
+      const sink = existing.stream
+
+      // Audio-only mientras el peer comparte pantalla y la track NO está en el
+      // sink de cámara: solo puede ser el audio de la pestaña (el mic ya entró
+      // al sink al inicio de la llamada, m-line del mic existe desde antes de
+      // compartir). Válido para Chrome (audio+video en el mismo evento) y
+      // Safari (audio de pestaña en evento aparte).
+      if (screenActive && track.kind === 'audio' && !sinkHas(sink, track)) {
+        const screenComp = this.remoteScreenStreams.get(remoteUserId) ?? new MediaStream()
+        if (!this.remoteScreenStreams.has(remoteUserId)) {
+          this.remoteScreenStreams.set(remoteUserId, screenComp)
+        }
+        if (!sinkHas(screenComp, track)) screenComp.addTrack(track)
+        // Entregar a la UI solo cuando ya tiene video: una vista principal
+        // solo-audio renderiza negro mientras el video va en camino.
+        if (screenComp.getVideoTracks().length > 0) {
+          for (const cb of this.onRemoteScreenStream) {
+            cb(remoteUserId, screenComp)
+          }
+        }
+        return
+      }
+
+      // Absorber TODA track entrante en el sink del tile (codelab: addTrack
+      // sobre un remoteStream persistente; los re-eventos son idempotentes).
+      if (!sinkHas(sink, track)) sink.addTrack(track)
+      if (incoming) {
+        for (const t of incoming.getTracks()) {
+          if (!sinkHas(sink, t)) sink.addTrack(t)
+        }
+      }
+      console.log(`[WebRTC] Remote stream for ${remoteUserId}: ${sink.getTracks().length} tracks`)
+      for (const cb of this.onRemoteStream) {
+        cb(remoteUserId, sink)
+      }
     }
 
     // Log ICE candidate gathering failures (STUN/TURN unreachable) — clave
@@ -1189,6 +1241,8 @@ export class PeerManager {
       this.isSettingRemoteAnswerPending.delete(userId)
       this.screenSenders.delete(userId)
       this.iceRestartCounts.delete(userId)
+      this.remoteScreenActive.delete(userId)
+      this.remoteScreenStreams.delete(userId)
       this.onPeerRemoved?.(userId)
     }
   }
@@ -1206,6 +1260,8 @@ export class PeerManager {
     this.isSettingRemoteAnswerPending.clear()
     this.screenSenders.clear()
     this.iceRestartCounts.clear()
+    this.remoteScreenActive.clear()
+    this.remoteScreenStreams.clear()
     this.localStream?.getTracks().forEach((t) => t.stop())
     this.screenStream?.getTracks().forEach((t) => t.stop())
     this.localStream = null
@@ -1281,8 +1337,15 @@ export class VideoCallManager {
       onMuteAll: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleMuteAll?.() },
       onKick: (targetUserId, fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleKick?.(targetUserId) },
       onEndSession: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleEndSession?.() },
-      onScreenShareStarted: (fromUserId) => this._handleScreenShareStarted?.(fromUserId),
-      onScreenShareStopped: (fromUserId) => this._handleScreenShareStopped?.(fromUserId),
+      onScreenShareStarted: (fromUserId) => {
+        // Enrutar el video de pantalla por SEÑAL, no por msid (ver ontrack)
+        this.peers.setRemoteScreenShareActive(fromUserId, true)
+        this._handleScreenShareStarted?.(fromUserId)
+      },
+      onScreenShareStopped: (fromUserId) => {
+        this.peers.setRemoteScreenShareActive(fromUserId, false)
+        this._handleScreenShareStopped?.(fromUserId)
+      },
       onTrackState: (fromUserId, micActive, videoActive) => this._handleTrackState?.(fromUserId, micActive, videoActive),
       onPresenceSync: () => {
         this.presenceState = this.signaling.getPresenceState()
