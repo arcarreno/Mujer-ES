@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sileo } from 'sileo'
 import { supabase } from '../../lib/supabase'
-import { markVirtualSessionAttendance } from '../../lib/queries'
+import { endVirtualSession, markVirtualSessionAttendance } from '../../lib/queries'
 import {
   VideoCallManager,
   type ParticipantState,
@@ -407,9 +407,32 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
     if (!manager || !isAdmin) return
     if (!confirm('¿Finalizar la sesión para todos?')) return
     await manager.endSession()
+    await endVirtualSession(courseId)
     await manager.leave()
     onClose()
-  }, [isAdmin, onClose])
+  }, [isAdmin, onClose, courseId])
+
+  // Si el admin finaliza la sesión (session_active=false vía endVirtualSession),
+  // salir de la llamada también en esta pestaña — cubre el caso de usar
+  // "Finalizar sesión" desde otra ventana o del panel del curso.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`course-session:${courseId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'courses', filter: `id=eq.${courseId}` },
+        (payload) => {
+          const row = payload.new as { session_active?: boolean } | null
+          if (row && row.session_active === false) {
+            setSessionEnded(true)
+          }
+        }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [courseId])
 
   const handleLeave = useCallback(async () => {
     const manager = managerRef.current
@@ -566,6 +589,9 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
           </svg>
           <h2>{kicked ? 'Fuiste expulsado' : 'Sesión finalizada'}</h2>
           <p>{kicked ? 'El administrador te expulsó de la sesión' : 'El administrador finalizó la sesión'}</p>
+          <button className="video-call-ended-close" onClick={onClose} type="button">
+            Cerrar
+          </button>
         </div>
       </div>,
       document.body

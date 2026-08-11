@@ -8042,6 +8042,15 @@ input[type="date"].form-input {
   background: #b91c1c !important;
 }
 
+.course-detail-action-rejoin {
+  background: #4f46e5 !important;
+  color: #fff !important;
+}
+
+.course-detail-action-rejoin:hover {
+  background: #4338ca !important;
+}
+
 .curso-detail-join-btn {
   display: inline-flex;
   align-items: center;
@@ -8293,6 +8302,22 @@ input[type="date"].form-input {
 .video-call-ended p {
   font-size: 0.9rem;
   margin: 0;
+}
+
+.video-call-ended-close {
+  padding: 10px 28px;
+  margin-top: 8px;
+  background: #059669;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.video-call-ended-close:hover {
+  background: #047857;
 }
 
 /* ============================================
