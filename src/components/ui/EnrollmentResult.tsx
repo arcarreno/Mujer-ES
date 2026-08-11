@@ -53,7 +53,7 @@ export default function EnrollmentResult({ modality, qrCodeDataUrl, accessCode, 
           </div>
           <h3 className="enrollment-result-title">Inscripción exitosa</h3>
           <p className="enrollment-result-course">{courseName}</p>
-          <p className="enrollment-result-hint">Usá este código de 4 dígitos para entrar a la videollamada</p>
+          <p className="enrollment-result-hint">Tu asistencia se registra automáticamente al entrar a la videollamada</p>
           <div className="enrollment-result-code" onClick={handleCopy} role="button" tabIndex={0}>
             {accessCode}
           </div>

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { sileo } from 'sileo'
 import { supabase } from '../../lib/supabase'
+import { markVirtualSessionAttendance } from '../../lib/queries'
 import {
   VideoCallManager,
   type ParticipantState,
@@ -254,6 +255,15 @@ export default function VideoCall({ courseId, isAdmin, onClose, onFullscreenChan
       console.log('[VideoCall] Joining signaling...')
       await manager.join()
       console.log('[VideoCall] Signaling joined, tracking presence...')
+
+      // Asistencia automática de sesión virtual: solo usuarios (no admin), al
+      // entrar efectivamente a la reunión. Fire-and-forget — nunca bloquea ni
+      // interrumpe el flujo de la llamada.
+      if (!isAdmin) {
+        markVirtualSessionAttendance(courseId).catch((e) => {
+          console.error('[VideoCall] Auto-attendance failed:', e)
+        })
+      }
 
       // Track presence after joining — derive mic/video from actual stream tracks,
       // NOT from React state (which hasn't updated yet due to stale closures)

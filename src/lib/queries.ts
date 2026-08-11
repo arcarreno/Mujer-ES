@@ -754,6 +754,31 @@ export async function getMyEnrollmentForCourse(courseId: string): Promise<Enroll
   return data as Enrollment | null
 }
 
+// Marca asistencia automática al entrar a una sesión virtual: solo sobre la
+// propia inscripción; no sobreescribe si ya estaba presente (conserva
+// attended_at). Best-effort: no lanza si el usuario no está inscripto.
+export async function markVirtualSessionAttendance(courseId: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data: enrollment, error } = await supabase
+    .from('course_enrollments')
+    .select('id, attended')
+    .eq('user_id', user.id)
+    .eq('course_id', courseId)
+    .maybeSingle()
+
+  if (error) throw error
+  if (!enrollment || enrollment.attended) return
+
+  const { error: updateErr } = await supabase
+    .from('course_enrollments')
+    .update({ attended: true, attended_at: new Date().toISOString() })
+    .eq('id', enrollment.id)
+
+  if (updateErr) throw updateErr
+}
+
 export async function generateQrDataUrlFromPayload(payload: string): Promise<string> {
   return QRCode.toDataURL(payload, {
     width: 400,

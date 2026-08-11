@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { sileo } from 'sileo'
+import { supabase } from '../../lib/supabase'
 import { getCourseEnrollments, markBulkAttendance, startVirtualSession, endVirtualSession, adminRemoveEnrollment, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
 import Skeleton from '../ui/Skeleton'
@@ -34,6 +35,21 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
   }, [course.id])
 
   useEffect(() => { load() }, [load])
+
+  // Lista en vivo: cuando un inscripto entra a la sesión virtual y su
+  // asistencia pasa a presente, la fila se actualiza sin recargar.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`course-enrollments:${course.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'course_enrollments', filter: `course_id=eq.${course.id}` },
+        () => { load() }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [course.id, load])
 
   const attended = enrollments.filter((e) => e.attended)
   const notAttended = enrollments.filter((e) => !e.attended)
