@@ -935,6 +935,15 @@ export async function getCourseEnrollments(courseId: string): Promise<Enrollment
   })) as Enrollment[]
 }
 
+export async function adminRemoveEnrollment(enrollmentId: string): Promise<void> {
+  const { error } = await supabase
+    .from('course_enrollments')
+    .delete()
+    .eq('id', enrollmentId)
+
+  if (error) throw error
+}
+
 // =====================================================
 // CHAT FUNCTIONS
 // =====================================================

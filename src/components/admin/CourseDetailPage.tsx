@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { sileo } from 'sileo'
-import { getCourseEnrollments, markBulkAttendance, startVirtualSession, endVirtualSession, type Course, type Enrollment } from '../../lib/queries'
+import { getCourseEnrollments, markBulkAttendance, startVirtualSession, endVirtualSession, adminRemoveEnrollment, type Course, type Enrollment } from '../../lib/queries'
 import QRScanner from './QRScanner'
 import Skeleton from '../ui/Skeleton'
 import VideoCall from '../ui/VideoCall'
@@ -20,6 +20,7 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
   const [sessionActive, setSessionActive] = useState(course.session_active)
   const [inSession, setInSession] = useState(false)
   const [startingSession, setStartingSession] = useState(false)
+  const [removingId, setRemovingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -79,6 +80,24 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
     sileo.success({ title: 'Asistencia registrada', description: username })
     setScannerOpen(false)
     load()
+  }
+
+  const handleRemoveEnrollment = async (enr: Enrollment) => {
+    const name = enr.profiles?.full_name || enr.profiles?.username || 'este usuario'
+    const ok = window.confirm(
+      `¿Eliminar a ${name} del curso?\n\nSe liberará su cupo y se eliminarán su código QR y su código de acceso.`
+    )
+    if (!ok) return
+    setRemovingId(enr.id)
+    try {
+      await adminRemoveEnrollment(enr.id)
+      sileo.success({ title: 'Inscripción eliminada', description: `${name} fue removido del curso. El cupo quedó liberado.` })
+      load()
+    } catch {
+      sileo.error({ title: 'Error', description: 'No se pudo eliminar la inscripción' })
+    } finally {
+      setRemovingId(null)
+    }
   }
 
   const handleStartSession = async () => {
@@ -267,12 +286,13 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
       ) : (
         <div className="course-detail-table">
           <div className="course-detail-table-header">
-            {manualMode && <span className="course-detail-col course-detail-col-check" />}
+            <span className="course-detail-col course-detail-col-check" />
             <span className="course-detail-col course-detail-col-avatar" />
             <span className="course-detail-col course-detail-col-name">Nombre</span>
             <span className="course-detail-col course-detail-col-username">Usuario</span>
             <span className="course-detail-col course-detail-col-date">Inscripción</span>
             <span className="course-detail-col course-detail-col-status">Estado</span>
+            <span className="course-detail-col course-detail-col-action" />
           </div>
           {enrollments.map((enr) => {
             const isSelected = selectedIds.has(enr.id)
@@ -286,19 +306,17 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
                 tabIndex={manualMode && !isMarked ? 0 : undefined}
                 onKeyDown={(e) => { if (manualMode && !isMarked && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleSelect(enr.id) } }}
               >
-                {manualMode && (
-                  <span className="course-detail-col course-detail-col-check">
-                    {!isMarked && (
-                      <span className={`course-detail-checkbox ${isSelected ? 'course-detail-checkbox-checked' : ''}`}>
-                        {isSelected && (
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="20 6 9 17 4 12" />
-                          </svg>
-                        )}
-                      </span>
-                    )}
-                  </span>
-                )}
+                <span className="course-detail-col course-detail-col-check">
+                  {manualMode && !isMarked && (
+                    <span className={`course-detail-checkbox ${isSelected ? 'course-detail-checkbox-checked' : ''}`}>
+                      {isSelected && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      )}
+                    </span>
+                  )}
+                </span>
                 <span className="course-detail-col course-detail-col-avatar">
                   {enr.profiles?.avatar_url ? (
                     <img src={enr.profiles.avatar_url} alt="" className="course-detail-avatar-img" />
@@ -319,6 +337,27 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
                 </span>
                 <span className={`course-detail-col course-detail-col-status ${isMarked ? 'course-detail-status-attended' : 'course-detail-status-missed'}`}>
                   {isMarked ? 'Presente' : 'Ausente'}
+                </span>
+                <span className="course-detail-col course-detail-col-action">
+                  <button
+                    className="course-detail-remove-btn"
+                    onClick={(e) => { e.stopPropagation(); handleRemoveEnrollment(enr) }}
+                    disabled={removingId === enr.id}
+                    title="Eliminar del curso"
+                    type="button"
+                  >
+                    {removingId === enr.id ? (
+                      <span className="course-detail-remove-spinner" />
+                    ) : (
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M3 6h18" />
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                        <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                        <line x1="10" y1="11" x2="10" y2="17" />
+                        <line x1="14" y1="11" x2="14" y2="17" />
+                      </svg>
+                    )}
+                  </button>
                 </span>
               </div>
             )
