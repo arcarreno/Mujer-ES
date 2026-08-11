@@ -288,9 +288,10 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
           <div className="course-detail-table-header">
             <span className="course-detail-col course-detail-col-check" />
             <span className="course-detail-col course-detail-col-avatar" />
-            <span className="course-detail-col course-detail-col-name">Nombre</span>
-            <span className="course-detail-col course-detail-col-username">Usuario</span>
-            <span className="course-detail-col course-detail-col-date">Inscripción</span>
+            <span className="course-detail-col course-detail-col-info">
+              <span className="course-detail-name">Nombre</span>
+              <span className="course-detail-meta">Usuario · Inscripción</span>
+            </span>
             <span className="course-detail-col course-detail-col-status">Estado</span>
             <span className="course-detail-col course-detail-col-action" />
           </div>
@@ -326,14 +327,13 @@ export default function CourseDetailPage({ course, onBack, onVideoCallFullscreen
                     </span>
                   )}
                 </span>
-                <span className="course-detail-col course-detail-col-name">
-                  {enr.profiles?.full_name || '—'}
-                </span>
-                <span className="course-detail-col course-detail-col-username">
-                  @{enr.profiles?.username || '?'}
-                </span>
-                <span className="course-detail-col course-detail-col-date">
-                  {new Date(enr.enrolled_at).toLocaleDateString('es-MX', { dateStyle: 'short' })}
+                <span className="course-detail-col course-detail-col-info">
+                  <span className="course-detail-name">
+                    {enr.profiles?.full_name || '—'}
+                  </span>
+                  <span className="course-detail-meta">
+                    @{enr.profiles?.username || '?'} · {new Date(enr.enrolled_at).toLocaleDateString('es-MX', { dateStyle: 'short' })}
+                  </span>
                 </span>
                 <span className={`course-detail-col course-detail-col-status ${isMarked ? 'course-detail-status-attended' : 'course-detail-status-missed'}`}>
                   {isMarked ? 'Presente' : 'Ausente'}

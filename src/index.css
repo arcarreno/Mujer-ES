@@ -5224,7 +5224,7 @@ input[type="date"].form-input {
 
 .course-detail-table-header {
   display: grid;
-  grid-template-columns: 36px 36px minmax(0, 1fr) auto auto auto 40px;
+  grid-template-columns: 36px 36px minmax(0, 1fr) 76px 40px;
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   background: #fafafa;
@@ -5239,7 +5239,7 @@ input[type="date"].form-input {
 
 .course-detail-row {
   display: grid;
-  grid-template-columns: 36px 36px minmax(0, 1fr) auto auto auto 40px;
+  grid-template-columns: 36px 36px minmax(0, 1fr) 76px 40px;
   gap: 0.5rem;
   padding: 0.55rem 0.75rem;
   align-items: center;
@@ -5274,21 +5274,25 @@ input[type="date"].form-input {
   min-width: 0;
 }
 
-.course-detail-col-name {
+.course-detail-col-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.course-detail-name {
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.3;
 }
 
-.course-detail-col-username {
-  color: #6b7280;
-  font-size: 0.75rem;
-}
-
-.course-detail-col-date {
+.course-detail-meta {
   color: #9ca3af;
   font-size: 0.72rem;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .course-detail-col-status {
@@ -5341,6 +5345,23 @@ input[type="date"].form-input {
 @keyframes course-detail-remove-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 640px) {
+  .course-detail-table-header {
+    display: none;
+  }
+
+  .course-detail-row {
+    grid-template-columns: 36px 36px minmax(0, 1fr) auto 40px;
+    gap: 0.4rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .course-detail-meta {
+    white-space: normal;
+    overflow: visible;
   }
 }
 
