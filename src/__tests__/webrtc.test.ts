@@ -2098,9 +2098,9 @@ describe('Screen share audio + ontrack guards', () => {
 })
 
 // =====================================================
-// SCREEN SHARE — TRACK-IDS ROUTING (admin mic audible with late joiners)
+// SCREEN SHARE — STREAM-ID (MSID) ROUTING (admin mic audible with late joiners)
 // =====================================================
-describe('Screen share track-ids (audio bugfix)', () => {
+describe('Screen share stream-id routing (audio bugfix)', () => {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
   const signalHandlers = (): ((args: any) => void)[] =>
@@ -2131,7 +2131,7 @@ describe('Screen share track-ids (audio bugfix)', () => {
     )
   }
 
-  it('startScreenShare signals screen-share-started with the real track ids', async () => {
+  it('startScreenShare signals screen-share-started with the screen stream id', async () => {
     setupCamAndScreen()
     const vcm = new VideoCallManager('course-1', 'user-1', false)
     await vcm.setupLocalStreamWithSuppression()
@@ -2142,28 +2142,29 @@ describe('Screen share track-ids (audio bugfix)', () => {
     expect(sendSpy).toHaveBeenCalledWith({
       type: 'screen-share-started',
       fromUserId: 'user-1',
-      screenTrackIds: result!.getTracks().map((t) => t.id),
+      screenStreamId: result!.id,
     })
     // La señal es la PRIMERA llamada: va antes de cualquier oferta de renegociación
     expect(sendSpy.mock.calls[0][0].type).toBe('screen-share-started')
   })
 
-  it('createOffer re-announces screen ids BEFORE the offer (late joiner)', async () => {
+  it('createOffer re-announces the screen stream id BEFORE the offer (late joiner)', async () => {
     const stream = new MockMediaStream([new MockMediaStreamTrack('audio')])
     getUserMediaMock.mockResolvedValue(stream)
 
     const { pm, signaling } = createRealPeerManager()
     await pm.ensureLocalStream()
-    ;(pm as any).screenStream = new MockMediaStream([
+    const screenStream = new MockMediaStream([
       new MockMediaStreamTrack('video', 'screen-video'),
       new MockMediaStreamTrack('audio', 'tab-audio'),
     ])
+    ;(pm as any).screenStream = screenStream
 
     await pm.createOffer('late-user')
 
     const calls = (signaling.sendSignal as any).mock.calls.map((c: any[]) => c[0])
     expect(calls[0]).toMatchObject({ type: 'screen-share-started' })
-    expect(calls[0].screenTrackIds).toHaveLength(2)
+    expect(calls[0].screenStreamId).toBe(screenStream.id)
     expect(calls[1]).toMatchObject({ type: 'offer', targetUserId: 'late-user' })
   })
 
@@ -2180,7 +2181,7 @@ describe('Screen share track-ids (audio bugfix)', () => {
     )
   })
 
-  it('broadcast delivers screenTrackIds to onScreenShareStarted', async () => {
+  it('broadcast delivers screenStreamId to onScreenShareStarted', async () => {
     const onScreenShareStarted = vi.fn()
     const sm = new SignalingManager('course-1', 'user-1', {
       onOffer: vi.fn(),
@@ -2200,12 +2201,12 @@ describe('Screen share track-ids (audio bugfix)', () => {
     const handler = mockPresenceChannel.on.mock.calls.find(
       (c: any[]) => c[0] === 'broadcast' && c[1]?.event === 'signal'
     )?.[2]
-    handler({ payload: { type: 'screen-share-started', fromUserId: 'user-2', screenTrackIds: ['s1', 't1'] } })
+    handler({ payload: { type: 'screen-share-started', fromUserId: 'user-2', screenStreamId: 'stream-abc' } })
 
-    expect(onScreenShareStarted).toHaveBeenCalledWith('user-2', ['s1', 't1'])
+    expect(onScreenShareStarted).toHaveBeenCalledWith('user-2', 'stream-abc')
   })
 
-  it('mic arriving AFTER the ids signal goes to the camera sink, never the screen composite', async () => {
+  it('mic arriving AFTER the screen signal goes to the camera sink, never the screen composite', async () => {
     const camStream = new MockMediaStream([
       new MockMediaStreamTrack('audio', 'cam-audio'),
       new MockMediaStreamTrack('video', 'cam-video'),
@@ -2223,35 +2224,72 @@ describe('Screen share track-ids (audio bugfix)', () => {
     const pc = pm.getPeers().get('remote-peer')!.connection as any
 
     // Cámara + mic llegan primero (negociación inicial)
-    const remoteCam = new MockMediaStream([
+    const cameraStream = new MockMediaStream([
       new MockMediaStreamTrack('audio', 'remote-mic'),
       new MockMediaStreamTrack('video', 'remote-cam-video'),
     ])
-    pc.ontrack({ track: remoteCam.getVideoTracks()[0], streams: [remoteCam] })
+    pc.ontrack({ track: cameraStream.getVideoTracks()[0], streams: [cameraStream] })
 
-    // Señal con ids: SOLO screen-video y tab-audio son de pantalla
-    const screenVideo = new MockMediaStreamTrack('video', 'remote-screen-video')
-    const tabAudio = new MockMediaStreamTrack('audio', 'tab-audio')
-    pm.setRemoteScreenShareActive('remote-peer', true, [screenVideo.id, tabAudio.id])
+    // El admin anuncia el id de SU stream de pantalla (el msid, que SÍ viaja)
+    const screenStream = new MockMediaStream([
+      new MockMediaStreamTrack('video', 'remote-screen-video'),
+      new MockMediaStreamTrack('audio', 'tab-audio'),
+    ])
+    pm.setRemoteScreenShareActive('remote-peer', true, screenStream.id)
 
-    // Safari split: el mic llega DESPUÉS de la señal en su propio evento.
-    // Antes del fix esto lo mandaba al composite → nadie escuchaba al admin.
+    // Safari split: el mic llega DESPUÉS de la señal en su propio evento, en
+    // el stream de la cámara. Antes del fallback por kind esto lo mandaba al
+    // composite → nadie escuchaba al admin.
     const mic = new MockMediaStreamTrack('audio', 'remote-mic')
-    pc.ontrack({ track: mic, streams: [new MockMediaStream([mic])] })
+    pc.ontrack({ track: mic, streams: [cameraStream] })
 
     const sink = pm.getPeers().get('remote-peer')!.stream!
     expect(sink.getAudioTracks().some((t: any) => t.id === mic.id)).toBe(true)
     expect(screenCb).not.toHaveBeenCalled()
 
-    // tab-audio solo → composite; screen-video solo → composite
-    pc.ontrack({ track: tabAudio, streams: [new MockMediaStream([tabAudio])] })
-    pc.ontrack({ track: screenVideo, streams: [new MockMediaStream([screenVideo])] })
+    // tab-audio solo → composite (sin video aún: no se entrega); screen-video
+    // → composite CON el audio de pestaña absorbido (mismo msid de pantalla)
+    pc.ontrack({ track: screenStream.getAudioTracks()[0], streams: [screenStream] })
+    pc.ontrack({ track: screenStream.getVideoTracks()[0], streams: [screenStream] })
 
     expect(screenCb).toHaveBeenCalledTimes(1)
     const comp = screenCb.mock.calls[0][1]
-    expect(comp.getAudioTracks().some((t: any) => t.id === tabAudio.id)).toBe(true)
-    expect(comp.getVideoTracks().some((t: any) => t.id === screenVideo.id)).toBe(true)
+    expect(comp.getAudioTracks().some((t: any) => t.label === 'tab-audio')).toBe(true)
+    expect(comp.getVideoTracks().some((t: any) => t.label === 'remote-screen-video')).toBe(true)
     expect(sink.getAudioTracks().some((t: any) => t.label === 'tab-audio')).toBe(false)
+    expect(comp.getAudioTracks().some((t: any) => t.id === mic.id)).toBe(false)
+  })
+
+  it('routes by stream id, not track id (browser generates new receiver track ids)', async () => {
+    const camStream = new MockMediaStream([
+      new MockMediaStreamTrack('audio', 'cam-audio'),
+      new MockMediaStreamTrack('video', 'cam-video'),
+    ])
+    getUserMediaMock.mockResolvedValue(camStream)
+
+    const { pm } = createRealPeerManager()
+    const screenCb = vi.fn()
+    pm.setOnRemoteScreenStream(screenCb)
+
+    await pm.ensureLocalStream()
+    await pm.handleOffer('remote-peer', { type: 'offer', sdp: 'v=0\r\n' })
+    const pc = pm.getPeers().get('remote-peer')!.connection as any
+
+    // El admin anuncia su stream de pantalla (el id viaja vía msid)
+    const screenStream = new MockMediaStream([new MockMediaStreamTrack('video', 'sender-screen-video')])
+    pm.setRemoteScreenShareActive('remote-peer', true, screenStream.id)
+
+    // El navegador receptor entrega la pantalla con un track de id NUEVO,
+    // distinto al del sender (los track-ids NO viajan por WebRTC) — el
+    // routing debe pasar por el id del stream, no por el de la track
+    const receiverTrack = new MockMediaStreamTrack('video', 'receiver-screen-video')
+    expect(receiverTrack.id).not.toBe(screenStream.getVideoTracks()[0].id)
+    pc.ontrack({ track: receiverTrack, streams: [screenStream] })
+
+    expect(screenCb).toHaveBeenCalledTimes(1)
+    const comp = screenCb.mock.calls[0][1]
+    expect(comp.getVideoTracks()).toHaveLength(1)
+    expect(comp.getVideoTracks()[0]).toBe(receiverTrack)
   })
 
   it('5 users in parallel: mic on every camera sink, tab audio on screen composite, late joiners included', async () => {
@@ -2281,42 +2319,46 @@ describe('Screen share track-ids (audio bugfix)', () => {
       return u
     }
 
-    // Entrega los tracks del admin a un usuario como lo haría el navegador
-    const deliverCam = (adminPc: any, userPc: any) => {
-      const senders = adminPc.getSenders()
-      const camV = senders.find((s: any) => s.track?.label === 'cam-video')
-      const camA = senders.find((s: any) => s.track?.label === 'cam-audio')
-      userPc.ontrack({ track: camV.track, streams: [new MockMediaStream([camA.track, camV.track])] })
+    // El stream de cámara REAL del admin (su getUserMedia): es el msid que
+    // viaja por a=msid en las ofertas y el que se compara contra la señal
+    const adminCamStream = await getUserMediaMock.mock.results[0].value
+    const deliverCam = (userPc: any) => {
+      // El navegador receptor genera tracks con ids propios; el routing del
+      // mic es por el id del stream (msid de cámara), NO por id de track
+      const camV = new MockMediaStreamTrack('video', 'cam-video')
+      const camA = new MockMediaStreamTrack('audio', 'cam-audio')
+      userPc.ontrack({ track: camV, streams: [adminCamStream] })
+      userPc.ontrack({ track: camA, streams: [adminCamStream] })
     }
-    const deliverScreen = (adminPc: any, userPc: any, safariSplit: boolean) => {
-      const senders = adminPc.getSenders()
-      const scrV = senders.find((s: any) => s.track?.label === 'screen-video')
-      const scrA = senders.find((s: any) => s.track?.label === 'tab-audio')
+    const deliverScreen = (userPc: any, safariSplit: boolean) => {
+      // Pantalla: el navegador receptor crea tracks nuevos; el msid del
+      // stream (adminScreenStream.id) es el que viajó en la señal
+      const scrV = new MockMediaStreamTrack('video', 'screen-video')
+      const scrA = new MockMediaStreamTrack('audio', 'tab-audio')
       if (safariSplit) {
         // Safari: pantalla en eventos separados (video, luego audio de pestaña)
-        userPc.ontrack({ track: scrV.track, streams: [new MockMediaStream([scrV.track])] })
-        userPc.ontrack({ track: scrA.track, streams: [new MockMediaStream([scrA.track])] })
+        userPc.ontrack({ track: scrV, streams: [adminScreenStream] })
+        userPc.ontrack({ track: scrA, streams: [adminScreenStream] })
       } else {
-        // Chrome: video de pantalla + audio de pestaña en el mismo stream
-        userPc.ontrack({ track: scrV.track, streams: [new MockMediaStream([scrA.track, scrV.track])] })
+        // Chrome: video de pantalla con el audio de pestaña en el mismo stream
+        userPc.ontrack({ track: scrV, streams: [adminScreenStream] })
       }
     }
 
     // users 1-3 se conectan y reciben la cámara ANTES de que el admin comparta
     for (let i = 1; i <= 3; i++) {
       const u = await joinUser(`user-${i}`)
-      deliverCam(
-        admin.peers.getPeers().get(`user-${i}`)!.connection as any,
-        u.peers.getPeers().get('admin-1')!.connection as any
-      )
+      deliverCam(u.peers.getPeers().get('admin-1')!.connection as any)
     }
 
-    // El admin empieza a compartir: la señal con ids debe ir PRIMERO
+    // El admin empieza a compartir: la señal con el stream-id debe ir PRIMERO
     const callsBefore = (admin.signaling.sendSignal as any).mock.calls.length
     await admin.startScreenShare()
+    const adminScreenStream = await getDisplayMediaMock.mock.results[0].value
     const firstNew = (admin.signaling.sendSignal as any).mock.calls[callsBefore][0]
     expect(firstNew.type).toBe('screen-share-started')
-    expect(firstNew.screenTrackIds).toHaveLength(2)
+    // El id señalizado es el MISMO que viaja por a=msid en las ofertas
+    expect(firstNew.screenStreamId).toBe(adminScreenStream.id)
 
     // users 4-5 se unen CON la pantalla ya activa (el caso del bug)
     for (let i = 4; i <= 5; i++) {
@@ -2324,15 +2366,14 @@ describe('Screen share track-ids (audio bugfix)', () => {
     }
     await sleep(400)
 
-    // Entregar la media del admin a todos (los late joiners ya tienen los ids)
+    // Entregar la media del admin a todos (los late joiners ya tienen el msid)
     for (const { id, u } of allUsers) {
-      const adminPc = admin.peers.getPeers().get(id)!.connection as any
       const userPc = u.peers.getPeers().get('admin-1')!.connection as any
       if (id === 'user-4' || id === 'user-5') {
         // Late joiners: la cámara llega junto con la pantalla (m-lines iniciales)
-        deliverCam(adminPc, userPc)
+        deliverCam(userPc)
       }
-      deliverScreen(adminPc, userPc, id === 'user-5') // Safari split en uno de ellos
+      deliverScreen(userPc, id === 'user-5') // Safari split en uno de ellos
     }
 
     // Verificación por usuario: mic SIEMPRE en el sink de cámara,

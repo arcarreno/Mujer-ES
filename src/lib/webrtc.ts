@@ -41,7 +41,7 @@ export type SignalEvent =
   | { type: 'mute-all'; fromUserId?: string }
   | { type: 'kick'; targetUserId: string; fromUserId?: string }
   | { type: 'end-session'; fromUserId?: string }
-  | { type: 'screen-share-started'; fromUserId: string; screenTrackIds?: string[] }
+  | { type: 'screen-share-started'; fromUserId: string; screenStreamId: string }
   | { type: 'screen-share-stopped'; fromUserId: string }
   | { type: 'track-state'; fromUserId: string; micActive: boolean; videoActive: boolean }
 
@@ -139,7 +139,7 @@ export class SignalingManager {
     onMuteAll: (fromUserId?: string) => void
     onKick: (targetUserId: string, fromUserId?: string) => void
     onEndSession: (fromUserId?: string) => void
-    onScreenShareStarted: (fromUserId: string, screenTrackIds?: string[]) => void
+    onScreenShareStarted: (fromUserId: string, screenStreamId?: string) => void
     onScreenShareStopped: (fromUserId: string) => void
     onTrackState?: (fromUserId: string, micActive: boolean, videoActive: boolean) => void
     onChatMessage?: (msg: { userId: string; username: string; text: string; time: number }) => void
@@ -241,7 +241,7 @@ export class SignalingManager {
         } else if (event.type === 'end-session') {
           this.handlers.onEndSession(event.fromUserId)
         } else if (event.type === 'screen-share-started') {
-          this.handlers.onScreenShareStarted(event.fromUserId, event.screenTrackIds)
+          this.handlers.onScreenShareStarted(event.fromUserId, event.screenStreamId)
         } else if (event.type === 'screen-share-stopped') {
           this.handlers.onScreenShareStopped(event.fromUserId)
         } else if (event.type === 'track-state') {
@@ -469,18 +469,15 @@ export class PeerManager {
   private pendingIceCandidates: Map<string, RTCIceCandidateInit[]> = new Map()
   private screenSenders: Map<string, RTCRtpSender> = new Map()
   private iceRestartCounts: Map<string, number> = new Map()
-  // Screen share routing por SEÑAL EXPLÍCITA (no por msid): el admin anuncia
+  // Screen share routing por SEÑAL EXPLÍCITA: el admin anuncia
   // 'screen-share-started/stopped' por broadcast; acá guardamos qué peers están
-  // compartiendo y el composite de su stream de pantalla (video + audio de
-  // pestaña) que se muestra en la vista principal.
+  // compartiendo, el composite de su stream de pantalla (video + audio de
+  // pestaña) que se muestra en la vista principal, y el MSID (stream id) de ese
+  // stream. Los stream-ids SÍ viajan entre peers (a=msid); los track-ids NO
+  // (cada navegador genera los suyos), por eso se enruta por stream.
   private remoteScreenActive: Map<string, boolean> = new Map()
   private remoteScreenStreams: Map<string, MediaStream> = new Map()
-  // Ids de los tracks de pantalla (video + audio de pestaña) de cada peer que
-  // está compartiendo — anunciados en el signal 'screen-share-started'. Se usan
-  // para enrutar por id en ontrack: el mic siempre va al sink de cámara aunque
-  // el peer ya compartía cuando nos unimos (audio bugfix), y el audio de la
-  // pestaña siempre al composite de pantalla, en Chrome y Safari.
-  private remoteScreenTrackIds: Map<string, Set<string>> = new Map()
+  private remoteScreenStreamIds: Map<string, string> = new Map()
 
   // Perfect Negotiation state per peer
   private makingOffer: Map<string, boolean> = new Map()
@@ -515,26 +512,29 @@ export class PeerManager {
 
   // The remote user started/stopped sharing their screen (explicit signal).
   // This — NOT msid heuristics — decides whether an incoming video track goes
-  // to the camera tile sink or to the main screen view.
-  setRemoteScreenShareActive(userId: string, active: boolean, screenTrackIds?: string[]): void {
+  // to the camera tile sink or to the main screen view. screenStreamId es el
+  // id del MediaStream de getDisplayMedia: los stream-ids se preservan entre
+  // peers (a=msid), así que el receptor puede correlacionarlos con ontrack.
+  setRemoteScreenShareActive(userId: string, active: boolean, screenStreamId?: string): void {
     if (active) {
       this.remoteScreenActive.set(userId, true)
-      if (screenTrackIds && screenTrackIds.length > 0) {
-        this.remoteScreenTrackIds.set(userId, new Set(screenTrackIds))
+      if (screenStreamId) {
+        this.remoteScreenStreamIds.set(userId, screenStreamId)
       }
     } else {
       this.remoteScreenActive.delete(userId)
       this.remoteScreenStreams.delete(userId)
-      this.remoteScreenTrackIds.delete(userId)
+      this.remoteScreenStreamIds.delete(userId)
     }
   }
 
-  // Routing por id: true/false si conocemos los ids de pantalla del peer,
-  // null si aún no llegó la señal (fallback al comportamiento por kind).
-  private isScreenTrack(userId: string, track: MediaStreamTrack): boolean | null {
-    const ids = this.remoteScreenTrackIds.get(userId)
-    if (!ids || ids.size === 0) return null
-    return ids.has(track.id)
+  // Routing por stream: true/false si conocemos el stream de pantalla del peer,
+  // null si aún no llegó la señal o el evento no trae stream (fallback al
+  // comportamiento por kind, clientes viejos / versiones mixtas).
+  private isScreenStreamTrack(userId: string, incoming: MediaStream | null): boolean | null {
+    const streamId = this.remoteScreenStreamIds.get(userId)
+    if (!streamId || !incoming) return null
+    return incoming.id === streamId
   }
 
   // =====================================================
@@ -723,7 +723,7 @@ export class PeerManager {
         console.log(`[WebRTC] Remote screen track ended for ${remoteUserId}`)
         this.remoteScreenStreams.delete(remoteUserId)
         this.remoteScreenActive.delete(remoteUserId)
-        this.remoteScreenTrackIds.delete(remoteUserId)
+        this.remoteScreenStreamIds.delete(remoteUserId)
         for (const cb of this.onRemoteScreenStream) {
           cb(remoteUserId, null as unknown as MediaStream)
         }
@@ -732,8 +732,9 @@ export class PeerManager {
 
       const incoming = streams[0] ?? null
       const screenActive = this.remoteScreenActive.get(remoteUserId) === true
-      // Por id si la señal con los ids ya llegó; si no (fallback), por kind.
-      const routesToScreen = screenActive && (this.isScreenTrack(remoteUserId, track) ?? true)
+      // Por stream-id (msid) si la señal con el stream ya llegó; si no
+      // (fallback, versiones mixtas), por kind.
+      const routesToScreen = screenActive && (this.isScreenStreamTrack(remoteUserId, incoming) ?? true)
       const sinkHas = (sink: MediaStream | null | undefined, t: MediaStreamTrack): boolean =>
         !!sink && sink.getTracks().some((x) => x.id === t.id)
 
@@ -747,13 +748,13 @@ export class PeerManager {
         }
         if (!sinkHas(screenComp, track)) screenComp.addTrack(track)
         // Chrome entrega el audio de la pestaña dentro del MISMO objeto stream
-        // que el video de pantalla — absorberlo en el composite (solo si es un
-        // track de pantalla conocido; el mic nunca lo es).
+        // que el video de pantalla — absorberlo en el composite. El stream de
+        // este evento ES el de pantalla por definición de esta rama (id-match o
+        // fallback por kind), así que todo su audio es de pestaña, nunca el mic
+        // (el mic viaja en el stream de la cámara, por otra m-line).
         if (incoming) {
           for (const t of incoming.getTracks()) {
-            if (t.kind === 'audio' && this.isScreenTrack(remoteUserId, t) !== false && !sinkHas(screenComp, t)) {
-              screenComp.addTrack(t)
-            }
+            if (t.kind === 'audio' && !sinkHas(screenComp, t)) screenComp.addTrack(t)
           }
         }
         console.log(`[WebRTC] Screen stream for ${remoteUserId}: ${screenComp.getTracks().length} tracks`)
@@ -946,14 +947,14 @@ export class PeerManager {
       this.ensureOfferHasMSection(pc)
 
       // Late joiner: re-anunciar la pantalla activa ANTES de la oferta para que
-      // el receptor enrute por id desde el primer frame (audio bugfix). Señal y
-      // oferta viajan por el mismo canal, en orden — el receptor registra los
-      // ids antes de que llegue la renegociación.
+      // el receptor enrute por stream-id (msid) desde el primer frame (audio
+      // bugfix). Señal y oferta viajan por el mismo canal, en orden — el
+      // receptor registra el stream antes de que llegue la renegociación.
       if (this.screenStream && this.screenStream.getTracks().length > 0) {
         await this.signaling.sendSignal({
           type: 'screen-share-started',
           fromUserId: this.myUserId,
-          screenTrackIds: this.screenStream.getTracks().map((t) => t.id),
+          screenStreamId: this.screenStream.id,
         })
       }
 
@@ -1288,7 +1289,7 @@ export class PeerManager {
       this.iceRestartCounts.delete(userId)
       this.remoteScreenActive.delete(userId)
       this.remoteScreenStreams.delete(userId)
-      this.remoteScreenTrackIds.delete(userId)
+      this.remoteScreenStreamIds.delete(userId)
       this.onPeerRemoved?.(userId)
     }
   }
@@ -1308,7 +1309,7 @@ export class PeerManager {
     this.iceRestartCounts.clear()
     this.remoteScreenActive.clear()
     this.remoteScreenStreams.clear()
-    this.remoteScreenTrackIds.clear()
+    this.remoteScreenStreamIds.clear()
     this.localStream?.getTracks().forEach((t) => t.stop())
     this.screenStream?.getTracks().forEach((t) => t.stop())
     this.localStream = null
@@ -1384,9 +1385,10 @@ export class VideoCallManager {
       onMuteAll: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleMuteAll?.() },
       onKick: (targetUserId, fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleKick?.(targetUserId) },
       onEndSession: (fromUserId) => { if (this.isTrustedSender(fromUserId)) this._handleEndSession?.() },
-      onScreenShareStarted: (fromUserId, screenTrackIds) => {
-        // Enrutar el video de pantalla por SEÑAL + ids, no por msid (ver ontrack)
-        this.peers.setRemoteScreenShareActive(fromUserId, true, screenTrackIds)
+      onScreenShareStarted: (fromUserId, screenStreamId) => {
+        // Enrutar el video de pantalla por SEÑAL + stream-id (msid), no por
+        // track-id (los track-ids no viajan entre navegadores)
+        this.peers.setRemoteScreenShareActive(fromUserId, true, screenStreamId)
         this._handleScreenShareStarted?.(fromUserId)
       },
       onScreenShareStopped: (fromUserId) => {
@@ -1599,12 +1601,12 @@ export class VideoCallManager {
   async startScreenShare(): Promise<MediaStream | null> {
     const stream = await this.peers.getScreenStream()
     if (stream) {
-      // Señal ANTES de la renegociación: los peers deben conocer los track-ids
-      // de la pantalla antes de que llegue la oferta (audio bugfix).
+      // Señal ANTES de la renegociación: los peers deben conocer el stream-id
+      // de la pantalla (msid) antes de que llegue la oferta (audio bugfix).
       await this.signaling.sendSignal({
         type: 'screen-share-started',
         fromUserId: this.myUserId,
-        screenTrackIds: stream.getTracks().map((t) => t.id),
+        screenStreamId: stream.id,
       })
       await this.peers.addScreenStreamToPeers()
     }
@@ -1618,7 +1620,7 @@ export class VideoCallManager {
       await this.signaling.sendSignal({
         type: 'screen-share-started',
         fromUserId: this.myUserId,
-        screenTrackIds: stream.getTracks().map((t) => t.id),
+        screenStreamId: stream.id,
       })
       await this.peers.addScreenStreamToPeers()
     }
