@@ -59,9 +59,12 @@ export default function VideoGrid({
 
   const hasLocalVideo = localStream !== null && localStream.getVideoTracks().length > 0
 
-  // Remote participants excluding screen sharer (who's already in main view)
+  // Remote participants. The screen sharer KEEPS their camera tile: the main
+  // view shows their SCREEN (video + optional tab audio, NO mic), so their
+  // tile is the only place their voice is rendered. Excluding them here made
+  // the sharer completely inaudible the moment sharing started.
   const activeRemoteParticipants = participants.filter(
-    (p) => p.userId !== userId && p.userId !== screenShareUserId && (
+    (p) => p.userId !== userId && (
       p.videoActive || p.micActive || remoteStreams.has(p.userId)
     )
   )
