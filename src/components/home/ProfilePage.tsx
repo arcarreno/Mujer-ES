@@ -180,7 +180,7 @@ export default function ProfilePage() {
   if (loading) {
     return (
       <div className="profile-page">
-        <div className="manage-loading">Cargando perfil...</div>
+        <div className="manage-loading">Cargando perfil</div>
       </div>
     )
   }
@@ -256,7 +256,7 @@ export default function ProfilePage() {
             className="profile-textarea"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
-            placeholder="Contanos un poco sobre vos..."
+            placeholder="Cuentanos un poco mas sobre ti"
             maxLength={300}
             rows={3}
           />

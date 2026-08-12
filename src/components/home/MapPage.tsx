@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { MapContainer, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { sileo } from 'sileo'
@@ -9,6 +9,8 @@ import EnrollmentResult from '../ui/EnrollmentResult'
 import MapillaryViewer from '../ui/MapillaryViewer'
 import MapillaryCoverage from '../ui/MapillaryCoverage'
 import ImageCarousel from '../ui/ImageCarousel'
+import RoutePanel from '../ui/RoutePanel'
+import { calcularRuta, estimarTiempos, type RutaCalculada } from '../../lib/routing'
 
 // Helper component to fly the map (must be inside MapContainer)
 function MapFlyTo({ target }: { target: { center: [number, number]; zoom: number } | null }) {
@@ -37,6 +39,86 @@ function courseIcon(color: string) {
   })
 }
 
+function originIcon(color = '#16a34a') {
+  return L.divIcon({
+    className: 'map-marker-origin',
+    html: `<svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="13" cy="13" r="10" fill="${color}" stroke="white" stroke-width="3"/>
+    </svg>`,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  })
+}
+
+function mensajeError(err: unknown): string {
+  return err instanceof Error ? err.message : 'Ocurrió un error inesperado'
+}
+
+// Fit the map bounds to the route (must be inside MapContainer)
+function MapFitRoute({ route, origin }: { route: RutaCalculada | null; origin: [number, number] | null }) {
+  const map = useMap()
+  useEffect(() => {
+    if (!route || !origin) return
+    const bounds = L.latLngBounds([[origin[0], origin[1]], ...route.puntos.map((p) => [p.lat, p.lng] as [number, number])])
+    const mobile = typeof window !== 'undefined' && window.innerWidth <= 640
+    map.fitBounds(
+      bounds,
+      mobile
+        ? { paddingTopLeft: [40, 60], paddingBottomRight: [40, 220], maxZoom: 16 }
+        : { padding: [70, 70], maxZoom: 16 }
+    )
+  }, [map, route, origin])
+  return null
+}
+
+// Captura clicks en el mapa para elegir el punto de partida (modo picking)
+function PickOriginLayer({ active, onPick }: { active: boolean; onPick: (latlng: [number, number]) => void }) {
+  useMapEvents({
+    click(e) {
+      if (active) onPick([e.latlng.lat, e.latlng.lng])
+    },
+  })
+  return null
+}
+
+// Buttons inside the popup that close it and run an action (popup children share the map context)
+function PopupActions({ course, onView, onDirections }: { course: Course; onView: (c: Course) => void; onDirections: (c: Course) => void }) {
+  const map = useMap()
+  return (
+    <div className="map-popup-actions">
+      <button
+        className="map-popup-btn"
+        onClick={() => {
+          map.closePopup()
+          onView(course)
+        }}
+        type="button"
+      >
+        Ver curso
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6" />
+        </svg>
+      </button>
+      <button
+        className="map-popup-btn map-popup-btn-street"
+        onClick={() => {
+          map.closePopup()
+          onDirections(course)
+        }}
+        type="button"
+        title="Cómo llegar"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="6" cy="19" r="3" />
+          <path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15" />
+          <circle cx="18" cy="5" r="3" />
+        </svg>
+        Cómo llegar
+      </button>
+    </div>
+  )
+}
+
 export default function MapPage() {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
@@ -58,6 +140,11 @@ export default function MapPage() {
   const [mapillaryMode, setMapillaryMode] = useState(false)
   const [showMapillaryModal, setShowMapillaryModal] = useState(false)
   const [flyTarget, setFlyTarget] = useState<{ center: [number, number]; zoom: number } | null>(null)
+  const [routeOrigin, setRouteOrigin] = useState<[number, number] | null>(null)
+  const [route, setRoute] = useState<RutaCalculada | null>(null)
+  const [routeCourse, setRouteCourse] = useState<Course | null>(null)
+  const [routeLoading, setRouteLoading] = useState(false)
+  const [pickOrigin, setPickOrigin] = useState(false)
 
   useEffect(() => {
     listPublishedCourses()
@@ -110,8 +197,8 @@ export default function MapPage() {
         courseName: selected.title,
       })
       if (result.qrPayload) setMyQrPayload(result.qrPayload)
-    } catch (err: any) {
-      sileo.error({ title: 'Error', description: err.message || 'No se pudo inscribir' })
+    } catch (err) {
+      sileo.error({ title: 'Error', description: mensajeError(err) || 'No se pudo inscribir' })
     } finally {
       setEnrolling(false)
     }
@@ -127,8 +214,8 @@ export default function MapPage() {
       setShowQrPanel(false)
       setMyQrPayload(null)
       sileo.success({ title: 'Baja exitosa', description: `Te diste de baja de "${selected.title}"` })
-    } catch (err: any) {
-      sileo.error({ title: 'Error', description: err.message || 'No se pudo dar de baja' })
+    } catch (err) {
+      sileo.error({ title: 'Error', description: mensajeError(err) || 'No se pudo dar de baja' })
     } finally {
       setEnrolling(false)
     }
@@ -151,6 +238,76 @@ export default function MapPage() {
     } finally {
       setQrLoading(false)
     }
+  }
+
+  const getCurrentPosition = (): Promise<[number, number]> =>
+    new Promise((resolve, reject) => {
+      if (!('geolocation' in navigator)) {
+        reject(new Error('Tu navegador no tiene geolocalización. Tocá el mapa para elegir tu punto de partida'))
+        return
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve([pos.coords.latitude, pos.coords.longitude]),
+        () => reject(new Error('No se pudo obtener tu ubicación. Activá la geolocalización o tocá el mapa para elegir tu punto de partida')),
+        { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+      )
+    })
+
+  const handleDirections = async (course: Course) => {
+    if (!course.latitude || !course.longitude) return
+    setRouteCourse(course)
+    setRoute(null)
+    setRouteOrigin(null)
+    setPickOrigin(false)
+    setRouteLoading(true)
+    try {
+      const [lat, lng] = await getCurrentPosition()
+      setRouteOrigin([lat, lng])
+      try {
+        const ruta = await calcularRuta(
+          { lat, lng },
+          { lat: course.latitude, lng: course.longitude }
+        )
+        setRoute(ruta)
+      } catch (err) {
+        setRoute(null)
+        sileo.error({ title: 'Error', description: mensajeError(err) || 'No se pudo calcular la ruta' })
+      }
+    } catch (err) {
+      // Geolocalización falló o fue denegada → modo "elegí el punto de partida en el mapa"
+      setRoute(null)
+      setRouteOrigin(null)
+      setPickOrigin(true)
+      sileo.error({ title: 'Ubicación', description: mensajeError(err) })
+    } finally {
+      setRouteLoading(false)
+    }
+  }
+
+  const handlePickOrigin = async (latlng: [number, number]) => {
+    if (!routeCourse || routeLoading) return
+    setPickOrigin(false)
+    setRouteOrigin(latlng)
+    setRouteLoading(true)
+    try {
+      const ruta = await calcularRuta(
+        { lat: latlng[0], lng: latlng[1] },
+        { lat: routeCourse.latitude!, lng: routeCourse.longitude! }
+      )
+      setRoute(ruta)
+    } catch (err) {
+      setRoute(null)
+      sileo.error({ title: 'Error', description: mensajeError(err) || 'No se pudo calcular la ruta' })
+    } finally {
+      setRouteLoading(false)
+    }
+  }
+
+  const closeRoutePanel = () => {
+    setRoute(null)
+    setRouteCourse(null)
+    setRouteOrigin(null)
+    setPickOrigin(false)
   }
 
   if (selected) {
@@ -343,7 +500,7 @@ export default function MapPage() {
           <p className="cursos-subtitle">{courses.length} curso{courses.length !== 1 ? 's' : ''} presencial{courses.length !== 1 ? 'es' : ''}</p>
         </div>
       )}
-      <div className={`map-page-container ${mapillaryMode ? 'mapillary-cursor' : ''}`}>
+      <div className={`map-page-container ${mapillaryMode ? 'mapillary-cursor' : ''} ${pickOrigin ? 'route-pick-cursor' : ''}`}>
         <MapContainer
           key={`${layerType}-${isFullscreen}`}
           center={PUEBLA_CENTER}
@@ -352,6 +509,8 @@ export default function MapPage() {
         >
           <MapTileLayer layerType={layerType} />
           <MapFlyTo target={flyTarget} />
+          <MapFitRoute route={route} origin={routeOrigin} />
+          <PickOriginLayer active={pickOrigin} onPick={handlePickOrigin} />
           <MapillaryCoverage
             active={mapillaryMode}
             onImageClick={(imageId) => {
@@ -370,39 +529,68 @@ export default function MapPage() {
                   <strong>{course.title}</strong>
                   {course.location_name && <p className="map-popup-location">{course.location_name}</p>}
                   {course.subtitle && <p className="map-popup-subtitle">{course.subtitle}</p>}
-                  <button
-                    className="map-popup-btn"
-                    onClick={() => openDetail(course)}
-                    type="button"
-                  >
-                    Ver curso
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="9 18 15 12 9 6" />
-                    </svg>
-                  </button>
+                  <PopupActions
+                    course={course}
+                    onView={openDetail}
+                    onDirections={handleDirections}
+                  />
                 </div>
               </Popup>
             </Marker>
           ))}
+          {route && routeOrigin && (
+            <>
+              <Marker position={routeOrigin} icon={originIcon()} />
+              <Polyline
+                positions={[[routeOrigin[0], routeOrigin[1]], ...route.puntos.map((p) => [p.lat, p.lng] as [number, number])]}
+                pathOptions={{ color: '#581C87', weight: 4, opacity: 0.85 }}
+              />
+            </>
+          )}
         </MapContainer>
+        {routeCourse && routeLoading && (
+          <div className="route-panel route-panel-loading">
+            <div className="route-panel-spinner" />
+            <p>Calculando la mejor ruta...</p>
+          </div>
+        )}
+        {routeCourse && pickOrigin && (
+          <div className="route-panel route-panel-pick">
+            <button className="route-panel-close" onClick={closeRoutePanel} type="button" aria-label="Cerrar indicaciones">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+            <svg className="route-panel-pick-icon" width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+            <h3 className="route-panel-pick-title">Elegí tu punto de partida</h3>
+            <p className="route-panel-pick-text">
+              No pudimos obtener tu ubicación. Tocá cualquier lugar del mapa para calcular la ruta desde ahí.
+            </p>
+            <button className="route-panel-pick-btn" onClick={() => routeCourse && handleDirections(routeCourse)} type="button">
+              Reintentar con mi ubicación
+            </button>
+          </div>
+        )}
+        {routeCourse && !routeLoading && route && (
+          <RoutePanel
+            course={routeCourse}
+            distanciaM={route.distanciaM}
+            pasos={route.pasos}
+            tiempos={estimarTiempos(route.distanciaM)}
+            onClose={closeRoutePanel}
+          />
+        )}
         <MapControls
           layerType={layerType}
           onToggleLayer={() => setLayerType((t) => t === 'map' ? 'satellite' : 'map')}
           isFullscreen={isFullscreen}
           onToggleFullscreen={() => setIsFullscreen((f) => !f)}
         />
-        <button
-          className={`map-control-btn mapillary-btn ${mapillaryMode ? 'mapillary-btn-active' : ''}`}
-          onClick={() => setShowMapillaryModal(true)}
-          type="button"
-          title="Vista de calle"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10" />
-            <circle cx="12" cy="12" r="3" />
-          </svg>
-        </button>
-      </div>
+        </div>
       {streetView && (
         <MapillaryViewer
           lat={streetView.lat}

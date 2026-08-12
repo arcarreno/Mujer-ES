@@ -1633,9 +1633,9 @@ input[type="date"].form-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(0.625rem + var(--sat)) 1.5rem 0.625rem;
-  background: var(--alabaster);
-  border-bottom: 1px solid #f0f0f0;
+  padding: calc(0.4rem + var(--sat)) 1.5rem 0.85rem;
+  background: #1a1c2e;
+  clip-path: url(#home-wave-clip);
   z-index: 10;
 }
 
@@ -1648,8 +1648,8 @@ input[type="date"].form-input {
 
 .home-greeting {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 0.8rem;
-  color: #9ca3af;
+  font-size: 0.68rem;
+  color: rgba(242, 240, 235, 0.7);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-weight: 500;
@@ -1658,8 +1658,8 @@ input[type="date"].form-input {
 .home-username {
   font-family: 'Playfair Display', Georgia, serif;
   font-weight: 600;
-  font-size: 1.3rem;
-  color: #1a1a1a;
+  font-size: 1.05rem;
+  color: var(--alabaster);
   margin: 0;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -1668,12 +1668,12 @@ input[type="date"].form-input {
 }
 
 .home-logout {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: #f5f5f5;
+  background: rgba(255, 255, 255, 0.12);
   border: none;
-  color: #4a4a4a;
+  color: var(--alabaster);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1682,7 +1682,7 @@ input[type="date"].form-input {
 }
 
 .home-logout:hover {
-  background: #1a1a1a;
+  background: rgba(255, 255, 255, 0.24);
   color: #ffffff;
 }
 
@@ -4810,6 +4810,363 @@ input[type="date"].form-input {
   border-radius: 0;
   border: none;
   height: 100%;
+}
+
+/* Route panel (Como llegar) */
+.route-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: min(330px, 88vw);
+  z-index: 1100;
+  background: #ffffff;
+  border-right: 1px solid #ececec;
+  box-shadow: 4px 0 20px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  animation: route-panel-in 0.3s ease;
+  overflow-y: auto;
+}
+
+@keyframes route-panel-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes route-panel-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* En móviles el panel se convierte en bottom sheet para no tapar el mapa ni el trazo */
+@media (max-width: 640px) {
+  .route-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    height: 48%;
+    min-height: 260px;
+    border: none;
+    border-top-left-radius: 1.25rem;
+    border-top-right-radius: 1.25rem;
+    box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.18);
+    animation: route-panel-up 0.3s ease;
+  }
+
+  .route-panel::before {
+    content: '';
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.35);
+    margin: 0.5rem auto 0;
+    flex-shrink: 0;
+  }
+}
+
+.route-pick-cursor {
+  cursor: crosshair;
+}
+
+.route-panel-pick {
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem 1.25rem;
+  text-align: center;
+}
+
+.route-panel-pick .route-panel-close {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.route-panel-pick .route-panel-close:hover {
+  background: #e5e7eb;
+}
+
+.route-panel-pick-icon {
+  color: #581C87;
+}
+
+.route-panel-pick-title {
+  margin: 0;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.route-panel-pick-text {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #6b7280;
+  line-height: 1.45;
+  max-width: 24rem;
+}
+
+.route-panel-pick-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.1rem;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #ffffff;
+  background: #581C87;
+  border: none;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.route-panel-pick-btn:hover {
+  background: #6b21a8;
+}
+
+.route-panel-loading {
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.route-panel-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #581C87;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.route-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.1rem 1.5rem;
+  background: #1a1c2e;
+  clip-path: url(#route-wave-clip);
+  flex-shrink: 0;
+}
+
+.route-panel-title {
+  margin: 0;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.route-panel-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.route-panel-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.route-panel-destino {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.route-panel-destino-label {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.route-panel-destino-nombre {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.98rem;
+  color: #1a1a1a;
+}
+
+.route-panel-destino-direccion {
+  font-size: 0.8rem;
+  color: #581C87;
+}
+
+.route-panel-resumen {
+  padding: 0.9rem 1.1rem;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.route-panel-distancia {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.route-panel-distancia-valor {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #1a1c2e;
+}
+
+.route-panel-distancia-label {
+  font-size: 0.72rem;
+  color: #9ca3af;
+}
+
+.route-panel-tiempos {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.route-panel-tiempo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.55rem 0.35rem;
+  background: #f7f7f9;
+  border-radius: 0.75rem;
+  text-align: center;
+}
+
+.route-panel-tiempo div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.route-panel-tiempo-icon {
+  display: inline-flex;
+  color: #581C87;
+}
+
+.route-panel-tiempo-icon-auto {
+  color: #1a1c2e;
+}
+
+.route-panel-tiempo-valor {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.route-panel-tiempo-label {
+  font-size: 0.66rem;
+  color: #9ca3af;
+}
+
+.route-panel-pasos {
+  padding: 1rem 1.1rem;
+  flex: 1;
+}
+
+.route-panel-pasos-title {
+  margin: 0 0 0.75rem;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.route-panel-pasos-vacio {
+  font-size: 0.82rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.route-panel-pasos-lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.route-panel-paso {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.route-panel-paso-numero {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: #581C87;
+  color: #ffffff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.route-panel-paso-cuerpo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.route-panel-paso-instruccion {
+  font-size: 0.82rem;
+  color: #333333;
+  line-height: 1.35;
+}
+
+.route-panel-paso-distancia {
+  font-size: 0.7rem;
+  color: #9ca3af;
+}
+
+.route-panel-nota {
+  margin: 0;
+  padding: 0.75rem 1.1rem;
+  border-top: 1px solid #f0f0f0;
+  font-size: 0.68rem;
+  color: #9ca3af;
+  line-height: 1.4;
+  flex-shrink: 0;
 }
 
 /* Admin map fullscreen */

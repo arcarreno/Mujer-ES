@@ -1,14 +1,3 @@
--- =====================================================
--- FIX — Infinite recursion en RLS de profiles
--- El problema: las policies "admins ..." hacen
---   select from public.profiles where role = 'admin'
--- dentro de su USING clause, lo que vuelve a disparar RLS
--- sobre profiles, causando recursión infinita (500).
---
--- Solución: helper function con security definer que
--- bypasea RLS al consultar si el user es admin.
--- =====================================================
-
 -- 1. Crear función helper
 create or replace function public.is_admin()
 returns boolean

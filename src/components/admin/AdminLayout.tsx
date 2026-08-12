@@ -93,8 +93,8 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
     try {
       const conv = await createDMConversation(userId)
       setAdminDMChat(conv.id)
-    } catch (e: any) {
-      sileo.error({ title: 'Error', description: e.message || 'No se pudo crear el chat' })
+    } catch (e) {
+      sileo.error({ title: 'Error', description: e instanceof Error ? e.message : 'No se pudo crear el chat' })
     }
   }, [])
 
@@ -113,6 +113,24 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             exit={{ opacity: 0, y: -40 }}
             transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
           >
+            <svg width="0" height="0" style={{ position: 'absolute' }}>
+              <defs>
+                <clipPath id="home-wave-clip" clipPathUnits="objectBoundingBox">
+                  <path d="
+                    M0,0
+                    L1,0
+                    L1,0.82
+                    C0.93,0.82 0.89,0.99 0.82,0.99
+                    C0.75,0.99 0.71,0.84 0.64,0.84
+                    C0.57,0.84 0.53,0.98 0.46,0.98
+                    C0.39,0.98 0.35,0.83 0.28,0.83
+                    C0.21,0.83 0.17,0.97 0.10,0.97
+                    C0.05,0.97 0.02,0.85 0,0.85
+                    Z
+                  " />
+                </clipPath>
+              </defs>
+            </svg>
             <div className="home-header-left">
               <span className="home-greeting">Admin ·</span>
               <h1 className="home-username">{username}</h1>
