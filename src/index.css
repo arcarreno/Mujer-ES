@@ -96,6 +96,15 @@ html, body {
 
 .site-header {
   top: calc(42px + var(--sat));
+  z-index: 20;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.site-title-clickable,
+.site-title-clickable * {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 @media (max-width: 480px) {
@@ -135,6 +144,15 @@ html, body {
   user-select: none;
   line-height: 1;
   display: inline-block;
+}
+
+.site-title-clickable {
+  transition: opacity 0.3s ease, scale 0.3s ease;
+}
+
+.site-title-clickable:hover {
+  opacity: 0.75;
+  scale: 1.02;
 }
 
 /* ============================================
@@ -10059,5 +10077,312 @@ select.haccordion-input {
 
   .haccordion-card + .haccordion-card {
     margin-top: -30px;
+  }
+}
+
+/* ============================================
+   404 / ERROR PAGE
+   ============================================ */
+
+.notfound-page {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.notfound-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.notfound-brand {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 300;
+  font-size: 0.85rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #1a1c2e;
+  margin-bottom: 0.5rem;
+}
+
+.notfound-code {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 500;
+  font-style: italic;
+  font-size: clamp(5rem, 30vw, 8.5rem);
+  line-height: 1;
+  color: #1a1c2e;
+  user-select: none;
+}
+
+.notfound-subtitle {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1.35rem;
+  color: #1a1c2e;
+  margin: 0.75rem 0 0.6rem;
+}
+
+.notfound-text {
+  font-size: 0.95rem;
+  color: rgba(26, 28, 46, 0.65);
+  max-width: 22rem;
+  margin: 0 0 1.75rem;
+  line-height: 1.5;
+}
+
+.notfound-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.notfound-btn {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  background: #1a1c2e;
+  border: 1.5px solid #1a1c2e;
+  border-radius: 2rem;
+  padding: 0.7rem 2.4rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.notfound-btn:hover {
+  background: transparent;
+  color: #1a1c2e;
+}
+
+.notfound-btn:active {
+  transform: scale(0.97);
+}
+
+.notfound-btn-ghost {
+  background: transparent;
+  color: #1a1c2e;
+}
+
+.notfound-btn-ghost:hover {
+  background: #1a1c2e;
+  color: #ffffff;
+}
+
+.notfound-waves {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 26vh;
+  background: #1a1c2e;
+  clip-path: url(#notfound-wave-clip);
+  z-index: 1;
+}
+
+@media only screen and (max-width: 480px) {
+  .notfound-brand {
+    font-size: 0.75rem;
+  }
+
+  .notfound-subtitle {
+    font-size: 1.15rem;
+  }
+
+  .notfound-text {
+    font-size: 0.88rem;
+  }
+
+  .notfound-waves {
+    height: 20vh;
+  }
+}
+
+/* ============================================
+   CONÓCENOS — EXPERIENCIA (FADE A PÁGINA)
+   ============================================ */
+
+.conocenos-experience {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  background: #060609;
+}
+
+.conocenos-page-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+/* ============================================
+   CONÓCENOS — PÁGINA
+   ============================================ */
+
+.conocenos-page {
+  position: absolute;
+  inset: 0;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.conocenos-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: calc(0.5rem + var(--sat)) 1.5rem 1.7rem;
+  background: #1a1c2e;
+  clip-path: url(#conocenos-wave-clip);
+}
+
+.conocenos-back {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  color: var(--alabaster);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.conocenos-back:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.conocenos-header-brand {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.conocenos-header-greeting {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(242, 240, 235, 0.7);
+  font-weight: 500;
+}
+
+.conocenos-header-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.35rem;
+  color: var(--alabaster);
+  margin: 0;
+  letter-spacing: 0.01em;
+}
+
+.conocenos-main {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  padding: 2.4rem 1.5rem 3rem;
+  max-width: 42rem;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.conocenos-main::-webkit-scrollbar {
+  display: none;
+}
+
+.conocenos-tagline {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: clamp(1.15rem, 4vw, 1.5rem);
+  color: #1a1c2e;
+  text-align: center;
+  margin: 0 0 2.4rem;
+  line-height: 1.45;
+}
+
+.conocenos-section {
+  margin-bottom: 1.6rem;
+  padding: 1.4rem 1.5rem;
+  background: #f9f8f5;
+  border: 1px solid rgba(26, 28, 46, 0.08);
+  border-radius: 1.1rem;
+  box-shadow: 0 6px 18px rgba(26, 28, 46, 0.05);
+}
+
+.conocenos-section-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: #1a1c2e;
+  margin: 0 0 0.55rem;
+}
+
+.conocenos-section-body {
+  font-size: 0.95rem;
+  line-height: 1.65;
+  color: rgba(26, 28, 46, 0.78);
+  margin: 0;
+}
+
+.conocenos-footer {
+  text-align: center;
+  padding-top: 0.8rem;
+}
+
+.conocenos-footer-text {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-style: italic;
+  font-size: 1.02rem;
+  color: #1a1c2e;
+  margin: 0 0 1.5rem;
+}
+
+.conocenos-btn {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  color: #ffffff;
+  background: #1a1c2e;
+  border: 1.5px solid #1a1c2e;
+  border-radius: 2rem;
+  padding: 0.7rem 2.4rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.conocenos-btn:hover {
+  background: transparent;
+  color: #1a1c2e;
+}
+
+.conocenos-btn:active {
+  transform: scale(0.97);
+}
+
+@media only screen and (max-width: 480px) {
+  .conocenos-main {
+    padding: 1.8rem 1.1rem 2.4rem;
+  }
+
+  .conocenos-section {
+    padding: 1.2rem 1.15rem;
+  }
+
+  .conocenos-section-body {
+    font-size: 0.9rem;
   }
 }

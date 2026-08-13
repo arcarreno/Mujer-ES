@@ -18,12 +18,14 @@ import Login from './components/Login'
 import LoadingFallback from './components/ui/LoadingFallback'
 import ErrorBoundary from './components/ui/ErrorBoundary'
 import WelcomeOverlay from './components/ui/WelcomeOverlay'
+import NotFoundPage from './components/ui/NotFoundPage'
 import SetPasswordForm from './components/form/SetPasswordForm'
 
 // Lazy load heavy layouts (admin, home)
 const WelcomeForm = lazy(() => import('./components/form/WelcomeForm'))
 const HomeLayout = lazy(() => import('./components/home/HomeLayout'))
 const AdminLayout = lazy(() => import('./components/admin/AdminLayout'))
+const ConocenosExperience = lazy(() => import('./components/landing/ConocenosExperience'))
 
 const images = Array.from({ length: 11 }, (_, i) => ({
   src: `/images/image ${i + 1}.webp`,
@@ -48,8 +50,16 @@ function App() {
   })
   const [formCheckKey, setFormCheckKey] = useState(0)
   const [showLandingOverlay, setShowLandingOverlay] = useState(true)
+  const [conocenosOpen, setConocenosOpen] = useState(false)
   const isOnline = useNetworkStatus()
   const wasOffline = useRef(!navigator.onLine)
+  const [badRoute, setBadRoute] = useState(() => window.location.pathname !== '/')
+
+  useEffect(() => {
+    const checkRoute = () => setBadRoute(window.location.pathname !== '/')
+    window.addEventListener('popstate', checkRoute)
+    return () => window.removeEventListener('popstate', checkRoute)
+  }, [])
 
   useEffect(() => {
     // Cargar sesión persistida al montar (además del evento INITIAL_SESSION)
@@ -230,6 +240,13 @@ function App() {
   return (
     <div className="relative w-full bg-white overflow-hidden" style={{ height: '100dvh' }}>
       <div style={{ perspective: '1200px', width: '100%', height: '100%' }}>
+        {badRoute ? (
+          <NotFoundPage
+            onHome={() => {
+              window.location.href = '/'
+            }}
+          />
+        ) : (
         <AnimatePresence mode="wait">
           {phase === 'landing' && (
             <>
@@ -242,8 +259,12 @@ function App() {
                 className="absolute inset-0 z-10"
               >
                 {!showLandingOverlay && (
-                  <div className="site-header absolute left-0 w-full text-center z-10">
-                    <h1 className="inline-flex items-baseline m-0">
+                  <div
+                    className="site-header absolute left-0 w-full text-center z-10"
+                    onClick={() => setConocenosOpen(true)}
+                    title="Conócenos"
+                  >
+                    <h1 className="inline-flex items-baseline m-0 site-title-clickable">
                       <BlurText
                         text="Mujer"
                         animateBy="letters"
@@ -265,7 +286,10 @@ function App() {
                       initial={{ opacity: 0, y: 15 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: 1.2, duration: 0.5 }}
-                      onClick={() => setPhase('welcome-form')}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setPhase('welcome-form')
+                      }}
                       className="comenzar-btn"
                     >
                       Comenzar
@@ -357,7 +381,23 @@ function App() {
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
+
+      {conocenosOpen && (
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div
+                className="conocenos-fallback"
+                style={{ position: 'fixed', inset: 0, zIndex: 800, background: '#060609' }}
+              />
+            }
+          >
+            <ConocenosExperience onClose={() => setConocenosOpen(false)} />
+          </Suspense>
+        </ErrorBoundary>
+      )}
 
       <Toaster
         position="top-center"

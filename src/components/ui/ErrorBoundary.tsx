@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react'
+import NotFoundPage from './NotFoundPage'
 
 interface Props {
   children: ReactNode
@@ -18,24 +19,15 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '1rem' }}>
-          <p style={{ color: '#1a1c2e', fontSize: '1rem' }}>Algo salió mal.</p>
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            style={{
-              background: '#1a1c2e',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 8,
-              padding: '0.5rem 1.5rem',
-              cursor: 'pointer',
-              fontSize: '0.875rem',
-            }}
-          >
-            Reintentar
-          </button>
-        </div>
+        <NotFoundPage
+          title="Ups"
+          subtitle="Algo salió mal"
+          description="Ocurrió un error inesperado. Reintentá o volvé al inicio para continuar."
+          showReload
+          onHome={() => {
+            window.location.href = '/'
+          }}
+        />
       )
     }
     return this.props.children
