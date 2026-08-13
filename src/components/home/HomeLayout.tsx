@@ -17,8 +17,13 @@ interface HomeLayoutProps {
   onLogout: () => void
 }
 
+// Las pestañas se montan en la primera visita y después quedan vivas (sin
+// desmontar): los datos y los canales realtime persisten al cambiar de tab.
+const TAB_ORDER: TabKey[] = ['cursos', 'mis-cursos', 'mapa', 'chats', 'perfil']
+
 export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('cursos')
+  const [visited, setVisited] = useState<Set<TabKey>>(() => new Set<TabKey>(['cursos']))
   const [chatFullscreen, setChatFullscreen] = useState(false)
   const [videoCallFullscreen, setVideoCallFullscreen] = useState(false)
 
@@ -31,6 +36,12 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
   const handleTabChange = useCallback((tab: TabKey) => {
     setActiveTab(tab)
     setChatFullscreen(false)
+    setVisited((prev) => {
+      if (prev.has(tab)) return prev
+      const next = new Set(prev)
+      next.add(tab)
+      return next
+    })
   }, [])
 
   const handleChatFullscreenChange = useCallback((fullscreen: boolean) => {
@@ -95,74 +106,32 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
       </AnimatePresence>
 
       <main className="home-main" style={chatFullscreen ? { paddingBottom: 0 } : undefined}>
-        <AnimatePresence mode="wait">
-          {activeTab === 'cursos' && (
-            <motion.div
-              key="cursos"
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -20 }}
-              transition={{ duration: 0.3 }}
+        {TAB_ORDER.map((tab) => {
+          const visible = activeTab === tab
+          if (!visited.has(tab)) return null
+          const isMap = tab === 'mapa'
+          return (
+            <div
+              key={tab}
+              className={`home-tab ${isMap ? 'home-tab--map' : ''} ${visible ? 'home-tab--active' : ''}`}
+              style={visible ? undefined : { display: 'none' }}
             >
               <Suspense fallback={<LoadingFallback />}>
-                <CursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+                {tab === 'cursos' && (
+                  <CursosPage onNavigateToMap={() => handleTabChange('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+                )}
+                {tab === 'mis-cursos' && (
+                  <MisCursosPage onNavigateToMap={() => handleTabChange('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
+                )}
+                {tab === 'mapa' && <MapPage active={visible} />}
+                {tab === 'chats' && (
+                  <ChatsPage onChatStateChange={handleChatFullscreenChange} />
+                )}
+                {tab === 'perfil' && <ProfilePage />}
               </Suspense>
-            </motion.div>
-          )}
-          {activeTab === 'mis-cursos' && (
-            <motion.div
-              key="mis-cursos"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Suspense fallback={<LoadingFallback />}>
-                <MisCursosPage onNavigateToMap={() => setActiveTab('mapa')} onVideoCallFullscreenChange={handleVideoCallFullscreenChange} />
-              </Suspense>
-            </motion.div>
-          )}
-          {activeTab === 'mapa' && (
-            <motion.div
-              key="mapa"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-              style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}
-            >
-              <Suspense fallback={<LoadingFallback />}>
-                <MapPage />
-              </Suspense>
-            </motion.div>
-          )}
-          {activeTab === 'chats' && (
-            <motion.div
-              key="chats"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Suspense fallback={<LoadingFallback />}>
-                <ChatsPage onChatStateChange={handleChatFullscreenChange} />
-              </Suspense>
-            </motion.div>
-          )}
-          {activeTab === 'perfil' && (
-            <motion.div
-              key="perfil"
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: 20 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Suspense fallback={<LoadingFallback />}>
-                <ProfilePage />
-              </Suspense>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          )
+        })}
       </main>
 
       <AnimatePresence>

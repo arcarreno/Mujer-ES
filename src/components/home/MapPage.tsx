@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MapContainer, Marker, Popup, Polyline, useMap, useMapEvents } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -20,6 +20,23 @@ function MapFlyTo({ target }: { target: { center: [number, number]; zoom: number
       map.flyTo(target.center, target.zoom, { duration: 1 })
     }
   }, [target, map])
+  return null
+}
+
+// La pestaña del mapa queda montada pero oculta (display:none) entre visitas;
+// Leaflet calcula el tamaño al montar, así que al volver a mostrarla hay que
+// recalcular el layout o los tiles quedan con dimensiones de 0x0.
+function MapResizeHandler({ active }: { active: boolean }) {
+  const map = useMap()
+  const wasActive = useRef(active)
+  useEffect(() => {
+    if (active && !wasActive.current) {
+      const t = setTimeout(() => map.invalidateSize(), 0)
+      wasActive.current = true
+      return () => clearTimeout(t)
+    }
+    wasActive.current = active
+  }, [active, map])
   return null
 }
 
@@ -119,7 +136,7 @@ function PopupActions({ course, onView, onDirections }: { course: Course; onView
   )
 }
 
-export default function MapPage() {
+export default function MapPage({ active = true }: { active?: boolean }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<Course | null>(null)
@@ -508,6 +525,7 @@ export default function MapPage() {
           style={{ height: '100%', width: '100%', position: 'absolute', top: 0, left: 0 }}
         >
           <MapTileLayer layerType={layerType} />
+          <MapResizeHandler active={active} />
           <MapFlyTo target={flyTarget} />
           <MapFitRoute route={route} origin={routeOrigin} />
           <PickOriginLayer active={pickOrigin} onPick={handlePickOrigin} />

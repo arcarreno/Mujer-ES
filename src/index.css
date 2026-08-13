@@ -1706,12 +1706,42 @@ input[type="date"].form-input {
 
 .home-main {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 1.5rem;
   padding-bottom: calc(6rem + var(--sab));
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
+}
+
+/* Cada pestaña es su propio contenedor de scroll: al mantenerlas montadas,
+   cada una conserva su posición de scroll y sus datos al cambiar de tab. */
+.home-tab {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.home-tab--map {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.home-tab--active {
+  animation: home-tab-in 0.15s ease-out;
+}
+
+@keyframes home-tab-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .home-main::-webkit-scrollbar {
@@ -10237,7 +10267,7 @@ select.haccordion-input {
 .conocenos-page {
   position: absolute;
   inset: 0;
-  background: #ffffff;
+  background: var(--alabaster);
   display: flex;
   flex-direction: column;
   overflow: hidden;

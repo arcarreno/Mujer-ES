@@ -76,6 +76,36 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
     }
   }, [])
 
+  // Vacantes en tiempo real: cuando alguien se inscribe o se da de baja
+  // (incluida la propia usuaria) el contador X / N se actualiza en vivo,
+  // sin salir de los detalles del curso.
+  useEffect(() => {
+    if (view !== 'detail' || !selected) return
+    const channel = supabase
+      .channel(`course-enrollments-count:${selected.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'course_enrollments', filter: `course_id=eq.${selected.id}` },
+        async () => {
+          try {
+            const [enrollments, full] = await Promise.all([
+              getCourseEnrollments(selected.id),
+              isCourseFull(selected.id),
+            ])
+            setEnrollmentCount(enrollments.length)
+            setCourseFull(full)
+          } catch {
+            // Silencio: el siguiente evento reintentará
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [view, selected])
+
   const openDetail = async (course: Course) => {
     setSelected(course)
     setView('detail')
@@ -118,6 +148,8 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
     try {
       const result = await enrollInCourse(selected.id)
       setEnrolled(true)
+      setEnrollmentCount((c) => c + 1)
+      if (selected.max_enrollments && enrollmentCount + 1 >= selected.max_enrollments) setCourseFull(true)
       setEnrollmentResult({
         modality: result.modality,
         qrCodeDataUrl: result.qrCodeDataUrl,
@@ -140,6 +172,8 @@ export default function CursosPage({ onNavigateToMap, onVideoCallFullscreenChang
     try {
       await unenrollFromCourse(selected.id)
       setEnrolled(false)
+      setEnrollmentCount((c) => Math.max(0, c - 1))
+      setCourseFull(false)
       setShowQrPanel(false)
       setMyQrPayload(null)
       sileo.success({ title: 'Baja exitosa', description: `Te diste de baja de "${selected.title}"` })
