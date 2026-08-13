@@ -4845,6 +4845,12 @@ input[type="date"].form-input {
   flex-direction: column;
   animation: route-panel-in 0.3s ease;
   overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.route-panel::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes route-panel-in {
