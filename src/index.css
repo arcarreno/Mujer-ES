@@ -2285,7 +2285,7 @@ input[type="date"].form-input {
    ============================================ */
 
 .admin-layout .home-greeting {
-  color: #581C87;
+  color: var(--alabaster);
   font-weight: 600;
 }
 
