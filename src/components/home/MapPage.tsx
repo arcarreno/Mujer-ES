@@ -56,7 +56,7 @@ function courseIcon(color: string) {
   })
 }
 
-function originIcon(color = '#16a34a') {
+function originIcon(color = '#111827') {
   return L.divIcon({
     className: 'map-marker-origin',
     html: `<svg width="26" height="26" viewBox="0 0 26 26" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -329,9 +329,9 @@ export default function MapPage({ active = true }: { active?: boolean }) {
 
   if (selected) {
     return (
-      <>
-        <div className={`curso-detail-layout ${showQrPanel ? 'curso-detail-layout-with-result' : ''}`}>
-          <div className="curso-detail">
+      <div className="map-detail-scroll">
+      <div className="curso-detail-layout">
+        <div className="curso-detail">
             <div className="curso-detail-header">
               <button
                 className="volver-btn-sm"
@@ -422,19 +422,40 @@ export default function MapPage({ active = true }: { active?: boolean }) {
             )}
 
             {enrolled && selected.modality === 'presencial' && myQrPayload && (
-              <button
-                className={`curso-detail-qr-btn ${showQrPanel ? 'curso-detail-qr-btn-active' : ''}`}
-                onClick={handleShowQr}
-                type="button"
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                  <rect x="14" y="14" width="3" height="3" />
-                </svg>
-                Código QR
-              </button>
+              <>
+                <button
+                  className={`curso-detail-qr-btn ${showQrPanel ? 'curso-detail-qr-btn-active' : ''}`}
+                  onClick={handleShowQr}
+                  type="button"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="7" />
+                    <rect x="14" y="3" width="7" height="7" />
+                    <rect x="3" y="14" width="7" height="7" />
+                    <rect x="14" y="14" width="3" height="3" />
+                  </svg>
+                  Código QR
+                </button>
+                {showQrPanel && (
+                  <div className="curso-inline-qr">
+                    {qrLoading ? (
+                      <div className="curso-qr-panel-loading">
+                        <div className="curso-detail-spinner" />
+                        <p>Generando código...</p>
+                      </div>
+                    ) : qrPanelDataUrl ? (
+                      <>
+                        <div className="curso-inline-qr-img">
+                          <img src={qrPanelDataUrl} alt="Código QR de asistencia" width="200" height="200" />
+                        </div>
+                        <p className="curso-inline-qr-hint">Código QR personal e intransferible</p>
+                      </>
+                    ) : (
+                      <p className="curso-qr-panel-error">No se pudo generar el código QR</p>
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -450,30 +471,6 @@ export default function MapPage({ active = true }: { active?: boolean }) {
           )}
         </div>
 
-        {showQrPanel && (
-          <div className="curso-qr-panel">
-            <div className="curso-qr-panel-card">
-              <h3 className="curso-qr-panel-title">Tu código QR</h3>
-              <p className="curso-qr-panel-hint">Mostrá este código al organizador para registrar tu asistencia</p>
-              {qrLoading ? (
-                <div className="curso-qr-panel-loading">
-                  <div className="curso-detail-spinner" />
-                  <p>Generando código...</p>
-                </div>
-              ) : qrPanelDataUrl ? (
-                <>
-                  <div className="curso-qr-panel-img">
-                    <img src={qrPanelDataUrl} alt="Código QR de asistencia" width="280" height="280" />
-                  </div>
-                  <p className="curso-qr-panel-sub">Código QR personal e intransferible</p>
-                </>
-              ) : (
-                <p className="curso-qr-panel-error">No se pudo generar el código QR</p>
-              )}
-            </div>
-          </div>
-        )}
-
         {enrollmentResult && (
           <EnrollmentResult
             modality={enrollmentResult.modality}
@@ -484,7 +481,7 @@ export default function MapPage({ active = true }: { active?: boolean }) {
           />
         )}
         </div>
-      </>
+      </div>
     )
   }
 

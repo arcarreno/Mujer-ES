@@ -1088,6 +1088,23 @@ input::-ms-clear {
   overflow: hidden;
 }
 
+/* El overlay solo tiene min-height: el mapa necesita una altura concreta
+   para que Leaflet se monte con tamaño real (en HomeLayout el tab le da
+   altura via position:absolute; inset:0). */
+.fullscreen-overlay-page > .map-page {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+/* El detalle abierto desde el mapa también es su propio scroller y necesita
+   la misma altura concreta dentro del overlay admin. */
+.fullscreen-overlay-page > .map-detail-scroll {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
 /* ============================================
    PRIVACY MODAL
    ============================================ */
@@ -1742,6 +1759,16 @@ input[type="date"].form-input {
   overflow: hidden;
   padding: 1.5rem;
   padding-bottom: calc(6rem + var(--sab));
+}
+
+/* Detalle del curso abierto desde el mapa: la tab del mapa tiene overflow
+   hidden (el mapa no debe scrollear), así que el detalle es su propio scroller. */
+.map-detail-scroll {
+  height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  padding-bottom: calc(4rem + var(--sab));
 }
 
 .home-tab--active {
