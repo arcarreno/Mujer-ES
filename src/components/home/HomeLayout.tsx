@@ -110,10 +110,11 @@ export default function HomeLayout({ username, onLogout }: HomeLayoutProps) {
           const visible = activeTab === tab
           if (!visited.has(tab)) return null
           const isMap = tab === 'mapa'
+          const isChats = tab === 'chats'
           return (
             <div
               key={tab}
-              className={`home-tab ${isMap ? 'home-tab--map' : ''} ${visible ? 'home-tab--active' : ''}`}
+              className={`home-tab ${isMap ? 'home-tab--map' : ''} ${isChats ? 'home-tab--chats' : ''} ${visible ? 'home-tab--active' : ''}`}
               style={visible ? undefined : { display: 'none' }}
             >
               <Suspense fallback={<LoadingFallback />}>

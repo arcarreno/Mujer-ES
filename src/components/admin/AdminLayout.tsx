@@ -297,6 +297,7 @@ export default function AdminLayout({ username, onLogout }: AdminLayoutProps) {
             {activeTab === 'chats' && (
               <motion.div
                 key="chats"
+                className="admin-tab-chats"
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 20 }}
